@@ -37,3 +37,19 @@ public:
 private:
     Eigen::VectorXd theta;
 };
+
+class RidgeRegression {
+public:
+    RidgeRegression(double alpha = 1.0) : alpha(alpha) {}
+
+    void fit(const Eigen::MatrixXd &X, const Eigen::VectorXd &y) {
+        int num_features = X.cols();
+
+        // Add regularization term: alpha * I
+        Eigen::MatrixXd I = Eigen::MatrixXd::Identity(num_features, num_features);
+        Eigen::MatrixXd XTX_regularized = X.transpose() * X + alpha * I;
+
+        // Solve for theta
+        theta = XTX_regularized.ldlt().solve(X.transpose() * y);
+    } 
+
