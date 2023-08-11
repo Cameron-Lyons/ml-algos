@@ -27,6 +27,11 @@ public:
         return theta(0);
     }
 
+    // Get the slopes
+    VectorXd getSlopes() const {
+        return theta.tail(theta.size() - 1);
+    }
+
 private:
     VectorXd theta;
 };
