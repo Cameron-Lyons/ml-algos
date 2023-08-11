@@ -4,6 +4,8 @@
 #include <string>
 #include <matrix.h>
 #include <linear.h>
+#include <algorithm>
+#include <random>
 
 Matrix readCSV(const std::string &filename)
 {
@@ -30,6 +32,38 @@ void splitData(const Matrix &data, Matrix &X, Vector &y)
     {
         y.push_back(row.back());
         X.push_back(Vector(row.begin(), row.end() - 1));
+    }
+}
+
+void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train, Matrix &X_test, Vector &y_train, Vector &y_test, double test_size)
+{
+    if (X.size() != y.size())
+    {
+        std::cerr << "Features and target sizes don't match!" << std::endl;
+        return;
+    }
+    std::vector<std::pair<Vector, double>> dataset;
+    for (size_t i = 0; i < X.size(); i++)
+    {
+        dataset.push_back({X[i], y[i]});
+    }
+
+    const unsigned seed = 0;
+    std::shuffle(dataset.begin(), dataset.end(), std::default_random_engine(seed));
+
+    size_t test_count = static_cast<size_t>(test_size * dataset.size());
+    for (size_t i = 0; i < dataset.size(); i++)
+    {
+        if (i < test_count)
+        {
+            X_test.push_back(dataset[i].first);
+            y_test.push_back(dataset[i].second);
+        }
+        else
+        {
+            X_train.push_back(dataset[i].first);
+            y_train.push_back(dataset[i].second);
+        }
     }
 }
 
