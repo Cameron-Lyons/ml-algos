@@ -21,6 +21,11 @@ public:
         X_b.block(0, 1, X.rows(), X.cols()) = X;
         return X_b * theta;
     }
+    
+    // first column is the intercept/bias term
+    double getIntercept() const {
+        return theta(0);
+    }
 
 private:
     VectorXd theta;
