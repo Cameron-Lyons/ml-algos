@@ -29,7 +29,6 @@ Matrix multiply(const Matrix &A, const Matrix &B)
     return C;
 }
 
-// Function to get transpose of a matrix
 Matrix transpose(const Matrix &A)
 {
     int rows = A.size();
@@ -44,6 +43,23 @@ Matrix transpose(const Matrix &A)
             B[j][i] = A[i][j];
         }
     }
+
+    return B;
+}
+
+Matrix inverse(const Matrix &A)
+{
+    assert(A.size() == 2 && A[0].size() == 2);
+
+    double det = A[0][0] * A[1][1] - A[0][1] * A[1][0];
+    assert(det != 0);
+
+    Matrix B(2, Vector(2));
+
+    B[0][0] = A[1][1] / det;
+    B[0][1] = -A[0][1] / det;
+    B[1][0] = -A[1][0] / det;
+    B[1][1] = A[0][0] / det;
 
     return B;
 }
