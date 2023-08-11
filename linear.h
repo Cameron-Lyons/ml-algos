@@ -20,4 +20,8 @@ public:
             coefficients.push_back(row[0]);
         }
     }
+    Vector predict(const Matrix &X) const
+    {
+        return multiply(X, {coefficients})[0];
+    }
 };
