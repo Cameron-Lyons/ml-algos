@@ -23,3 +23,12 @@ Matrix readCSV(const std::string &filename)
     }
     return data;
 }
+
+void splitData(const Matrix &data, Matrix &X, Vector &y)
+{
+    for (const auto &row : data)
+    {
+        y.push_back(row.back());
+        X.push_back(Vector(row.begin(), row.end() - 1));
+    }
+}
