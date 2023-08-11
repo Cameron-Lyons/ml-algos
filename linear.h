@@ -101,7 +101,7 @@ class LassoRegression : public LinearModel
 private:
     double lambda; // Regularization parameter
     double tol;    // Tolerance for stopping criterion
-    int max_iter;  // Maximum number of iterations
+    int max_iter;
 
     double soft_threshold(double value, double threshold) const
     {
