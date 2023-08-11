@@ -49,7 +49,13 @@ public:
         Eigen::MatrixXd I = Eigen::MatrixXd::Identity(num_features, num_features);
         Eigen::MatrixXd XTX_regularized = X.transpose() * X + alpha * I;
 
-        // Solve for theta
         theta = XTX_regularized.ldlt().solve(X.transpose() * y);
     } 
+    Eigen::VectorXd predict(const Eigen::MatrixXd &X) const {
+        return X * theta;
+    }
 
+private:
+    Eigen::VectorXd theta;
+    double alpha;  // Regularization strength
+};
