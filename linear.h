@@ -5,42 +5,82 @@
 typedef std::vector<std::vector<double>> Matrix;
 typedef std::vector<double> Vector;
 
-class LinearRegression
+Matrix multiply(const Matrix &A, const Matrix &B)
 {
-public:
-    LinearRegression() {}
+    int rowsA = A.size();
+    int colsA = A[0].size();
+    int rowsB = B.size();
+    int colsB = B[0].size();
+    assert(colsA == rowsB);
 
-    void fit(const Eigen::MatrixXd &X, const Eigen::VectorXd &y)
+    Matrix C(rowsA, Vector(colsB, 0.0));
+
+    for (int i = 0; i < rowsA; i++)
     {
-        // Adding a column of ones for the intercept term
-        MatrixXd X_b = Eigen::MatrixXd::Ones(X.rows(), X.cols() + 1);
-        X_b.block(0, 1, X.rows(), X.cols()) = X;
-
-        // Normal equation: theta = (X^T * X)^(-1) * X^T * y
-        theta = (X_b.transpose() * X_b).ldlt().solve(X_b.transpose() * y);
+        for (int j = 0; j < colsB; j++)
+        {
+            for (int k = 0; k < colsA; k++)
+            {
+                C[i][j] += A[i][k] * B[k][j];
+            }
+        }
     }
 
-    Eigen::VectorXd predict(const Eigen::MatrixXd &X) const
+    return C;
+}
+
+// Function to get transpose of a matrix
+Matrix transpose(const Matrix &A)
+{
+    int rows = A.size();
+    int cols = A[0].size();
+
+    Matrix B(cols, Vector(rows));
+
+    for (int i = 0; i < rows; i++)
     {
-        MatrixXd X_b = Eigen::MatrixXd::Ones(X.rows(), X.cols() + 1);
-        X_b.block(0, 1, X.rows(), X.cols()) = X;
-        return X_b * theta;
+        for (int j = 0; j < cols; j++)
+        {
+            B[j][i] = A[i][j];
+        }
     }
 
-    // first val is the intercept/bias term
-    double getIntercept() const
-    {
-        return theta(0);
-    }
+    return B;
+}
 
-    Eigen::VectorXd getCoeffecients() const
-    {
-        return theta.tail(theta.size() - 1);
-    }
+// Function to compute inverse of a 2x2 matrix (used for simplicity)
+Matrix inverse(const Matrix &A)
+{
+    assert(A.size() == 2 && A[0].size() == 2);
 
-private:
-    Eigen::VectorXd theta;
-};
+    double det = A[0][0] * A[1][1] - A[0][1] * A[1][0];
+    assert(det != 0);
+
+    Matrix B(2, Vector(2));
+
+    B[0][0] = A[1][1] / det;
+    B[0][1] = -A[0][1] / det;
+    B[1][0] = -A[1][0] / det;
+    B[1][1] = A[0][0] / det;
+
+    return B;
+}
+
+Vector multivariateRegression(const Matrix &X, const Vector &y)
+{
+    Matrix Xt = transpose(X);
+    Matrix XtX = multiply(Xt, X);
+    Matrix XtX_inv = inverse(XtX);
+    Matrix XtX_inv_Xt = multiply(XtX_inv, Xt);
+    Matrix betaMatrix = multiply(XtX_inv_Xt, {y}); // Convert y to column matrix for multiplication
+
+    Vector beta;
+    for (const auto &row : betaMatrix)
+    {
+        beta.push_back(row[0]);
+    }
+    return beta;
+}
 
 class RidgeRegression
 {
