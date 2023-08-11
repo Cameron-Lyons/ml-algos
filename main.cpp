@@ -32,3 +32,21 @@ void splitData(const Matrix &data, Matrix &X, Vector &y)
         X.push_back(Vector(row.begin(), row.end() - 1));
     }
 }
+
+int main()
+{
+    Matrix data = readCSV("data.csv");
+    Matrix X;
+    Vector y;
+    splitData(data, X, y);
+
+    LinearRegression model;
+    model.fit(X, y);
+    Vector lr_predictions = model.predict(X);
+    std::cout << "Model Predictions:" << std::endl;
+    for (double val : lr_predictions)
+    {
+        std::cout << val << std::endl;
+    }
+    return 0;
+}
