@@ -1,4 +1,5 @@
 #include <matrix.h>
+#include <cmath>
 
 class LinearModel
 {
@@ -91,6 +92,72 @@ public:
         for (const auto &row : betaMatrix)
         {
             coefficients.push_back(row[0]);
+        }
+    }
+};
+
+class LassoRegression : public LinearModel
+{
+private:
+    double lambda; // Regularization parameter
+    double tol;    // Tolerance for stopping criterion
+    int max_iter;  // Maximum number of iterations
+
+    double soft_threshold(double value, double threshold) const
+    {
+        if (value > threshold)
+            return value - threshold;
+        if (value < -threshold)
+            return value + threshold;
+        return 0.0;
+    }
+
+public:
+    LassoRegression(double lambda_val, double tol_val = 1e-6, int max_iterations = 1000)
+        : lambda(lambda_val), tol(tol_val), max_iter(max_iterations) {}
+
+    void fit(const Matrix &X, const Vector &y) override
+    {
+        Matrix X_bias = addBias(X);
+        size_t num_samples = X_bias.size();
+        size_t num_features = X_bias[0].size();
+
+        coefficients = Vector(num_features, 0.0); // Initialize coefficients
+
+        for (int iteration = 0; iteration < max_iter; ++iteration)
+        {
+            Vector old_coefficients = coefficients;
+
+            for (size_t j = 0; j < num_features; ++j)
+            {
+                double tmp = y[j];
+                for (size_t k = 0; k < num_features; ++k)
+                {
+                    if (j != k)
+                        tmp -= coefficients[k] * X_bias[j][k];
+                }
+
+                if (j == 0) // Bias term, don't penalize
+                {
+                    coefficients[j] = tmp;
+                }
+                else
+                {
+                    coefficients[j] = soft_threshold(tmp, lambda) / num_samples;
+                }
+            }
+
+            // Check for convergence
+            double max_change = 0.0;
+            for (size_t j = 0; j < num_features; ++j)
+            {
+                double change = fabs(old_coefficients[j] - coefficients[j]);
+                if (change > max_change)
+                    max_change = change;
+            }
+
+            if (max_change < tol)
+                break;
         }
     }
 };
