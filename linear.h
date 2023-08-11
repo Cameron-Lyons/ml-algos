@@ -1,34 +1,30 @@
-#include <vector>
+#include <iostream>
+#include <Eigen/Dense>
 
-class LinearRegression
-{
-    std::vector<float> x;
-    std::vector<float> y;
-    float coef;
-    float intercept;
+using namespace Eigen;
 
+class LinearRegression {
 public:
-    void fit(std::vector<float> x, std::vector<float> y)
-    {
-        this->x = x;
-        this->y = y;
-        float x_mean = 0;
-        float y_mean = 0;
-        for (int i = 0; i < x.size(); i++)
-        {
-            x_mean += x[i];
-            y_mean += y[i];
-        }
-        x_mean /= x.size();
-        y_mean /= y.size();
-        float num = 0;
-        float den = 0;
-        for (int i = 0; i < x.size(); i++)
-        {
-            num += (x[i] - x_mean) * (y[i] - y_mean);
-            den += (x[i] - x_mean) * (x[i] - x_mean);
-        }
-        coef = num / den;
-        intercept = y_mean - coef * x_mean;
+    LinearRegression() {}
+
+    // Train the linear regression model
+    void fit(const MatrixXd &X, const VectorXd &y) {
+        // Adding a column of ones for the intercept term
+        MatrixXd X_b = MatrixXd::Ones(X.rows(), X.cols() + 1);
+        X_b.block(0, 1, X.rows(), X.cols()) = X;
+
+        // Normal equation: theta = (X^T * X)^(-1) * X^T * y
+        theta = (X_b.transpose() * X_b).ldlt().solve(X_b.transpose() * y);
     }
+
+    // Predict using the trained model
+    VectorXd predict(const MatrixXd &X) const {
+        MatrixXd X_b = MatrixXd::Ones(X.rows(), X.cols() + 1);
+        X_b.block(0, 1, X.rows(), X.cols()) = X;
+        return X_b * theta;
+    }
+
+private:
+    VectorXd theta;
 };
+
