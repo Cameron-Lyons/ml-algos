@@ -1,5 +1,9 @@
 #include <iostream>
-#include <Eigen/Dense>
+#include <vector>
+#include <cassert>
+
+typedef std::vector<std::vector<double>> Matrix;
+typedef std::vector<double> Vector;
 
 class LinearRegression
 {
