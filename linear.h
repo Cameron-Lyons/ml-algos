@@ -7,7 +7,6 @@ class LinearRegression {
 public:
     LinearRegression() {}
 
-    // Train the linear regression model
     void fit(const MatrixXd &X, const VectorXd &y) {
         // Adding a column of ones for the intercept term
         MatrixXd X_b = MatrixXd::Ones(X.rows(), X.cols() + 1);
@@ -17,7 +16,6 @@ public:
         theta = (X_b.transpose() * X_b).ldlt().solve(X_b.transpose() * y);
     }
 
-    // Predict using the trained model
     VectorXd predict(const MatrixXd &X) const {
         MatrixXd X_b = MatrixXd::Ones(X.rows(), X.cols() + 1);
         X_b.block(0, 1, X.rows(), X.cols()) = X;
