@@ -63,3 +63,22 @@ Matrix inverse(const Matrix &A)
 
     return B;
 }
+
+Matrix add(const Matrix &A, const Matrix &B)
+{
+    assert(A.size() == B.size() && A[0].size() == B[0].size());
+
+    int rows = A.size();
+    int cols = A[0].size();
+    Matrix C(rows, Vector(cols, 0.0));
+
+    for (int i = 0; i < rows; i++)
+    {
+        for (int j = 0; j < cols; j++)
+        {
+            C[i][j] = A[i][j] + B[i][j];
+        }
+    }
+
+    return C;
+}
