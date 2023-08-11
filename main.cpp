@@ -74,11 +74,17 @@ int main()
     Vector y;
     splitData(data, X, y);
 
+    Matrix X_train, X_test;
+    Vector y_train, y_test;
+    trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+
     LinearRegression model;
-    model.fit(X, y);
-    Vector lr_predictions = model.predict(X);
+    model.fit(X_train, y_train);
+
+    Vector preds = model.predict(X_test);
+
     std::cout << "Model Predictions:" << std::endl;
-    for (double val : lr_predictions)
+    for (double val : preds)
     {
         std::cout << val << std::endl;
     }
