@@ -1,20 +1,30 @@
 #include <matrix.h>
 
-class SVC
+class SVM
 {
-private:
+protected:
     Vector weights;
     double learningRate;
     int maxIterations;
 
-public:
-    SVC(int n_features, double learningRate = 0.01, int maxIterations = 1000)
+    SVM(int n_features, double learningRate, int maxIterations)
         : learningRate(learningRate), maxIterations(maxIterations)
     {
         weights.resize(n_features, 0.0);
     }
 
-    int predict(const Vector &x)
+public:
+    virtual double predict(const Vector &x) const = 0; // Pure virtual function
+    virtual void fit(const Matrix &X, const Vector &y) = 0;
+};
+
+class SVC : public SVM
+{
+public:
+    SVC(int n_features, double learningRate = 0.01, int maxIterations = 1000)
+        : SVM(n_features, learningRate, maxIterations) {}
+
+    int predict(const Vector &x) const override
     {
         double dotProduct = 0.0;
         for (size_t i = 0; i < x.size(); i++)
@@ -24,7 +34,7 @@ public:
         return (dotProduct >= 0.0) ? 1 : -1;
     }
 
-    void fit(const Matrix &X, const Vector &y)
+    void fit(const Matrix &X, const Vector &y) override
     {
         for (int iter = 0; iter < maxIterations; iter++)
         {
@@ -49,22 +59,18 @@ public:
     }
 };
 
-class SVR
+// Derived class for SVR
+class SVR : public SVM
 {
 private:
-    Vector weights;
     double bias = 0.0;
-    double learningRate;
     double epsilon;
-    int maxIterations;
 
 public:
     SVR(int n_features, double learningRate = 0.01, double epsilon = 0.1, int maxIterations = 1000)
-        : learningRate(learningRate), epsilon(epsilon), maxIterations(maxIterations)
-    {
-        weights.resize(n_features, 0.0);
-    }
-    double predict(const Vector &x)
+        : SVM(n_features, learningRate, maxIterations), epsilon(epsilon) {}
+
+    double predict(const Vector &x) const override
     {
         double result = bias;
         for (size_t i = 0; i < x.size(); i++)
@@ -73,7 +79,8 @@ public:
         }
         return result;
     }
-    void fit(const Matrix &X, const Vector &y)
+
+    void fit(const Matrix &X, const Vector &y) override
     {
         for (int iter = 0; iter < maxIterations; iter++)
         {
@@ -81,8 +88,6 @@ public:
             {
                 double prediction = predict(X[i]);
                 double error = prediction - y[i];
-
-                // Only consider errors outside the ε-tube
                 if (std::abs(error) > epsilon)
                 {
                     for (size_t j = 0; j < X[i].size(); j++)
