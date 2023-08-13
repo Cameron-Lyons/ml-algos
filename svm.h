@@ -1,6 +1,6 @@
 #include <matrix.h>
 
-class SVM
+class SVC
 {
 private:
     Vector weights;
@@ -8,7 +8,7 @@ private:
     int maxIterations;
 
 public:
-    SVM(int n_features, double learningRate = 0.01, int maxIterations = 1000)
+    SVC(int n_features, double learningRate = 0.01, int maxIterations = 1000)
         : learningRate(learningRate), maxIterations(maxIterations)
     {
         weights.resize(n_features, 0.0);
@@ -49,7 +49,7 @@ public:
     }
 };
 
-class SimpleSVR
+class SVR
 {
 private:
     Vector weights;
@@ -59,7 +59,7 @@ private:
     int maxIterations;
 
 public:
-    SimpleSVR(int n_features, double learningRate = 0.01, double epsilon = 0.1, int maxIterations = 1000)
+    SVR(int n_features, double learningRate = 0.01, double epsilon = 0.1, int maxIterations = 1000)
         : learningRate(learningRate), epsilon(epsilon), maxIterations(maxIterations)
     {
         weights.resize(n_features, 0.0);
