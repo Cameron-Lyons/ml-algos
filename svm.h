@@ -19,3 +19,22 @@ public:
         }
         return (dotProduct >= 0.0) ? 1 : -1;
     }
+
+    void fit(const Matrix &X, const Vector &y) {
+        for (int iter = 0; iter < maxIterations; iter++) {
+            bool allClassifiedCorrectly = true;
+            for (size_t i = 0; i < X.size(); i++) {
+                int prediction = predict(X[i]);
+                if (prediction != y[i]) {
+                    allClassifiedCorrectly = false;
+                    for (size_t j = 0; j < X[i].size(); j++) {
+                        weights[j] += learningRate * y[i] * X[i][j];
+                    }
+                }
+            }
+            if (allClassifiedCorrectly) {
+                break;
+            }
+        }
+    }
+    };
