@@ -48,3 +48,18 @@ public:
         }
     }
 };
+
+class SimpleSVR {
+private:
+    Vector weights;
+    double bias = 0.0;
+    double learningRate;
+    double epsilon;
+    int maxIterations;
+
+public:
+    SimpleSVR(int n_features, double learningRate = 0.01, double epsilon = 0.1, int maxIterations = 1000)
+        : learningRate(learningRate), epsilon(epsilon), maxIterations(maxIterations) {
+        weights.resize(n_features, 0.0);
+    }
+};
