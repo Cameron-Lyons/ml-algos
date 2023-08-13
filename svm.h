@@ -69,4 +69,20 @@ public:
         }
         return result;
     }
+    void fit(const Matrix &X, const Vector &y) {
+        for (int iter = 0; iter < maxIterations; iter++) {
+            for (size_t i = 0; i < X.size(); i++) {
+                double prediction = predict(X[i]);
+                double error = prediction - y[i];
+
+                // Only consider errors outside the ε-tube
+                if (std::abs(error) > epsilon) {
+                    for (size_t j = 0; j < X[i].size(); j++) {
+                        weights[j] -= learningRate * error * X[i][j];
+                    }
+                    bias -= learningRate * error;
+                }
+            }
+        }
+    }
 };
