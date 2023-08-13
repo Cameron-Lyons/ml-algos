@@ -14,7 +14,7 @@ protected:
     }
 
 public:
-    virtual double predict(const Vector &x) const = 0; // Pure virtual function
+    virtual double predict(const Vector &x) const = 0;
     virtual void fit(const Matrix &X, const Vector &y) = 0;
 };
 
@@ -24,14 +24,14 @@ public:
     SVC(int n_features, double learningRate = 0.01, int maxIterations = 1000)
         : SVM(n_features, learningRate, maxIterations) {}
 
-    int predict(const Vector &x) const override
+    double predict(const Vector &x) const override
     {
         double dotProduct = 0.0;
         for (size_t i = 0; i < x.size(); i++)
         {
             dotProduct += x[i] * weights[i];
         }
-        return (dotProduct >= 0.0) ? 1 : -1;
+        return (dotProduct >= 0.0) ? 1.0 : -1.0;
     }
 
     void fit(const Matrix &X, const Vector &y) override
@@ -59,7 +59,6 @@ public:
     }
 };
 
-// Derived class for SVR
 class SVR : public SVM
 {
 private:
