@@ -62,4 +62,11 @@ public:
         : learningRate(learningRate), epsilon(epsilon), maxIterations(maxIterations) {
         weights.resize(n_features, 0.0);
     }
+    double predict(const Vector &x) {
+        double result = bias;
+        for (size_t i = 0; i < x.size(); i++) {
+            result += x[i] * weights[i];
+        }
+        return result;
+    }
 };
