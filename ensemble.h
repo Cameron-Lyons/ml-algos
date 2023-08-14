@@ -145,7 +145,7 @@ public:
 
         for (int i = 0; i < n_estimators; i++)
         {
-            DecisionTree tree;
+            DecisionTree tree(n_estimators);
             tree.fit(X, residuals);
             trees.push_back(tree);
 
@@ -189,7 +189,7 @@ public:
                 residuals[j] = y[j] - probabilities[j];
             }
 
-            DecisionTree tree;
+            DecisionTree tree(n_estimators);
             tree.fit(X, residuals);
             trees.push_back(tree);
 
