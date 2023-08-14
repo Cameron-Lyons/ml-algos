@@ -1,4 +1,5 @@
 #include <matrix.h>
+#include <limits>
 
 class SVM
 {
@@ -31,7 +32,7 @@ public:
         class_weights.resize(n_classes, Vector(n_features, 0.0));
     }
 
-    int predict(const Vector &x) const override
+    double predict(const Vector &x) const override
     {
         double max_dotProduct = std::numeric_limits<double>::min();
         int predicted_class = -1;
@@ -50,7 +51,7 @@ public:
             }
         }
 
-        return predicted_class;
+        return static_cast<double>(predicted_class);
     }
 
     void fit(const Matrix &X, const Vector &y) override
