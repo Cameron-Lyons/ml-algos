@@ -1,12 +1,13 @@
 #include <iostream>
 #include <matrix.h>
+#include <cmath>
 
 double mse(const Vector &y_true, const Vector &y_pred)
 {
     if (y_true.size() != y_pred.size())
     {
         std::cerr << "Sizes of true values and predicted values do not match!" << std::endl;
-        return -1.0; // Return a negative value to indicate an error
+        return -1.0;
     }
 
     double sum_errors = 0.0;
@@ -25,7 +26,7 @@ double r2(const Vector &y_true, const Vector &y_pred)
     if (y_true.size() != y_pred.size())
     {
         std::cerr << "Sizes of true values and predicted values do not match!" << std::endl;
-        return -1.0; // Return a negative value to indicate an error
+        return -1.0;
     }
 
     double mean_true = 0.0;
@@ -61,7 +62,7 @@ double accuracy(const Vector &y_true, const Vector &y_pred)
     if (y_true.size() != y_pred.size())
     {
         std::cerr << "Sizes of true values and predicted values do not match!" << std::endl;
-        return -1.0; // Return a negative value to indicate an error
+        return -1.0;
     }
 
     int num_correct = 0;
@@ -81,7 +82,7 @@ double f1_score(const Vector &y_true, const Vector &y_pred)
     if (y_true.size() != y_pred.size())
     {
         std::cerr << "Sizes of true values and predicted values do not match!" << std::endl;
-        return -1.0; // Return a negative value to indicate an error
+        return -1.0;
     }
 
     int true_positives = 0;
@@ -121,7 +122,7 @@ double matthews_correlation_coeffecient(const Vector &y_true, const Vector &y_pr
     if (y_true.size() != y_pred.size())
     {
         std::cerr << "Sizes of true values and predicted values do not match!" << std::endl;
-        return -1.0; // Return a negative value to indicate an error
+        return -1.0;
     }
 
     int true_positives = 0;
