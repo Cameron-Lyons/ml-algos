@@ -122,7 +122,7 @@ public:
         root = buildTree(X, y, 0);
     }
 
-    double predict(const Vector &instance, TreeNode *node)
+    double predict(const Vector &instance, TreeNode *node) const
     {
         if (!node->left && !node->right)
         {
@@ -139,7 +139,7 @@ public:
         }
     }
 
-    double predict(const Vector &instance)
+    double predict(const Vector &instance) const
     {
         if (!root)
             return 0.0;
