@@ -59,7 +59,7 @@ private:
     }
 
 public:
-    using RandomForestBase::RandomForestBase; // Inherits constructor
+    using RandomForestBase::RandomForestBase;
 
     void fit(const Matrix &X, const Vector &y) override
     {
@@ -89,7 +89,7 @@ public:
 class RandomForestRegressor : public RandomForestBase
 {
 public:
-    using RandomForestBase::RandomForestBase; // Inherits constructor
+    using RandomForestBase::RandomForestBase;
 
     void fit(const Matrix &X, const Vector &y) override
     {
@@ -112,7 +112,6 @@ public:
         {
             predictions.push_back(tree.predict(x));
         }
-        // Calculate the average prediction from all the trees
         double average = std::accumulate(predictions.begin(), predictions.end(), 0.0) / predictions.size();
         return average;
     }
