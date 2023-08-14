@@ -115,3 +115,45 @@ double f1_score(const Vector &y_true, const Vector &y_pred)
 
     return 2.0 * precision * recall / (precision + recall);
 }
+
+double matthews_correlation_coeffecient(const Vector &y_true, const Vector &y_pred)
+{
+    if (y_true.size() != y_pred.size())
+    {
+        std::cerr << "Sizes of true values and predicted values do not match!" << std::endl;
+        return -1.0; // Return a negative value to indicate an error
+    }
+
+    int true_positives = 0;
+    int false_positives = 0;
+    int false_negatives = 0;
+    int true_negatives = 0;
+
+    for (size_t i = 0; i < y_true.size(); i++)
+    {
+        if (y_true[i] == 1.0 && y_pred[i] == 1.0)
+        {
+            true_positives++;
+        }
+        else if (y_true[i] == 0.0 && y_pred[i] == 1.0)
+        {
+            false_positives++;
+        }
+        else if (y_true[i] == 1.0 && y_pred[i] == 0.0)
+        {
+            false_negatives++;
+        }
+        else if (y_true[i] == 0.0 && y_pred[i] == 0.0)
+        {
+            true_negatives++;
+        }
+    }
+
+    if ((true_positives + false_positives) * (true_positives + false_negatives) * (true_negatives + false_positives) * (true_negatives + false_negatives) == 0)
+    {
+        std::cerr << "Division by zero encountered in Matthews correlation coeffecient calculation!" << std::endl;
+        return -1.0;
+    }
+
+    return (true_positives * true_negatives - false_positives * false_negatives) / sqrt((true_positives + false_positives) * (true_positives + false_negatives) * (true_negatives + false_positives) * (true_negatives + false_negatives));
+}
