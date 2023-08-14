@@ -44,7 +44,6 @@ private:
     {
         TreeNode *node = new TreeNode();
 
-        // Base cases: pure or depth reached
         if (depth == maxDepth)
         {
             node->output = computeMean(y);
@@ -66,7 +65,6 @@ private:
                 Matrix currentLeftX, currentRightX;
                 Vector currentLeftY, currentRightY;
 
-                // Split data based on the current feature and value
                 for (size_t i = 0; i < X.size(); ++i)
                 {
                     if (X[i][featureIdx] <= value)
@@ -81,14 +79,12 @@ private:
                     }
                 }
 
-                // Compute variances
                 double leftMean = computeMean(currentLeftY);
                 double rightMean = computeMean(currentRightY);
                 double currentVariance = (currentLeftY.size() * computeVariance(currentLeftY, leftMean) +
                                           currentRightY.size() * computeVariance(currentRightY, rightMean)) /
                                          y.size();
 
-                // Update best split if needed
                 if (currentVariance < bestVariance)
                 {
                     bestVariance = currentVariance;
@@ -146,7 +142,7 @@ public:
     double predict(const Vector &instance)
     {
         if (!root)
-            return 0.0; // or handle appropriately
+            return 0.0;
         return predict(instance, root);
     }
 };
