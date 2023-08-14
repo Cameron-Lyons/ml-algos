@@ -116,3 +116,102 @@ public:
         return average;
     }
 };
+
+class GradientBoostedTrees
+{
+protected:
+    std::vector<DecisionTree> trees;
+    int n_estimators;
+    double learning_rate;
+
+public:
+    GradientBoostedTrees(int n_estimators, double learning_rate)
+        : n_estimators(n_estimators), learning_rate(learning_rate) {}
+
+    virtual void fit(const Matrix &X, const Vector &y) = 0;
+    virtual double predict(const Vector &x) const = 0;
+};
+
+class GradientBoostedTreesRegressor : public GradientBoostedTrees
+{
+public:
+    GradientBoostedTreesRegressor(int n_estimators, double learning_rate)
+        : GradientBoostedTrees(n_estimators, learning_rate) {}
+
+    void fit(const Matrix &X, const Vector &y) override
+    {
+        Vector residuals = y;
+        Vector predictions(X.size(), 0.0);
+
+        for (int i = 0; i < n_estimators; i++)
+        {
+            DecisionTree tree;
+            tree.fit(X, residuals);
+            trees.push_back(tree);
+
+            // Update predictions and compute residuals
+            for (size_t j = 0; j < X.size(); j++)
+            {
+                double prediction = tree.predict(X[j]);
+                predictions[j] += learning_rate * prediction;
+                residuals[j] = y[j] - predictions[j];
+            }
+        }
+    }
+
+    double predict(const Vector &x) const override
+    {
+        double result = 0.0;
+        for (const DecisionTree &tree : trees)
+        {
+            result += learning_rate * tree.predict(x);
+        }
+        return result;
+    }
+};
+
+class GradientBoostedTreesClassifier : public GradientBoostedTrees
+{
+public:
+    GradientBoostedTreesClassifier(int n_estimators, double learning_rate)
+        : GradientBoostedTrees(n_estimators, learning_rate) {}
+
+    void fit(const Matrix &X, const Vector &y) override
+    {
+        Vector probabilities(X.size(), 0.5); // initialize with 0.5 probabilities
+        Vector residuals(X.size(), 0.0);
+
+        for (int i = 0; i < n_estimators; i++)
+        {
+            // Compute residuals (negative gradient of the log loss)
+            for (size_t j = 0; j < X.size(); j++)
+            {
+                residuals[j] = y[j] - probabilities[j];
+            }
+
+            DecisionTree tree;
+            tree.fit(X, residuals);
+            trees.push_back(tree);
+
+            // Update probabilities
+            for (size_t j = 0; j < X.size(); j++)
+            {
+                double prediction = tree.predict(X[j]);
+                double logOdds = log(probabilities[j] / (1 - probabilities[j]));
+                logOdds += learning_rate * prediction;
+                probabilities[j] = 1.0 / (1.0 + exp(-logOdds)); // Convert log odds back to probability
+            }
+        }
+    }
+
+    double predict(const Vector &x) const override
+    {
+        double logOdds = 0.0;
+        for (const DecisionTree &tree : trees)
+        {
+            logOdds += learning_rate * tree.predict(x);
+        }
+        double probability = 1.0 / (1.0 + exp(-logOdds));
+        return probability > 0.5 ? 1.0 : 0.0; // Return class label instead of probability
+    }
+};
