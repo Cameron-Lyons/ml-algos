@@ -55,3 +55,23 @@ double r2(const Vector &y_true, const Vector &y_pred)
 
     return 1.0 - (ss_res / ss_total);
 }
+
+double accuracy(const Vector &y_true, const Vector &y_pred)
+{
+    if (y_true.size() != y_pred.size())
+    {
+        std::cerr << "Sizes of true values and predicted values do not match!" << std::endl;
+        return -1.0; // Return a negative value to indicate an error
+    }
+
+    int num_correct = 0;
+    for (size_t i = 0; i < y_true.size(); i++)
+    {
+        if (y_true[i] == y_pred[i])
+        {
+            num_correct++;
+        }
+    }
+
+    return static_cast<double>(num_correct) / y_true.size();
+}
