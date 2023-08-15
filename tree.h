@@ -1,6 +1,6 @@
+#include "matrix.h"
 #include <iostream>
 #include <limits>
-#include <matrix.h>
 #include <vector>
 
 struct TreeNode {

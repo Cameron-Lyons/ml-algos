@@ -1,8 +1,8 @@
+#include "linear.h"
+#include "matrix.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <linear.h>
-#include <matrix.h>
 #include <random>
 #include <sstream>
 #include <string>

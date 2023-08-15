@@ -1,8 +1,8 @@
 
+#include "matrix.h"
 #include <cmath>
 #include <iostream>
 #include <map>
-#include <matrix.h>
 #include <vector>
 
 struct Gaussian {

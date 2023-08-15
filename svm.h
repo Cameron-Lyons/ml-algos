@@ -1,5 +1,5 @@
+#include "matrix.h"
 #include <limits>
-#include <matrix.h>
 
 class SVM {
 protected:
