@@ -10,6 +10,12 @@ struct Gaussian {
 };
 
 class NaiveBayes {
+public:
+    virtual void train(const std::vector<std::vector<double>>& features, const std::vector<int>& labels) = 0;
+    virtual int predict(const std::vector<double>& features) = 0;
+};
+
+class GaussianNaiveBayes {
 private:
     std::map<int, Gaussian> featureStatsClass0; // Stats for class 0
     std::map<int, Gaussian> featureStatsClass1; // Stats for class 1
