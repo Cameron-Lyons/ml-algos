@@ -89,3 +89,53 @@ public:
     }
 };
 
+class MultinomialNaiveBayes : public NaiveBayes {
+private:
+    std::map<int, std::map<int, double>> featureCounts;
+    std::map<int, double> classCounts;
+    double totalSamples;
+    double alpha; // Additive (Laplace/Lidstone) smoothing parameter
+
+public:
+    MultinomialNaiveBayes(double a = 1.0) : alpha(a) {}
+
+    void train(const std::vector<std::vector<double>>& features, const std::vector<int>& labels) override {
+        totalSamples = features.size();
+
+        for(int i = 0; i < totalSamples; ++i) {
+            classCounts[labels[i]] += 1;
+            for(int j = 0; j < features[i].size(); ++j) {
+                featureCounts[labels[i]][j] += features[i][j];
+            }
+        }
+    }
+
+    int predict(const std::vector<double>& features) override {
+        double maxLogProb = std::numeric_limits<double>::lowest();
+        int bestClass = -1;
+
+        for(const auto& classEntry : classCounts) {
+            int c = classEntry.first;
+            double logProb = log(classEntry.second / totalSamples);
+            
+            for(int j = 0; j < features.size(); ++j) {
+                double countForFeatureInClass = featureCounts[c].count(j) ? featureCounts[c][j] : 0;
+                double totalFeatureCountForClass = 0;
+                for(const auto& featureEntry : featureCounts[c]) {
+                    totalFeatureCountForClass += featureEntry.second;
+                }
+                
+                logProb += features[j] * log((countForFeatureInClass + alpha) /
+                                 (totalFeatureCountForClass + features.size() * alpha));
+            }
+            
+            if(logProb > maxLogProb) {
+                maxLogProb = logProb;
+                bestClass = c;
+            }
+        }
+
+        return bestClass;
+    }
+};
+
