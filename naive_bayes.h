@@ -298,48 +298,56 @@ public:
     }
 };
 
-
-class CategoricalNaiveBayes : public NaiveBayes {
+class CategoricalNaiveBayes : public NaiveBayes
+{
 private:
     std::map<int, std::map<int, std::map<int, double>>> featureCategoryCounts;
     std::map<int, double> classCounts;
     double totalSamples;
-    double alpha;  // Additive (Laplace/Lidstone) smoothing parameter
+    double alpha; // Additive (Laplace/Lidstone) smoothing parameter
 
 public:
     CategoricalNaiveBayes(double a = 1.0) : alpha(a) {}
 
-    void train(const std::vector<std::vector<int>>& features, const std::vector<int>& labels) override {
+    void train(const Matrix &features, const std::vector<int> &labels) override
+    {
         totalSamples = features.size();
 
-        for(int i = 0; i < totalSamples; ++i) {
+        for (int i = 0; i < totalSamples; ++i)
+        {
             classCounts[labels[i]] += 1;
-            for(int j = 0; j < features[i].size(); ++j) {
+            for (int j = 0; j < features[i].size(); ++j)
+            {
                 featureCategoryCounts[labels[i]][j][features[i][j]] += 1;
             }
         }
     }
 
-    int predict(const std::vector<int>& features) override {
+    int predict(const std::vector<double> &features) override
+    {
         double maxLogProb = std::numeric_limits<double>::lowest();
         int bestClass = -1;
 
-        for(const auto& classEntry : classCounts) {
+        for (const auto &classEntry : classCounts)
+        {
             int c = classEntry.first;
             double logProb = log(classEntry.second / totalSamples);
 
-            for(int j = 0; j < features.size(); ++j) {
+            for (int j = 0; j < features.size(); ++j)
+            {
                 double countForCategoryInFeature = featureCategoryCounts[c][j][features[j]];
                 double totalCountForFeature = 0;
-                for(const auto& categoryEntry : featureCategoryCounts[c][j]) {
+                for (const auto &categoryEntry : featureCategoryCounts[c][j])
+                {
                     totalCountForFeature += categoryEntry.second;
                 }
 
-                logProb += log((countForCategoryInFeature + alpha) / 
+                logProb += log((countForCategoryInFeature + alpha) /
                                (totalCountForFeature + featureCategoryCounts[c][j].size() * alpha));
             }
 
-            if(logProb > maxLogProb) {
+            if (logProb > maxLogProb)
+            {
                 maxLogProb = logProb;
                 bestClass = c;
             }
@@ -348,4 +356,3 @@ public:
         return bestClass;
     }
 };
-
