@@ -235,48 +235,60 @@ public:
     }
 };
 
-class BernoulliNaiveBayes : public NaiveBayes {
+class BernoulliNaiveBayes : public NaiveBayes
+{
 private:
     std::map<int, std::map<int, double>> featureCounts;
     std::map<int, double> classCounts;
     double totalSamples;
-    double alpha;  // Additive (Laplace/Lidstone) smoothing parameter
+    double alpha; // Additive (Laplace/Lidstone) smoothing parameter
 
 public:
     BernoulliNaiveBayes(double a = 1.0) : alpha(a) {}
 
-    void train(const Matrix& features, const std::vector<int>& labels) override {
+    void train(const Matrix &features, const std::vector<int> &labels) override
+    {
         totalSamples = features.size();
 
-        for(int i = 0; i < totalSamples; ++i) {
+        for (int i = 0; i < totalSamples; ++i)
+        {
             classCounts[labels[i]] += 1;
-            for(int j = 0; j < features[i].size(); ++j) {
-                if(features[i][j] == 1) {  // Only count if the feature is present
+            for (int j = 0; j < features[i].size(); ++j)
+            {
+                if (features[i][j] == 1)
+                { // Only count if the feature is present
                     featureCounts[labels[i]][j] += 1;
                 }
             }
         }
     }
 
-    int predict(const std::vector<double>& features) override {
+    int predict(const std::vector<double> &features) override
+    {
         double maxLogProb = std::numeric_limits<double>::lowest();
         int bestClass = -1;
 
-        for(const auto& classEntry : classCounts) {
+        for (const auto &classEntry : classCounts)
+        {
             int c = classEntry.first;
             double logProb = log(classEntry.second / totalSamples);
 
-            for(int j = 0; j < features.size(); ++j) {
+            for (int j = 0; j < features.size(); ++j)
+            {
                 double probabilityOfFeatureInClass = (featureCounts[c][j] + alpha) / (classCounts[c] + 2 * alpha);
-                
-                if(features[j] == 1) {
+
+                if (features[j] == 1)
+                {
                     logProb += log(probabilityOfFeatureInClass);
-                } else {
+                }
+                else
+                {
                     logProb += log(1.0 - probabilityOfFeatureInClass);
                 }
             }
 
-            if(logProb > maxLogProb) {
+            if (logProb > maxLogProb)
+            {
                 maxLogProb = logProb;
                 bestClass = c;
             }
@@ -285,4 +297,3 @@ public:
         return bestClass;
     }
 };
-
