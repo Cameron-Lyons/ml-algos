@@ -14,7 +14,7 @@ struct Gaussian
 class NaiveBayes
 {
 public:
-    virtual void train(const std::vector<std::vector<double>> &features, const std::vector<int> &labels) = 0;
+    virtual void train(const matrix &features, const std::vector<int> &labels) = 0;
     virtual int predict(const std::vector<double> &features) = 0;
 };
 
@@ -56,7 +56,7 @@ public:
         int numSamples = features.size();
         int numFeatures = features[0].size();
         int countClass0 = 0;
-        std::vector<std::vector<double>> valuesClass0, valuesClass1;
+        matrix valuesClass0, valuesClass1;
 
         for (int i = 0; i < numFeatures; ++i)
         {
@@ -119,7 +119,7 @@ private:
 public:
     MultinomialNaiveBayes(double a = 1.0) : alpha(a) {}
 
-    void train(const std::vector<std::vector<double>> &features, const std::vector<int> &labels) override
+    void train(const matrix &features, const std::vector<int> &labels) override
     {
         totalSamples = features.size();
 
@@ -177,7 +177,7 @@ private:
 public:
     ComplementNaiveBayes(double a = 1.0) : alpha(a) {}
 
-    void train(const std::vector<std::vector<double>>& features, const std::vector<int>& labels) override {
+    void train(const matrix& features, const std::vector<int>& labels) override {
         totalSamples = features.size();
 
         for(int i = 0; i < totalSamples; ++i) {
