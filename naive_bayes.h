@@ -14,7 +14,7 @@ struct Gaussian
 class NaiveBayes
 {
 public:
-    virtual void train(const matrix &features, const std::vector<int> &labels) = 0;
+    virtual void train(const Matrix &features, const std::vector<int> &labels) = 0;
     virtual int predict(const std::vector<double> &features) = 0;
 };
 
@@ -56,7 +56,7 @@ public:
         int numSamples = features.size();
         int numFeatures = features[0].size();
         int countClass0 = 0;
-        matrix valuesClass0, valuesClass1;
+        Matrix valuesClass0, valuesClass1;
 
         for (int i = 0; i < numFeatures; ++i)
         {
@@ -119,7 +119,7 @@ private:
 public:
     MultinomialNaiveBayes(double a = 1.0) : alpha(a) {}
 
-    void train(const matrix &features, const std::vector<int> &labels) override
+    void train(const Matrix &features, const std::vector<int> &labels) override
     {
         totalSamples = features.size();
 
@@ -167,54 +167,65 @@ public:
     }
 };
 
-class ComplementNaiveBayes : public NaiveBayes {
+class ComplementNaiveBayes : public NaiveBayes
+{
 private:
     std::map<int, std::map<int, double>> featureCounts;
     std::map<int, double> classCounts;
     double totalSamples;
-    double alpha;  // Additive (Laplace/Lidstone) smoothing parameter
+    double alpha; // Additive (Laplace/Lidstone) smoothing parameter
 
 public:
     ComplementNaiveBayes(double a = 1.0) : alpha(a) {}
 
-    void train(const matrix& features, const std::vector<int>& labels) override {
+    void train(const Matrix &features, const std::vector<int> &labels) override
+    {
         totalSamples = features.size();
 
-        for(int i = 0; i < totalSamples; ++i) {
+        for (int i = 0; i < totalSamples; ++i)
+        {
             classCounts[labels[i]] += 1;
-            for(int j = 0; j < features[i].size(); ++j) {
+            for (int j = 0; j < features[i].size(); ++j)
+            {
                 featureCounts[labels[i]][j] += features[i][j];
             }
         }
     }
 
-    int predict(const std::vector<double>& features) override {
+    int predict(const std::vector<double> &features) override
+    {
         double minLogProb = std::numeric_limits<double>::max();
         int bestClass = -1;
 
-        for(const auto& classEntry : classCounts) {
+        for (const auto &classEntry : classCounts)
+        {
             int c = classEntry.first;
             double logProb = 0.0;
 
             // Calculate the total feature counts for all other classes (complement)
             std::map<int, double> complementFeatureCounts;
             double complementTotalCount = 0.0;
-            for(const auto& otherClassEntry : classCounts) {
-                if(otherClassEntry.first == c) continue;
-                for(const auto& featureEntry : featureCounts[otherClassEntry.first]) {
+            for (const auto &otherClassEntry : classCounts)
+            {
+                if (otherClassEntry.first == c)
+                    continue;
+                for (const auto &featureEntry : featureCounts[otherClassEntry.first])
+                {
                     complementFeatureCounts[featureEntry.first] += featureEntry.second;
                     complementTotalCount += featureEntry.second;
                 }
             }
 
-            for(int j = 0; j < features.size(); ++j) {
+            for (int j = 0; j < features.size(); ++j)
+            {
                 double countForFeatureInComplement = complementFeatureCounts.count(j) ? complementFeatureCounts[j] : 0;
                 logProb += features[j] * log((countForFeatureInComplement + alpha) /
-                                 (complementTotalCount + features.size() * alpha));
+                                             (complementTotalCount + features.size() * alpha));
             }
 
             // Since CNB aims for the minimum complement probability
-            if(logProb < minLogProb) {
+            if (logProb < minLogProb)
+            {
                 minLogProb = logProb;
                 bestClass = c;
             }
