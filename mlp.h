@@ -49,7 +49,6 @@ private:
 public:
     MLP(int inputSize, int hiddenSize, int outputSize)
     {
-        // Initialize weights and biases with small random values
         weightsInputToHidden = Matrix(inputSize, Vector(hiddenSize));
         weightsHiddenToOutput = Matrix(hiddenSize, Vector(outputSize));
         hiddenBias = Vector(hiddenSize, 0.1);
@@ -58,7 +57,6 @@ public:
 
     Vector predict(const Vector &input)
     {
-        // Forward propagation
         Matrix hidden = multiply({input}, weightsInputToHidden);
         Vector hiddenActivated = applyFunction(hidden[0], sigmoid);
 
@@ -69,14 +67,12 @@ public:
     }
     void train(const Vector &input, const Vector &targetOutput)
     {
-        // Forward propagation
         Matrix hidden = multiply({input}, weightsInputToHidden);
         Vector hiddenActivated = applyFunction(hidden[0], sigmoid);
 
         Matrix output = multiply({hiddenActivated}, weightsHiddenToOutput);
         Vector outputActivated = applyFunction(output[0], sigmoid);
 
-        // Calculate errors
         Vector outputError(targetOutput.size());
         for (size_t i = 0; i < targetOutput.size(); i++)
         {
@@ -85,8 +81,6 @@ public:
 
         Vector hiddenError = multiply(outputError, transpose(weightsHiddenToOutput))[0];
 
-        // Gradient descent
-        // For output layer
         for (size_t i = 0; i < weightsHiddenToOutput.size(); i++)
         {
             for (size_t j = 0; j < weightsHiddenToOutput[0].size(); j++)
@@ -95,7 +89,6 @@ public:
             }
         }
 
-        // For hidden layer
         for (size_t i = 0; i < weightsInputToHidden.size(); i++)
         {
             for (size_t j = 0; j < weightsInputToHidden[0].size(); j++)
@@ -104,7 +97,6 @@ public:
             }
         }
 
-        // Adjusting biases (simplified, without considering batch size)
         for (size_t i = 0; i < hiddenBias.size(); i++)
         {
             hiddenBias[i] += learningRate * hiddenError[i] * sigmoid_derivative(hiddenActivated[i]);
