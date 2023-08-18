@@ -31,3 +31,11 @@ Matrix applyFunction(const Matrix &mat, double (*func)(double))
     }
     return result;
 }
+
+class MLP
+{
+private:
+    Matrix weightsInputToHidden;
+    Matrix weightsHiddenToOutput;
+    Vector hiddenBias;
+    Vector outputBias;
