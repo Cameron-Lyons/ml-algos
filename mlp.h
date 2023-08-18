@@ -79,7 +79,9 @@ public:
             outputError[i] = targetOutput[i] - outputActivated[i];
         }
 
-        Vector hiddenError = multiply(outputError, transpose(weightsHiddenToOutput))[0];
+        Matrix outputErrorMatrix = {outputError};
+        Matrix hiddenErrorMatrix = multiply(outputErrorMatrix, transpose(weightsHiddenToOutput));
+        Vector hiddenError = hiddenErrorMatrix[0];
 
         for (size_t i = 0; i < weightsHiddenToOutput.size(); i++)
         {
