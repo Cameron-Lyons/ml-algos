@@ -39,3 +39,25 @@ private:
     Matrix weightsHiddenToOutput;
     Vector hiddenBias;
     Vector outputBias;
+
+public:
+    MLP(int inputSize, int hiddenSize, int outputSize)
+    {
+        // Initialize weights and biases with small random values
+        weightsInputToHidden = Matrix(inputSize, Vector(hiddenSize));
+        weightsHiddenToOutput = Matrix(hiddenSize, Vector(outputSize));
+        hiddenBias = Vector(hiddenSize, 0.1);
+        outputBias = Vector(outputSize, 0.1);
+    }
+
+    Vector predict(const Vector &input)
+    {
+        // Forward propagation
+        Matrix hidden = multiply({input}, weightsInputToHidden);
+        Vector hiddenActivated = applyFunction(hidden[0], sigmoid);
+
+        Matrix output = multiply({hiddenActivated}, weightsHiddenToOutput);
+        Vector outputActivated = applyFunction(output[0], sigmoid);
+
+        return outputActivated;
+    }
