@@ -32,6 +32,11 @@ Matrix applyFunction(const Matrix &mat, double (*func)(double))
     return result;
 }
 
+double sigmoid_derivative(double x)
+{
+    return x * (1.0 - x); // assuming x has already passed through the sigmoid function
+}
+
 class MLP
 {
 private:
@@ -39,6 +44,7 @@ private:
     Matrix weightsHiddenToOutput;
     Vector hiddenBias;
     Vector outputBias;
+    double learningRate = 0.01;
 
 public:
     MLP(int inputSize, int hiddenSize, int outputSize)
@@ -61,3 +67,52 @@ public:
 
         return outputActivated;
     }
+    void train(const Vector &input, const Vector &targetOutput)
+    {
+        // Forward propagation
+        Matrix hidden = multiply({input}, weightsInputToHidden);
+        Vector hiddenActivated = applyFunction(hidden[0], sigmoid);
+
+        Matrix output = multiply({hiddenActivated}, weightsHiddenToOutput);
+        Vector outputActivated = applyFunction(output[0], sigmoid);
+
+        // Calculate errors
+        Vector outputError(targetOutput.size());
+        for (size_t i = 0; i < targetOutput.size(); i++)
+        {
+            outputError[i] = targetOutput[i] - outputActivated[i];
+        }
+
+        Vector hiddenError = multiply(outputError, transpose(weightsHiddenToOutput))[0];
+
+        // Gradient descent
+        // For output layer
+        for (size_t i = 0; i < weightsHiddenToOutput.size(); i++)
+        {
+            for (size_t j = 0; j < weightsHiddenToOutput[0].size(); j++)
+            {
+                weightsHiddenToOutput[i][j] += learningRate * outputError[j] * sigmoid_derivative(outputActivated[j]) * hiddenActivated[i];
+            }
+        }
+
+        // For hidden layer
+        for (size_t i = 0; i < weightsInputToHidden.size(); i++)
+        {
+            for (size_t j = 0; j < weightsInputToHidden[0].size(); j++)
+            {
+                weightsInputToHidden[i][j] += learningRate * hiddenError[j] * sigmoid_derivative(hiddenActivated[j]) * input[i];
+            }
+        }
+
+        // Adjusting biases (simplified, without considering batch size)
+        for (size_t i = 0; i < hiddenBias.size(); i++)
+        {
+            hiddenBias[i] += learningRate * hiddenError[i] * sigmoid_derivative(hiddenActivated[i]);
+        }
+
+        for (size_t i = 0; i < outputBias.size(); i++)
+        {
+            outputBias[i] += learningRate * outputError[i] * sigmoid_derivative(outputActivated[i]);
+        }
+    }
+};
