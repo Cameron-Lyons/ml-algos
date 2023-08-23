@@ -102,3 +102,11 @@ public:
     }
   }
 };
+
+double rbf_kernel(const Vector &x, const Vector &z, double sigma) {
+  double norm_sq = 0.0;
+  for (size_t i = 0; i < x.size(); i++) {
+    norm_sq += (x[i] - z[i]) * (x[i] - z[i]);
+  }
+  return exp(-norm_sq / (2 * sigma * sigma));
+}
