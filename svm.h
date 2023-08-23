@@ -1,4 +1,5 @@
 #include "matrix.h"
+#include <cmath>
 #include <limits>
 
 class SVM {
