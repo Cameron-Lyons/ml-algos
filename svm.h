@@ -118,6 +118,7 @@ private:
   Vector alphas;
   double bias = 0.0;
   double sigma;
+  double epsilon;
 
 public:
   KernelSVM(int n_features, double learningRate, double sigma,
