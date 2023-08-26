@@ -71,3 +71,22 @@ Matrix add(const Matrix &A, const Matrix &B) {
 
   return C;
 }
+
+Matrix subtractMean(const Matrix &data) {
+  size_t rows = data.size();
+  size_t cols = data[0].size();
+
+  Vector mean(cols, 0.0);
+  for (size_t j = 0; j < cols; j++)
+    for (size_t i = 0; i < rows; i++)
+      mean[j] += data[i][j];
+  for (double &m : mean)
+    m /= rows;
+
+  Matrix centeredData = data;
+  for (size_t i = 0; i < rows; i++)
+    for (size_t j = 0; j < cols; j++)
+      centeredData[i][j] -= mean[j];
+
+  return centeredData;
+}
