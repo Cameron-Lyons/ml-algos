@@ -4,6 +4,8 @@
 
 typedef std::vector<std::vector<double>> Matrix;
 typedef std::vector<double> Vector;
+typedef std::vector<double> Point;
+typedef std::vector<Point> Points;
 
 Matrix multiply(const Matrix &A, const Matrix &B) {
   int rowsA = A.size();
@@ -70,4 +72,38 @@ Matrix add(const Matrix &A, const Matrix &B) {
   }
 
   return C;
+}
+
+Matrix subtractMean(const Matrix &data) {
+  size_t rows = data.size();
+  size_t cols = data[0].size();
+
+  Vector mean(cols, 0.0);
+  for (size_t j = 0; j < cols; j++)
+    for (size_t i = 0; i < rows; i++)
+      mean[j] += data[i][j];
+  for (double &m : mean)
+    m /= rows;
+
+  Matrix centeredData = data;
+  for (size_t i = 0; i < rows; i++)
+    for (size_t j = 0; j < cols; j++)
+      centeredData[i][j] -= mean[j];
+
+  return centeredData;
+}
+
+Vector meanMatrix(const Matrix &X) {
+  Vector meanVector(X[0].size(), 0.0);
+  for (const auto &row : X) {
+    for (size_t j = 0; j < row.size(); ++j) {
+      meanVector[j] += row[j];
+    }
+  }
+
+  for (double &value : meanVector) {
+    value /= X.size();
+  }
+
+  return meanVector;
 }

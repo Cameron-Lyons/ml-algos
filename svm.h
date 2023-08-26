@@ -1,4 +1,5 @@
 #include "matrix.h"
+#include <cmath>
 #include <limits>
 
 class SVM {
@@ -98,6 +99,49 @@ public:
           }
           bias -= learningRate * error;
         }
+      }
+    }
+  }
+};
+
+double rbf_kernel(const Vector &x, const Vector &z, double sigma) {
+  double norm_sq = 0.0;
+  for (size_t i = 0; i < x.size(); i++) {
+    norm_sq += (x[i] - z[i]) * (x[i] - z[i]);
+  }
+  return exp(-norm_sq / (2 * sigma * sigma));
+}
+
+class KernelSVM : public SVM {
+private:
+  Matrix support_vectors;
+  Vector alphas;
+  double bias = 0.0;
+  double sigma;
+  double epsilon;
+
+public:
+  KernelSVM(int n_features, double learningRate, double sigma,
+            int maxIterations)
+      : SVM(n_features, learningRate, maxIterations), sigma(sigma) {}
+
+  double predict(const Vector &x) const override {
+    double result = bias;
+    for (size_t i = 0; i < support_vectors.size(); i++) {
+      result += alphas[i] * rbf_kernel(x, support_vectors[i], sigma);
+    }
+    return result;
+  }
+
+  void fit(const Matrix &X, const Vector &y) override {
+    for (size_t i = 0; i < X.size(); i++) {
+      double prediction = predict(X[i]);
+      double error = y[i] - prediction;
+
+      if (std::abs(error) > epsilon) {
+        alphas.push_back(error);
+        support_vectors.push_back(X[i]);
+        bias += learningRate * error;
       }
     }
   }

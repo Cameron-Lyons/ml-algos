@@ -1,6 +1,5 @@
 #include "matrix.h"
 #include <cmath>
-#include <iostream>
 
 double mse(const Vector &y_true, const Vector &y_pred) {
   if (y_true.size() != y_pred.size()) {
