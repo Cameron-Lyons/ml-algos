@@ -39,4 +39,4 @@ Vector pca(const Matrix &data) {
       covMatrix[i][j] /= (data.size() - 1);
 
   return powerIteration(covMatrix);
-}:
+}
