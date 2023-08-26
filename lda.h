@@ -1,4 +1,5 @@
 #include "matrix.h"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 
