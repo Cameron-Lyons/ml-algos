@@ -4,6 +4,8 @@
 
 typedef std::vector<std::vector<double>> Matrix;
 typedef std::vector<double> Vector;
+typedef std::vector<double> Point;
+typedef std::vector<Point> Points;
 
 Matrix multiply(const Matrix &A, const Matrix &B) {
   int rowsA = A.size();

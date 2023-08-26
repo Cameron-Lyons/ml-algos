@@ -1,4 +1,4 @@
-#include <"matrix.h">
+#include "matrix.h"
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -12,4 +12,13 @@ double euclideanDistance(const Point &a, const Point &b) {
     sum += (a[i] - b[i]) * (a[i] - b[i]);
   }
   return sqrt(sum);
+}
+
+Points initializeCentroids(const Points &data, int k) {
+  Points centroids(k);
+  std::srand(std::time(nullptr));
+  for (int i = 0; i < k; i++) {
+    centroids[i] = data[rand() % data.size()];
+  }
+  return centroids;
 }
