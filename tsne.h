@@ -34,3 +34,30 @@ double computeGradient(const Points &X, const Points &Y, size_t i, size_t d,
   }
   return 2.0 * (1.0 - lowDimAffinity(Y[i], Y[i])) * grad;
 }
+
+Points tSNE(const Points &X, int no_dims, int max_iterations,
+            double learning_rate, double sigma) {
+  size_t n = X.size();
+  Points Y(n, Point(no_dims, 0.0));
+
+  std::mt19937 gen(std::random_device{}());
+  std::normal_distribution<double> dist(0, 1e-4);
+  for (size_t i = 0; i < n; i++)
+    for (int d = 0; d < no_dims; d++)
+      Y[i][d] = dist(gen);
+
+  for (int iter = 0; iter < max_iterations; iter++) {
+    for (size_t i = 0; i < n; i++) {
+      for (int d = 0; d < no_dims; d++) {
+        double gradient = computeGradient(X, Y, i, d, sigma);
+        Y[i][d] -= learning_rate * gradient;
+      }
+    }
+
+    if (iter % 10 == 0) {
+      std::cout << "Iteration " << iter << " completed." << std::endl;
+    }
+  }
+
+  return Y;
+}
