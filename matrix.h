@@ -92,3 +92,18 @@ Matrix subtractMean(const Matrix &data) {
 
   return centeredData;
 }
+
+Vector meanMatrix(const Matrix &X) {
+  Vector meanVector(X[0].size(), 0.0);
+  for (const auto &row : X) {
+    for (size_t j = 0; j < row.size(); ++j) {
+      meanVector[j] += row[j];
+    }
+  }
+
+  for (double &value : meanVector) {
+    value /= X.size();
+  }
+
+  return meanVector;
+}
