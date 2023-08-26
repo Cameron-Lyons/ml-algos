@@ -1,7 +1,6 @@
 #include "matrix.h"
 #include <cassert>
 #include <cmath>
-#include <iostream>
 #include <vector>
 
 double sigmoid(double x) { return 1.0 / (1.0 + std::exp(-x)); }
