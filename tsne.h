@@ -3,6 +3,14 @@
 #include <random>
 #include <vector>
 
+double euclideanDistance(const Point &a, const Point &b) {
+  double sum = 0.0;
+  for (size_t i = 0; i < a.size(); i++) {
+    sum += (a[i] - b[i]) * (a[i] - b[i]);
+  }
+  return sqrt(sum);
+}
+
 double highDimAffinity(const Point &xi, const Point &xj, double sigma) {
   double distance = euclideanDistance(xi, xj);
   return exp(-distance * distance / (2.0 * sigma * sigma));
