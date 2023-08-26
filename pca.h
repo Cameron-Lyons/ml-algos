@@ -29,3 +29,14 @@ Vector powerIteration(const Matrix &matrix, int maxIter = 1000,
   }
   return vector;
 }
+
+Vector pca(const Matrix &data) {
+  Matrix centeredData = subtractMean(data);
+  Matrix covMatrix = multiply(transpose(centeredData), centeredData);
+
+  for (size_t i = 0; i < covMatrix.size(); i++)
+    for (size_t j = 0; j < covMatrix[0].size(); j++)
+      covMatrix[i][j] /= (data.size() - 1);
+
+  return powerIteration(covMatrix);
+}:
