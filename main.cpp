@@ -1,4 +1,3 @@
-#include "linear.h"
 #include "matrix.h"
 #include <algorithm>
 #include <fstream>
@@ -6,6 +5,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <supervised/linear.h>
 
 Matrix readCSV(const std::string &filename) {
   Matrix data;
