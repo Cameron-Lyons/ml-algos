@@ -1,4 +1,5 @@
 #include "matrix.h"
+#include <algorithm>
 #include <cmath>
 
 double mse(const Vector &y_true, const Vector &y_pred) {
@@ -143,4 +144,46 @@ double matthews_correlation_coeffecient(const Vector &y_true,
               (true_positives + false_negatives) *
               (true_negatives + false_positives) *
               (true_negatives + false_negatives));
+}
+
+double computeAUC(const std::vector<int> &trueLabels,
+                  const std::vector<double> &predictedScores) {
+  if (trueLabels.size() != predictedScores.size() || trueLabels.empty()) {
+    std::cerr << "Error: Mismatched sizes or empty vectors." << std::endl;
+    return -1.0;
+  }
+
+  // Pair (score, label)
+  std::vector<std::pair<double, int>> pairs;
+  for (size_t i = 0; i < trueLabels.size(); ++i) {
+    pairs.emplace_back(predictedScores[i], trueLabels[i]);
+  }
+
+  // Sort by predicted scores in descending order
+  std::sort(pairs.begin(), pairs.end(),
+            [](const auto &a, const auto &b) { return a.first > b.first; });
+
+  double auc = 0.0;
+  double fprPrev = 0.0;
+  double tprPrev = 0.0;
+  double positiveCount = std::count(trueLabels.begin(), trueLabels.end(), 1);
+  double negativeCount = trueLabels.size() - positiveCount;
+
+  for (size_t i = 0; i < pairs.size(); ++i) {
+    double fpr =
+        std::count_if(pairs.begin(), pairs.begin() + i + 1,
+                      [](const auto &pair) { return pair.second == 0; }) /
+        negativeCount;
+
+    double tpr =
+        std::count_if(pairs.begin(), pairs.begin() + i + 1,
+                      [](const auto &pair) { return pair.second == 1; }) /
+        positiveCount;
+
+    auc += (fpr - fprPrev) * (tpr + tprPrev) / 2.0;
+    fprPrev = fpr;
+    tprPrev = tpr;
+  }
+
+  return auc;
 }
