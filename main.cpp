@@ -7,15 +7,18 @@
 #include <string>
 #include <supervised/linear.h>
 
-Matrix readCSV(const std::string &filename) {
+Matrix readCSV(const std::string &filename)
+{
   Matrix data;
   std::ifstream file(filename);
   std::string row, item;
 
-  while (getline(file, row)) {
+  while (getline(file, row))
+  {
     std::stringstream ss(row);
     Vector currentRow;
-    while (getline(ss, item, ',')) {
+    while (getline(ss, item, ','))
+    {
       currentRow.push_back(std::stod(item));
     }
     data.push_back(currentRow);
@@ -23,8 +26,10 @@ Matrix readCSV(const std::string &filename) {
   return data;
 }
 
-void splitData(const Matrix &data, Matrix &X, Vector &y) {
-  for (const auto &row : data) {
+void splitData(const Matrix &data, Matrix &X, Vector &y)
+{
+  for (const auto &row : data)
+  {
     y.push_back(row.back());
     X.push_back(Vector(row.begin(), row.end() - 1));
   }
@@ -32,13 +37,16 @@ void splitData(const Matrix &data, Matrix &X, Vector &y) {
 
 void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
                     Matrix &X_test, Vector &y_train, Vector &y_test,
-                    double test_size) {
-  if (X.size() != y.size()) {
+                    double test_size)
+{
+  if (X.size() != y.size())
+  {
     std::cerr << "Features and target sizes don't match!" << std::endl;
     return;
   }
   std::vector<std::pair<Vector, double>> dataset;
-  for (size_t i = 0; i < X.size(); i++) {
+  for (size_t i = 0; i < X.size(); i++)
+  {
     dataset.push_back({X[i], y[i]});
   }
 
@@ -47,18 +55,23 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
                std::default_random_engine(seed));
 
   size_t test_count = static_cast<size_t>(test_size * dataset.size());
-  for (size_t i = 0; i < dataset.size(); i++) {
-    if (i < test_count) {
+  for (size_t i = 0; i < dataset.size(); i++)
+  {
+    if (i < test_count)
+    {
       X_test.push_back(dataset[i].first);
       y_test.push_back(dataset[i].second);
-    } else {
+    }
+    else
+    {
       X_train.push_back(dataset[i].first);
       y_train.push_back(dataset[i].second);
     }
   }
 }
 
-int main() {
+int main()
+{
   Matrix data = readCSV("data.csv");
   Matrix X;
   Vector y;
@@ -74,7 +87,8 @@ int main() {
   Vector preds = model.predict(X_test);
 
   std::cout << "Model Predictions:" << std::endl;
-  for (double val : preds) {
+  for (double val : preds)
+  {
     std::cout << val << std::endl;
   }
   return 0;
