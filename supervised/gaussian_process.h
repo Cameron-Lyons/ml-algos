@@ -22,18 +22,33 @@ public:
   void fit(const Matrix &X, const Vector &y) {
     X_train = X;
     y_train = y;
-  }
-  double predict(const Vector &X_test) {
-    double K_star = 0;
-    double sum = 0.0;
 
-    for (size_t i = 0; i < X_train.size(); ++i) {
-      K_star = rbf_kernel(X_test, X_train[i]);
-      sum +=
-          K_star * y_train[i]; // Assuming the inverse kernel matrix times the
-                               // training outputs is identity for simplicity.
+    int n = X_train.size();
+    Matrix K(n, vector<double>(n, 0.0));
+
+    for (int i = 0; i < n; i++) {
+      for (int j = 0; j < n; j++) {
+        K[i][j] = rbf_kernel(X_train[i], X_train[j]);
+        if (i == j) {
+          K[i][j] += sigma_n * sigma_n; // Adding noise variance to the diagonal
+        }
+      }
     }
 
-    return sum;
+    inverse_matrix = invert_matrix(K);
   }
-};
+
+} double predict(const Vector &X_test) {
+  double K_star = 0;
+  double sum = 0.0;
+
+  for (size_t i = 0; i < X_train.size(); ++i) {
+    K_star = rbf_kernel(X_test, X_train[i]);
+    sum += K_star * y_train[i]; // Assuming the inverse kernel matrix times the
+                                // training outputs is identity for simplicity.
+  }
+
+  return sum;
+}
+}
+;
