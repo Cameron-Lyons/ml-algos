@@ -7,3 +7,11 @@ private:
   double sigma_n; // Noise level
   Matrix X_train;
   Vector y_train;
+
+  double rbf_kernel(const vector<double> &x1, const vector<double> &x2) const {
+    double sum = 0.0;
+    for (size_t i = 0; i < x1.size(); ++i) {
+      sum += (x1[i] - x2[i]) * (x1[i] - x2[i]);
+    }
+    return exp(-sum / (2 * l * l));
+  }
