@@ -2,7 +2,8 @@
 #include <limits>
 #include <vector>
 
-struct TreeNode {
+struct TreeNode
+{
   TreeNode *left;
   TreeNode *right;
   int splitFeature;
@@ -14,31 +15,38 @@ struct TreeNode {
         output(0.0) {}
 };
 
-class DecisionTree {
+class DecisionTree
+{
 private:
   TreeNode *root;
   int maxDepth;
 
-  double computeMean(const Vector &values) {
+  double computeMean(const Vector &values)
+  {
     double sum = 0.0;
-    for (double value : values) {
+    for (double value : values)
+    {
       sum += value;
     }
     return sum / values.size();
   }
 
-  double computeVariance(const Vector &values, double mean) {
+  double computeVariance(const Vector &values, double mean)
+  {
     double variance = 0.0;
-    for (double value : values) {
+    for (double value : values)
+    {
       variance += (value - mean) * (value - mean);
     }
     return variance / values.size();
   }
 
-  TreeNode *buildTree(const Matrix &X, const Vector &y, int depth) {
+  TreeNode *buildTree(const Matrix &X, const Vector &y, int depth)
+  {
     TreeNode *node = new TreeNode();
 
-    if (depth == maxDepth) {
+    if (depth == maxDepth)
+    {
       node->output = computeMean(y);
       return node;
     }
@@ -51,16 +59,22 @@ private:
     Vector leftY, rightY;
 
     // For each feature, find the best split
-    for (size_t featureIdx = 0; featureIdx < X[0].size(); ++featureIdx) {
-      for (const double &value : X[featureIdx]) {
+    for (size_t featureIdx = 0; featureIdx < X[0].size(); ++featureIdx)
+    {
+      for (const double &value : X[featureIdx])
+      {
         Matrix currentLeftX, currentRightX;
         Vector currentLeftY, currentRightY;
 
-        for (size_t i = 0; i < X.size(); ++i) {
-          if (X[i][featureIdx] <= value) {
+        for (size_t i = 0; i < X.size(); ++i)
+        {
+          if (X[i][featureIdx] <= value)
+          {
             currentLeftX.push_back(X[i]);
             currentLeftY.push_back(y[i]);
-          } else {
+          }
+          else
+          {
             currentRightX.push_back(X[i]);
             currentRightY.push_back(y[i]);
           }
@@ -73,7 +87,8 @@ private:
              currentRightY.size() * computeVariance(currentRightY, rightMean)) /
             y.size();
 
-        if (currentVariance < bestVariance) {
+        if (currentVariance < bestVariance)
+        {
           bestVariance = currentVariance;
           bestFeature = featureIdx;
           bestSplit = value;
@@ -87,7 +102,8 @@ private:
     }
 
     // No beneficial split found, create a leaf node
-    if (bestFeature == -1) {
+    if (bestFeature == -1)
+    {
       node->output = computeMean(y);
       return node;
     }
@@ -105,19 +121,25 @@ public:
 
   void fit(const Matrix &X, const Vector &y) { root = buildTree(X, y, 0); }
 
-  double predict(const Vector &instance, TreeNode *node) const {
-    if (!node->left && !node->right) {
+  double predict(const Vector &instance, TreeNode *node) const
+  {
+    if (!node->left && !node->right)
+    {
       return node->output;
     }
 
-    if (instance[node->splitFeature] <= node->splitValue) {
+    if (instance[node->splitFeature] <= node->splitValue)
+    {
       return predict(instance, node->left);
-    } else {
+    }
+    else
+    {
       return predict(instance, node->right);
     }
   }
 
-  double predict(const Vector &instance) const {
+  double predict(const Vector &instance) const
+  {
     if (!root)
       return 0.0;
     return predict(instance, root);
