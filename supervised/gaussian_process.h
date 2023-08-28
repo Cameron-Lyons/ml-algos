@@ -42,8 +42,9 @@ public:
       }
     }
 
-    inverse_matrix = invert_matrix(K);
+    Matrix inverse_matrix = invert_matrix(K);
   };
+
   double predict(const Vector &X_test)
   {
     double K_star = 0;
