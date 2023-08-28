@@ -15,3 +15,11 @@ private:
     }
     return exp(-sum / (2 * l * l));
   }
+
+public:
+  GaussianProcessRegressor(double l, double sigma_n) : l(l), sigma_n(sigma_n) {}
+
+  void fit(const Matrix &X, const Vector &y) {
+    X_train = X;
+    y_train = y;
+  }
