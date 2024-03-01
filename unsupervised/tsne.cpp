@@ -1,7 +1,7 @@
-#include "../matrix.h"
+#include "../matrix.cpp"
 #include <cmath>
+#include <iostream>
 #include <random>
-#include <vector>
 
 double euclideanDistance(const Point &a, const Point &b) {
   double sum = 0.0;

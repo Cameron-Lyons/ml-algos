@@ -1,8 +1,6 @@
-#include "../matrix.h"
-#include <cassert>
+#include "../matrix.cpp"
 #include <cmath>
 #include <numeric>
-#include <vector>
 
 Vector powerIteration(const Matrix &matrix, int maxIter = 1000,
                       double tolerance = 1e-6) {

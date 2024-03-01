@@ -1,12 +1,12 @@
-#include "matrix.h"
+#include "matrix.cpp"
+#include "metrics.cpp"
+#include "supervised/linear.cpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <metrics.h>
 #include <random>
 #include <sstream>
 #include <string>
-#include <supervised/linear.h>
 
 Matrix readCSV(const std::string &filename) {
   Matrix data;
