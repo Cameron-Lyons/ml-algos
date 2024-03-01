@@ -1,4 +1,6 @@
+#include "matrix.h"
 #include <cassert>
+#include <cmath>
 #include <vector>
 
 typedef std::vector<std::vector<double>> Matrix;

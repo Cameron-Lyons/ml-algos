@@ -1,7 +1,6 @@
-#include "../matrix.cpp"
+#include "../matrix.h"
 #include <algorithm>
 #include <cassert>
-#include <cmath>
 
 Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
   assert(X.size() == y.size() && "Data and labels must have the same length.");

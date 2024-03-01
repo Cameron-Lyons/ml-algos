@@ -1,4 +1,4 @@
-#include "../matrix.cpp"
+#include "../matrix.h"
 #include <cmath>
 #include <iostream>
 #include <random>
