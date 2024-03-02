@@ -1,6 +1,7 @@
 #include "matrix.cpp"
 #include "metrics.cpp"
 #include "supervised/linear.cpp"
+#include "supervised/tree.cpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -59,8 +60,9 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
   }
 }
 
-int main() {
-  Matrix data = readCSV("data.csv");
+int main(int argc, char *argv[]) {
+  std::string filename = argv[1];
+  Matrix data = readCSV(filename);
   Matrix X;
   Vector y;
   splitData(data, X, y);
