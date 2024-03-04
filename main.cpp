@@ -1,7 +1,6 @@
 #include "matrix.cpp"
 #include "metrics.cpp"
 #include "supervised/linear.cpp"
-#include "supervised/tree.cpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
