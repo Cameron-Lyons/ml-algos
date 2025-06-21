@@ -1,6 +1,6 @@
 #include "matrix.cpp"
 #include "metrics.cpp"
-#include "supervised/linear.cpp"
+#include "supervised/mlp.cpp"
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -70,13 +70,26 @@ int main(int argc, char *argv[]) {
   Vector y_train, y_test;
   trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
 
-  LinearRegression model;
-  model.fit(X_train, y_train);
+  int input_size = X_train[0].size();
+  int hidden_size = 5;
+  int output_size = 1;
+  MLP model(input_size, hidden_size, output_size);
 
-  Vector preds = model.predict(X_test);
+  for (int epoch = 0; epoch < 500; ++epoch) {
+    for (size_t i = 0; i < X_train.size(); ++i) {
+      Vector target = {y_train[i]};
+      model.train(X_train[i], target);
+    }
+  }
+
+  Vector preds;
+  for (const auto& x : X_test) {
+    preds.push_back(model.predict(x)[0]);
+  }
   float r2_score = r2(y_test, preds);
 
   std::cout << "R2 score:" << std::endl;
   std::cout << r2_score << std::endl;
+
   return 0;
 }

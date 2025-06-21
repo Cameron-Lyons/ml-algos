@@ -30,7 +30,7 @@ Matrix applyFunction(const Matrix &mat, double (*func)(double)) {
 
 double sigmoid_derivative(double x) {
   return x * (1.0 -
-              x); // assuming x has already passed through the sigmoid function
+              x);
 }
 
 class MLP {

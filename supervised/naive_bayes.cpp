@@ -17,8 +17,8 @@ public:
 
 class GaussianNaiveBayes {
 private:
-  std::map<int, Gaussian> featureStatsClass0; // Stats for class 0
-  std::map<int, Gaussian> featureStatsClass1; // Stats for class 1
+  std::map<int, Gaussian> featureStatsClass0;
+  std::map<int, Gaussian> featureStatsClass1;
   double prior0, prior1;
 
   Gaussian computeStats(const std::vector<double> &features) {
@@ -98,7 +98,7 @@ private:
   std::map<int, std::map<int, double>> featureCounts;
   std::map<int, double> classCounts;
   double totalSamples;
-  double alpha; // Additive (Laplace/Lidstone) smoothing parameter
+  double alpha;
 
 public:
   MultinomialNaiveBayes(double a = 1.0) : alpha(a) {}
@@ -150,7 +150,7 @@ private:
   std::map<int, std::map<int, double>> featureCounts;
   std::map<int, double> classCounts;
   double totalSamples;
-  double alpha; // Additive (Laplace/Lidstone) smoothing parameter
+  double alpha;
 
 public:
   ComplementNaiveBayes(double a = 1.0) : alpha(a) {}
@@ -174,7 +174,6 @@ public:
       int c = classEntry.first;
       double logProb = 0.0;
 
-      // Calculate the total feature counts for all other classes (complement)
       std::map<int, double> complementFeatureCounts;
       double complementTotalCount = 0.0;
       for (const auto &otherClassEntry : classCounts) {
@@ -194,7 +193,6 @@ public:
                               (complementTotalCount + features.size() * alpha));
       }
 
-      // Since CNB aims for the minimum complement probability
       if (logProb < minLogProb) {
         minLogProb = logProb;
         bestClass = c;
@@ -210,7 +208,7 @@ private:
   std::map<int, std::map<int, double>> featureCounts;
   std::map<int, double> classCounts;
   double totalSamples;
-  double alpha; // Additive (Laplace/Lidstone) smoothing parameter
+  double alpha;
 
 public:
   BernoulliNaiveBayes(double a = 1.0) : alpha(a) {}
@@ -221,7 +219,7 @@ public:
     for (int i = 0; i < totalSamples; ++i) {
       classCounts[labels[i]] += 1;
       for (int j = 0; j < features[i].size(); ++j) {
-        if (features[i][j] == 1) { // Only count if the feature is present
+        if (features[i][j] == 1) {
           featureCounts[labels[i]][j] += 1;
         }
       }
@@ -262,7 +260,7 @@ private:
   std::map<int, std::map<int, std::map<int, double>>> featureCategoryCounts;
   std::map<int, double> classCounts;
   double totalSamples;
-  double alpha; // Additive (Laplace/Lidstone) smoothing parameter
+    double alpha;
 
 public:
   CategoricalNaiveBayes(double a = 1.0) : alpha(a) {}

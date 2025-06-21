@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cmath>
 #include <vector>
+#include <iostream>
 
 typedef std::vector<std::vector<double>> Matrix;
 typedef std::vector<double> Vector;
@@ -13,6 +14,7 @@ Matrix multiply(const Matrix &A, const Matrix &B) {
   int colsA = A[0].size();
   int rowsB = B.size();
   int colsB = B[0].size();
+  std::cout << "multiply: A is " << rowsA << " x " << colsA << ", B is " << rowsB << " x " << colsB << std::endl;
   assert(colsA == rowsB);
 
   Matrix C(rowsA, Vector(colsB, 0.0));

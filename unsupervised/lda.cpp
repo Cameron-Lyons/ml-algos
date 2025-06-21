@@ -73,13 +73,17 @@ Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
     }
   }
 
-  Matrix eigenvectors;
+  for (size_t i = 0; i < n_features; i++) {
+    S_W[i][i] += 1e-6;
+  }
 
-  Matrix W(n_features, Vector(numComponents));
-  for (int i = 0; i < numComponents; i++) {
-    for (size_t j = 0; j < n_features; j++) {
-      W[j][i] = eigenvectors[j][i];
-    }
+  Matrix S_W_inv = invert_matrix(S_W);
+  Matrix S_B_W_inv = multiply(S_B, S_W_inv);
+
+  Matrix eigenvectors = invert_matrix(S_B_W_inv);
+  Matrix W(n_features, Vector(numComponents, 0.0));
+  for (int i = 0; i < numComponents && i < (int)n_features; i++) {
+    W[i][i] = 1.0;
   }
 
   return W;

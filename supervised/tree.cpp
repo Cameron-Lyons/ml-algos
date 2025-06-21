@@ -1,12 +1,13 @@
 #include "../matrix.h"
 #include <limits>
+#include <set>
 
 struct TreeNode {
   TreeNode *left;
   TreeNode *right;
   int splitFeature;
   double splitValue;
-  double output; // used for leaves
+  double output;
 
   TreeNode()
       : left(nullptr), right(nullptr), splitFeature(-1), splitValue(0.0),
@@ -49,9 +50,12 @@ private:
     Matrix leftX, rightX;
     Vector leftY, rightY;
 
-    // For each feature, find the best split
     for (size_t featureIdx = 0; featureIdx < X[0].size(); ++featureIdx) {
-      for (const double &value : X[featureIdx]) {
+      std::set<double> unique_values;
+      for (size_t i = 0; i < X.size(); ++i) {
+        unique_values.insert(X[i][featureIdx]);
+      }
+      for (const double &value : unique_values) {
         Matrix currentLeftX, currentRightX;
         Vector currentLeftY, currentRightY;
 
@@ -85,7 +89,6 @@ private:
       }
     }
 
-    // No beneficial split found, create a leaf node
     if (bestFeature == -1) {
       node->output = computeMean(y);
       return node;
@@ -102,7 +105,9 @@ private:
 public:
   DecisionTree(int depth) : root(nullptr), maxDepth(depth) {}
 
-  void fit(const Matrix &X, const Vector &y) { root = buildTree(X, y, 0); }
+    void fit(const Matrix &X, const Vector &y) {
+    root = buildTree(X, y, 0);
+  }
 
   double predict(const Vector &instance, TreeNode *node) const {
     if (!node->left && !node->right) {

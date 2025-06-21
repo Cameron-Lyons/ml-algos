@@ -83,7 +83,6 @@ public:
       Matrix X_sample;
       Vector y_sample;
       bootstrapSample(X, y, X_sample, y_sample);
-
       DecisionTree tree(max_features);
       tree.fit(X_sample, y_sample);
       trees.push_back(tree);
@@ -130,7 +129,6 @@ public:
       tree.fit(X, residuals);
       trees.push_back(tree);
 
-      // Update predictions and compute residuals
       for (size_t j = 0; j < X.size(); j++) {
         double prediction = tree.predict(X[j]);
         predictions[j] += learning_rate * prediction;
@@ -154,11 +152,10 @@ public:
       : GradientBoostedTrees(n_estimators, learning_rate) {}
 
   void fit(const Matrix &X, const Vector &y) override {
-    Vector probabilities(X.size(), 0.5); // initialize with 0.5 probabilities
+    Vector probabilities(X.size(), 0.5);
     Vector residuals(X.size(), 0.0);
 
     for (int i = 0; i < n_estimators; i++) {
-      // Compute residuals (negative gradient of the log loss)
       for (size_t j = 0; j < X.size(); j++) {
         residuals[j] = y[j] - probabilities[j];
       }
@@ -167,13 +164,12 @@ public:
       tree.fit(X, residuals);
       trees.push_back(tree);
 
-      // Update probabilities
       for (size_t j = 0; j < X.size(); j++) {
         double prediction = tree.predict(X[j]);
         double logOdds = log(probabilities[j] / (1 - probabilities[j]));
         logOdds += learning_rate * prediction;
         probabilities[j] =
-            1.0 / (1.0 + exp(-logOdds)); // Convert log odds back to probability
+            1.0 / (1.0 + exp(-logOdds));
       }
     }
   }
@@ -185,6 +181,6 @@ public:
     }
     double probability = 1.0 / (1.0 + exp(-logOdds));
     return probability > 0.5 ? 1.0
-                             : 0.0; // Return class label instead of probability
+                             : 0.0;
   }
 };

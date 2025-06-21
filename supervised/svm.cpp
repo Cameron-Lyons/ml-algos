@@ -21,7 +21,7 @@ public:
 class SVC : public SVM {
 private:
   int num_classes;
-  std::vector<Vector> class_weights; // Each class will have a set of weights
+    std::vector<Vector> class_weights;
 
 public:
   SVC(int n_features, int n_classes, double learningRate = 0.01,

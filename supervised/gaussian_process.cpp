@@ -1,5 +1,6 @@
 #include "../matrix.h"
 #include <cmath>
+#include <vector>
 
 class GaussianProcessRegressor {
 private:
@@ -7,6 +8,7 @@ private:
   double sigma_n; // Noise level
   Matrix X_train;
   Vector y_train;
+  Matrix K_inv;
 
   double rbf_kernel(const Vector &x1, const Vector &x2) const {
     double sum = 0.0;
@@ -30,25 +32,27 @@ public:
       for (int j = 0; j < n; j++) {
         K[i][j] = rbf_kernel(X_train[i], X_train[j]);
         if (i == j) {
-          K[i][j] += sigma_n * sigma_n; // Adding noise variance to the diagonal
+          K[i][j] += sigma_n * sigma_n;
         }
       }
     }
 
-    Matrix inverse_matrix = invert_matrix(K);
+    K_inv = invert_matrix(K);
   };
 
   double predict(const Vector &X_test) {
-    double K_star = 0;
-    double sum = 0.0;
-
-    for (size_t i = 0; i < X_train.size(); ++i) {
-      K_star = rbf_kernel(X_test, X_train[i]);
-      sum +=
-          K_star * y_train[i]; // Assuming the inverse kernel matrix times the
-                               // training outputs is identity for simplicity.
+    int n = X_train.size();
+    Matrix k_star(n, Vector(1));
+    for (int i = 0; i < n; ++i) {
+      k_star[i][0] = rbf_kernel(X_test, X_train[i]);
     }
-
-    return sum;
+    Matrix y_col(n, Vector(1));
+    for (int i = 0; i < n; ++i) y_col[i][0] = y_train[i];
+    Matrix alpha = multiply(K_inv, y_col); // (n x 1)
+    double mu = 0.0;
+    for (int i = 0; i < n; ++i) {
+      mu += k_star[i][0] * alpha[i][0];
+    }
+    return mu;
   }
 };

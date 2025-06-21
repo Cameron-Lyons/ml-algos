@@ -5,8 +5,7 @@ class LinearModel {
 protected:
   Vector coefficients;
 
-  // Add a column of 1s to the left of the matrix to account for the bias term
-  Matrix addBias(const Matrix &X) {
+  Matrix addBias(const Matrix &X) const {
     Matrix X_bias(X.size(), Vector(X[0].size() + 1, 1.0));
     for (size_t i = 0; i < X.size(); i++) {
       for (size_t j = 0; j < X[0].size(); j++) {
@@ -20,7 +19,13 @@ public:
   virtual void fit(const Matrix &X, const Vector &y) = 0;
 
   Vector predict(const Matrix &X) const {
-    return multiply(X, {coefficients})[0];
+    Matrix X_bias = addBias(X);
+    Matrix coef_col(coefficients.size(), Vector(1));
+    for (size_t i = 0; i < coefficients.size(); ++i) coef_col[i][0] = coefficients[i];
+    Matrix result = multiply(X_bias, coef_col);
+    Vector preds(result.size());
+    for (size_t i = 0; i < result.size(); ++i) preds[i] = result[i][0];
+    return preds;
   }
 
   Vector getCoefficients() const {
@@ -28,7 +33,6 @@ public:
     return coeff;
   }
 
-  // The bias term is the first coefficient
   double getBias() const { return coefficients[0]; }
 };
 
@@ -39,9 +43,11 @@ public:
 
     Matrix Xt = transpose(X_bias);
     Matrix XtX = multiply(Xt, X_bias);
-    Matrix XtX_inv = inverse(XtX);
+    Matrix XtX_inv = invert_matrix(XtX);
     Matrix XtX_inv_Xt = multiply(XtX_inv, Xt);
-    Matrix betaMatrix = multiply(XtX_inv_Xt, {y});
+    Matrix y_col(y.size(), Vector(1));
+    for (size_t i = 0; i < y.size(); ++i) y_col[i][0] = y[i];
+    Matrix betaMatrix = multiply(XtX_inv_Xt, y_col);
 
     coefficients.clear();
     for (const auto &row : betaMatrix) {
@@ -52,7 +58,7 @@ public:
 
 class RidgeRegression : public LinearModel {
 private:
-  double lambda; // Regularization parameter
+  double lambda;
 
 public:
   RidgeRegression(double lambda_val) : lambda(lambda_val) {}
@@ -62,16 +68,17 @@ public:
     Matrix Xt = transpose(X_bias);
     Matrix XtX = multiply(Xt, X_bias);
 
-    // Add regularization term
     Matrix I(XtX.size(), Vector(XtX[0].size(), 0.0));
     for (size_t i = 0; i < I.size(); i++) {
       I[i][i] = lambda;
     }
     Matrix regularizedMatrix = add(XtX, I);
 
-    Matrix regularizedMatrix_inv = inverse(regularizedMatrix);
+    Matrix regularizedMatrix_inv = invert_matrix(regularizedMatrix);
     Matrix XtX_inv_Xt = multiply(regularizedMatrix_inv, Xt);
-    Matrix betaMatrix = multiply(XtX_inv_Xt, {y});
+    Matrix y_col(y.size(), Vector(1));
+    for (size_t i = 0; i < y.size(); ++i) y_col[i][0] = y[i];
+    Matrix betaMatrix = multiply(XtX_inv_Xt, y_col);
 
     coefficients.clear();
     for (const auto &row : betaMatrix) {
@@ -82,8 +89,8 @@ public:
 
 class LassoRegression : public LinearModel {
 private:
-  double lambda; // Regularization parameter
-  double tol;    // Tolerance for stopping criterion
+  double lambda;
+  double tol;
   int max_iter;
 
   double soft_threshold(double value, double threshold) const {
@@ -104,7 +111,7 @@ public:
     size_t num_samples = X_bias.size();
     size_t num_features = X_bias[0].size();
 
-    coefficients = Vector(num_features, 0.0); // Initialize coefficients
+    coefficients = Vector(num_features, 0.0);
 
     for (int iteration = 0; iteration < max_iter; ++iteration) {
       Vector old_coefficients = coefficients;
@@ -116,7 +123,7 @@ public:
             tmp -= coefficients[k] * X_bias[j][k];
         }
 
-        if (j == 0) // Bias term, don't penalize
+        if (j == 0)
         {
           coefficients[j] = tmp;
         } else {
@@ -124,7 +131,6 @@ public:
         }
       }
 
-      // Check for convergence
       double max_change = 0.0;
       for (size_t j = 0; j < num_features; ++j) {
         double change = fabs(old_coefficients[j] - coefficients[j]);
@@ -140,9 +146,9 @@ public:
 
 class ElasticNet : public LinearModel {
 private:
-  double alpha; // Regularization strength
-  double rho;   // Mix ratio for L1 vs L2 regularization
-  double tol;   // Tolerance for convergence
+  double alpha;
+  double rho;
+  double tol;
   int max_iter;
 
   double soft_threshold(double value, double threshold) const {
@@ -164,7 +170,7 @@ public:
     size_t num_samples = X_bias.size();
     size_t num_features = X_bias[0].size();
 
-    coefficients = Vector(num_features, 0.0); // Initialize coefficients
+    coefficients = Vector(num_features, 0.0);
 
     for (int iteration = 0; iteration < max_iter; ++iteration) {
       Vector old_coefficients = coefficients;
@@ -176,7 +182,7 @@ public:
             tmp -= coefficients[k] * X_bias[j][k];
         }
 
-        if (j == 0) // Bias term, don't penalize
+        if (j == 0)
         {
           coefficients[j] = tmp;
         } else {
@@ -185,7 +191,6 @@ public:
         }
       }
 
-      // Check for convergence
       double max_change = 0.0;
       for (size_t j = 0; j < num_features; ++j) {
         double change = fabs(old_coefficients[j] - coefficients[j]);
