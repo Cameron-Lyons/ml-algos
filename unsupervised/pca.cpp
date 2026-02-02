@@ -9,9 +9,11 @@ Vector powerIteration(const Matrix &matrix, int maxIter = 1000,
   Vector lastVector(n, 1.0);
   for (int iter = 0; iter < maxIter; iter++) {
     Matrix lastVectorCol(n, Vector(1));
-    for (size_t i = 0; i < n; ++i) lastVectorCol[i][0] = lastVector[i];
+    for (size_t i = 0; i < n; ++i)
+      lastVectorCol[i][0] = lastVector[i];
     Matrix result = multiply(matrix, lastVectorCol);
-    for (size_t i = 0; i < n; ++i) vector[i] = result[i][0];
+    for (size_t i = 0; i < n; ++i)
+      vector[i] = result[i][0];
 
     double norm = std::sqrt(
         std::inner_product(vector.begin(), vector.end(), vector.begin(), 0.0));

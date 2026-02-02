@@ -1,12 +1,12 @@
 #include "matrix.h"
 #include <algorithm>
 #include <cmath>
-#include <iostream>
+#include <print>
 
 double mse(const Vector &y_true, const Vector &y_pred) {
   if (y_true.size() != y_pred.size()) {
-    std::cerr << "Sizes of true values and predicted values do not match!"
-              << std::endl;
+    std::println(stderr,
+                 "Sizes of true values and predicted values do not match!");
     return -1.0;
   }
 
@@ -17,13 +17,13 @@ double mse(const Vector &y_true, const Vector &y_pred) {
     sum_errors += error * error;
   }
 
-  return sum_errors / y_true.size();
+  return sum_errors / static_cast<double>(y_true.size());
 }
 
 double r2(const Vector &y_true, const Vector &y_pred) {
   if (y_true.size() != y_pred.size()) {
-    std::cerr << "Sizes of true values and predicted values do not match!"
-              << std::endl;
+    std::println(stderr,
+                 "Sizes of true values and predicted values do not match!");
     return -1.0;
   }
 
@@ -31,10 +31,10 @@ double r2(const Vector &y_true, const Vector &y_pred) {
   for (const double value : y_true) {
     mean_true += value;
   }
-  mean_true /= y_true.size();
+  mean_true /= static_cast<double>(y_true.size());
 
-  double ss_total = 0.0; // Total sum of squares
-  double ss_res = 0.0;   // Residual sum of squares
+  double ss_total = 0.0;
+  double ss_res = 0.0;
 
   for (size_t i = 0; i < y_true.size(); i++) {
     double residual = y_true[i] - y_pred[i];
@@ -44,9 +44,8 @@ double r2(const Vector &y_true, const Vector &y_pred) {
     ss_total += total * total;
   }
 
-  if (ss_total == 0.0) // Avoid division by zero
-  {
-    std::cerr << "Division by zero encountered in R2 calculation!" << std::endl;
+  if (ss_total == 0.0) {
+    std::println(stderr, "Division by zero encountered in R2 calculation!");
     return -1.0;
   }
 
@@ -55,8 +54,8 @@ double r2(const Vector &y_true, const Vector &y_pred) {
 
 double accuracy(const Vector &y_true, const Vector &y_pred) {
   if (y_true.size() != y_pred.size()) {
-    std::cerr << "Sizes of true values and predicted values do not match!"
-              << std::endl;
+    std::println(stderr,
+                 "Sizes of true values and predicted values do not match!");
     return -1.0;
   }
 
@@ -67,13 +66,13 @@ double accuracy(const Vector &y_true, const Vector &y_pred) {
     }
   }
 
-  return static_cast<double>(num_correct) / y_true.size();
+  return static_cast<double>(num_correct) / static_cast<double>(y_true.size());
 }
 
 double f1_score(const Vector &y_true, const Vector &y_pred) {
   if (y_true.size() != y_pred.size()) {
-    std::cerr << "Sizes of true values and predicted values do not match!"
-              << std::endl;
+    std::println(stderr,
+                 "Sizes of true values and predicted values do not match!");
     return -1.0;
   }
 
@@ -92,8 +91,8 @@ double f1_score(const Vector &y_true, const Vector &y_pred) {
   }
 
   if (true_positives == 0) {
-    std::cerr << "Division by zero encountered in F1 score calculation!"
-              << std::endl;
+    std::println(stderr,
+                 "Division by zero encountered in F1 score calculation!");
     return -1.0;
   }
 
@@ -105,11 +104,11 @@ double f1_score(const Vector &y_true, const Vector &y_pred) {
   return 2.0 * precision * recall / (precision + recall);
 }
 
-double matthews_correlation_coeffecient(const Vector &y_true,
+double matthews_correlation_coefficient(const Vector &y_true,
                                         const Vector &y_pred) {
   if (y_true.size() != y_pred.size()) {
-    std::cerr << "Sizes of true values and predicted values do not match!"
-              << std::endl;
+    std::println(stderr,
+                 "Sizes of true values and predicted values do not match!");
     return -1.0;
   }
 
@@ -134,9 +133,8 @@ double matthews_correlation_coeffecient(const Vector &y_true,
           (true_negatives + false_positives) *
           (true_negatives + false_negatives) ==
       0) {
-    std::cerr << "Division by zero encountered in Matthews correlation "
-                 "coeffecient calculation!"
-              << std::endl;
+    std::println(stderr, "Division by zero encountered in Matthews correlation "
+                         "coefficient calculation!");
     return -1.0;
   }
 
@@ -150,35 +148,36 @@ double matthews_correlation_coeffecient(const Vector &y_true,
 double computeAUC(const std::vector<int> &trueLabels,
                   const std::vector<double> &predictedScores) {
   if (trueLabels.size() != predictedScores.size() || trueLabels.empty()) {
-    std::cerr << "Error: Mismatched sizes or empty vectors." << std::endl;
+    std::println(stderr, "Error: Mismatched sizes or empty vectors.");
     return -1.0;
   }
 
-  // Pair (score, label)
   std::vector<std::pair<double, int>> pairs;
   for (size_t i = 0; i < trueLabels.size(); ++i) {
     pairs.emplace_back(predictedScores[i], trueLabels[i]);
   }
 
-  // Sort by predicted scores in descending order
   std::sort(pairs.begin(), pairs.end(),
             [](const auto &a, const auto &b) { return a.first > b.first; });
 
   double auc = 0.0;
   double fprPrev = 0.0;
   double tprPrev = 0.0;
-  double positiveCount = std::count(trueLabels.begin(), trueLabels.end(), 1);
-  double negativeCount = trueLabels.size() - positiveCount;
+  auto positiveCount =
+      static_cast<double>(std::count(trueLabels.begin(), trueLabels.end(), 1));
+  double negativeCount = static_cast<double>(trueLabels.size()) - positiveCount;
 
   for (size_t i = 0; i < pairs.size(); ++i) {
     double fpr =
-        std::count_if(pairs.begin(), pairs.begin() + i + 1,
-                      [](const auto &pair) { return pair.second == 0; }) /
+        static_cast<double>(std::count_if(
+            pairs.begin(), pairs.begin() + static_cast<ptrdiff_t>(i + 1),
+            [](const auto &pair) { return pair.second == 0; })) /
         negativeCount;
 
     double tpr =
-        std::count_if(pairs.begin(), pairs.begin() + i + 1,
-                      [](const auto &pair) { return pair.second == 1; }) /
+        static_cast<double>(std::count_if(
+            pairs.begin(), pairs.begin() + static_cast<ptrdiff_t>(i + 1),
+            [](const auto &pair) { return pair.second == 1; })) /
         positiveCount;
 
     auc += (fpr - fprPrev) * (tpr + tprPrev) / 2.0;

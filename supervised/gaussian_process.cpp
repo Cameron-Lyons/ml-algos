@@ -47,7 +47,8 @@ public:
       k_star[i][0] = rbf_kernel(X_test, X_train[i]);
     }
     Matrix y_col(n, Vector(1));
-    for (int i = 0; i < n; ++i) y_col[i][0] = y_train[i];
+    for (int i = 0; i < n; ++i)
+      y_col[i][0] = y_train[i];
     Matrix alpha = multiply(K_inv, y_col); // (n x 1)
     double mu = 0.0;
     for (int i = 0; i < n; ++i) {

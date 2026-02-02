@@ -8,27 +8,28 @@ class RandomForestBase {
 protected:
   std::vector<DecisionTree> trees;
   size_t num_trees;
-  size_t max_features;
+  int max_features;
 
   virtual void bootstrapSample(const Matrix &X, const Vector &y,
                                Matrix &X_sample, Vector &y_sample) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dist(0, X.size() - 1);
+    std::uniform_int_distribution<size_t> dist(0, X.size() - 1);
 
     for (size_t i = 0; i < X.size(); i++) {
-      int idx = dist(gen);
+      size_t idx = dist(gen);
       X_sample.push_back(X[idx]);
       y_sample.push_back(y[idx]);
     }
   }
 
 public:
-  RandomForestBase(size_t num_trees, size_t max_features)
+  RandomForestBase(size_t num_trees, int max_features)
       : num_trees(num_trees), max_features(max_features) {}
 
   virtual void fit(const Matrix &X, const Vector &y) = 0;
   virtual double predict(const Vector &x) = 0;
+  virtual ~RandomForestBase() = default;
 };
 
 class RandomForestClassifier : public RandomForestBase {
@@ -41,10 +42,10 @@ private:
 
     int majority = -1;
     int max_count = 0;
-    for (const auto &pair : vote_count) {
-      if (pair.second > max_count) {
-        majority = pair.first;
-        max_count = pair.second;
+    for (const auto &[cls, count] : vote_count) {
+      if (count > max_count) {
+        majority = cls;
+        max_count = count;
       }
     }
     return majority;
@@ -61,14 +62,14 @@ public:
 
       DecisionTree tree(max_features);
       tree.fit(X_sample, y_sample);
-      trees.push_back(tree);
+      trees.push_back(std::move(tree));
     }
   }
 
   double predict(const Vector &x) override {
     std::vector<int> votes;
     for (const auto &tree : trees) {
-      votes.push_back(tree.predict(x));
+      votes.push_back(static_cast<int>(tree.predict(x)));
     }
     return static_cast<double>(majorityVote(votes));
   }
@@ -85,7 +86,7 @@ public:
       bootstrapSample(X, y, X_sample, y_sample);
       DecisionTree tree(max_features);
       tree.fit(X_sample, y_sample);
-      trees.push_back(tree);
+      trees.push_back(std::move(tree));
     }
   }
 
@@ -96,7 +97,7 @@ public:
     }
     double average =
         std::accumulate(predictions.begin(), predictions.end(), 0.0) /
-        predictions.size();
+        static_cast<double>(predictions.size());
     return average;
   }
 };
@@ -113,6 +114,7 @@ public:
 
   virtual void fit(const Matrix &X, const Vector &y) = 0;
   virtual double predict(const Vector &x) const = 0;
+  virtual ~GradientBoostedTrees() = default;
 };
 
 class GradientBoostedTreesRegressor : public GradientBoostedTrees {
@@ -127,13 +129,14 @@ public:
     for (int i = 0; i < n_estimators; i++) {
       DecisionTree tree(n_estimators);
       tree.fit(X, residuals);
-      trees.push_back(tree);
 
       for (size_t j = 0; j < X.size(); j++) {
         double prediction = tree.predict(X[j]);
         predictions[j] += learning_rate * prediction;
         residuals[j] = y[j] - predictions[j];
       }
+
+      trees.push_back(std::move(tree));
     }
   }
 
@@ -162,15 +165,15 @@ public:
 
       DecisionTree tree(n_estimators);
       tree.fit(X, residuals);
-      trees.push_back(tree);
 
       for (size_t j = 0; j < X.size(); j++) {
         double prediction = tree.predict(X[j]);
         double logOdds = log(probabilities[j] / (1 - probabilities[j]));
         logOdds += learning_rate * prediction;
-        probabilities[j] =
-            1.0 / (1.0 + exp(-logOdds));
+        probabilities[j] = 1.0 / (1.0 + exp(-logOdds));
       }
+
+      trees.push_back(std::move(tree));
     }
   }
 
@@ -180,7 +183,6 @@ public:
       logOdds += learning_rate * tree.predict(x);
     }
     double probability = 1.0 / (1.0 + exp(-logOdds));
-    return probability > 0.5 ? 1.0
-                             : 0.0;
+    return probability > 0.5 ? 1.0 : 0.0;
   }
 };

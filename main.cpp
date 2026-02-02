@@ -3,7 +3,7 @@
 #include "supervised/mlp.cpp"
 #include <algorithm>
 #include <fstream>
-#include <iostream>
+#include <print>
 #include <random>
 #include <sstream>
 #include <string>
@@ -35,7 +35,7 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
                     Matrix &X_test, Vector &y_train, Vector &y_test,
                     double test_size) {
   if (X.size() != y.size()) {
-    std::cerr << "Features and target sizes don't match!" << std::endl;
+    std::println(stderr, "Features and target sizes don't match!");
     return;
   }
   std::vector<std::pair<Vector, double>> dataset;
@@ -47,7 +47,8 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
   std::shuffle(dataset.begin(), dataset.end(),
                std::default_random_engine(seed));
 
-  size_t test_count = static_cast<size_t>(test_size * dataset.size());
+  size_t test_count =
+      static_cast<size_t>(test_size * static_cast<double>(dataset.size()));
   for (size_t i = 0; i < dataset.size(); i++) {
     if (i < test_count) {
       X_test.push_back(dataset[i].first);
@@ -59,7 +60,7 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
   }
 }
 
-int main(int argc, char *argv[]) {
+int main([[maybe_unused]] int argc, char *argv[]) {
   std::string filename = argv[1];
   Matrix data = readCSV(filename);
   Matrix X;
@@ -70,9 +71,9 @@ int main(int argc, char *argv[]) {
   Vector y_train, y_test;
   trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
 
-  int input_size = X_train[0].size();
-  int hidden_size = 5;
-  int output_size = 1;
+  size_t input_size = X_train[0].size();
+  size_t hidden_size = 5;
+  size_t output_size = 1;
   MLP model(input_size, hidden_size, output_size);
 
   for (int epoch = 0; epoch < 500; ++epoch) {
@@ -83,13 +84,13 @@ int main(int argc, char *argv[]) {
   }
 
   Vector preds;
-  for (const auto& x : X_test) {
+  for (const auto &x : X_test) {
     preds.push_back(model.predict(x)[0]);
   }
-  float r2_score = r2(y_test, preds);
+  double r2_score = r2(y_test, preds);
 
-  std::cout << "R2 score:" << std::endl;
-  std::cout << r2_score << std::endl;
+  std::println("R2 score:");
+  std::println("{}", r2_score);
 
   return 0;
 }

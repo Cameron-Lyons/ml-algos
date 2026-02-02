@@ -28,10 +28,7 @@ Matrix applyFunction(const Matrix &mat, double (*func)(double)) {
   return result;
 }
 
-double sigmoid_derivative(double x) {
-  return x * (1.0 -
-              x);
-}
+double sigmoid_derivative(double x) { return x * (1.0 - x); }
 
 class MLP {
 private:
@@ -42,7 +39,7 @@ private:
   double learningRate = 0.01;
 
 public:
-  MLP(int inputSize, int hiddenSize, int outputSize) {
+  MLP(size_t inputSize, size_t hiddenSize, size_t outputSize) {
     weightsInputToHidden = Matrix(inputSize, Vector(hiddenSize));
     weightsHiddenToOutput = Matrix(hiddenSize, Vector(outputSize));
     hiddenBias = Vector(hiddenSize, 0.1);
@@ -58,6 +55,7 @@ public:
 
     return outputActivated;
   }
+
   void train(const Vector &input, const Vector &targetOutput) {
     Matrix hidden = multiply({input}, weightsInputToHidden);
     Vector hiddenActivated = applyFunction(hidden[0], sigmoid);

@@ -8,7 +8,7 @@ protected:
   double learningRate;
   int maxIterations;
 
-  SVM(int n_features, double learningRate, int maxIterations)
+  SVM(size_t n_features, double learningRate, int maxIterations)
       : learningRate(learningRate), maxIterations(maxIterations) {
     weights.resize(n_features, 0.0);
   }
@@ -16,28 +16,30 @@ protected:
 public:
   virtual double predict(const Vector &x) const = 0;
   virtual void fit(const Matrix &X, const Vector &y) = 0;
+  virtual ~SVM() = default;
 };
 
 class SVC : public SVM {
 private:
   int num_classes;
-    std::vector<Vector> class_weights;
+  std::vector<Vector> class_weights;
 
 public:
-  SVC(int n_features, int n_classes, double learningRate = 0.01,
+  SVC(size_t n_features, int n_classes, double learningRate = 0.01,
       int maxIterations = 1000)
       : SVM(n_features, learningRate, maxIterations), num_classes(n_classes) {
-    class_weights.resize(n_classes, Vector(n_features, 0.0));
+    class_weights.resize(static_cast<size_t>(n_classes),
+                         Vector(n_features, 0.0));
   }
 
   double predict(const Vector &x) const override {
-    double max_dotProduct = std::numeric_limits<double>::min();
+    double max_dotProduct = std::numeric_limits<double>::lowest();
     int predicted_class = -1;
 
     for (int k = 0; k < num_classes; k++) {
       double dotProduct = 0.0;
       for (size_t i = 0; i < x.size(); i++) {
-        dotProduct += x[i] * class_weights[k][i];
+        dotProduct += x[i] * class_weights[static_cast<size_t>(k)][i];
       }
       if (dotProduct > max_dotProduct) {
         max_dotProduct = dotProduct;
@@ -58,7 +60,8 @@ public:
           if (prediction != true_label) {
             allClassifiedCorrectly = false;
             for (size_t j = 0; j < X[i].size(); j++) {
-              class_weights[k][j] += learningRate * true_label * X[i][j];
+              class_weights[static_cast<size_t>(k)][j] +=
+                  learningRate * true_label * X[i][j];
             }
           }
         }
@@ -76,7 +79,7 @@ private:
   double epsilon;
 
 public:
-  SVR(int n_features, double learningRate = 0.01, double epsilon = 0.1,
+  SVR(size_t n_features, double learningRate = 0.01, double epsilon = 0.1,
       int maxIterations = 1000)
       : SVM(n_features, learningRate, maxIterations), epsilon(epsilon) {}
 
@@ -121,9 +124,10 @@ private:
   double epsilon;
 
 public:
-  KernelSVM(int n_features, double learningRate, double sigma,
-            int maxIterations)
-      : SVM(n_features, learningRate, maxIterations), sigma(sigma) {}
+  KernelSVM(size_t n_features, double learningRate, double sigma,
+            double epsilon = 0.1, int maxIterations = 1000)
+      : SVM(n_features, learningRate, maxIterations), sigma(sigma),
+        epsilon(epsilon) {}
 
   double predict(const Vector &x) const override {
     double result = bias;

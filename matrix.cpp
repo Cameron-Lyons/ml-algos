@@ -1,27 +1,23 @@
 #include "matrix.h"
 #include <cassert>
 #include <cmath>
+#include <print>
 #include <vector>
-#include <iostream>
-
-typedef std::vector<std::vector<double>> Matrix;
-typedef std::vector<double> Vector;
-typedef std::vector<double> Point;
-typedef std::vector<Point> Points;
 
 Matrix multiply(const Matrix &A, const Matrix &B) {
-  int rowsA = A.size();
-  int colsA = A[0].size();
-  int rowsB = B.size();
-  int colsB = B[0].size();
-  std::cout << "multiply: A is " << rowsA << " x " << colsA << ", B is " << rowsB << " x " << colsB << std::endl;
+  size_t rowsA = A.size();
+  size_t colsA = A[0].size();
+  size_t rowsB = B.size();
+  size_t colsB = B[0].size();
+  std::println("multiply: A is {} x {}, B is {} x {}", rowsA, colsA, rowsB,
+               colsB);
   assert(colsA == rowsB);
 
   Matrix C(rowsA, Vector(colsB, 0.0));
 
-  for (int i = 0; i < rowsA; i++) {
-    for (int j = 0; j < colsB; j++) {
-      for (int k = 0; k < colsA; k++) {
+  for (size_t i = 0; i < rowsA; i++) {
+    for (size_t j = 0; j < colsB; j++) {
+      for (size_t k = 0; k < colsA; k++) {
         C[i][j] += A[i][k] * B[k][j];
       }
     }
@@ -31,13 +27,13 @@ Matrix multiply(const Matrix &A, const Matrix &B) {
 }
 
 Matrix transpose(const Matrix &A) {
-  int rows = A.size();
-  int cols = A[0].size();
+  size_t rows = A.size();
+  size_t cols = A[0].size();
 
   Matrix B(cols, Vector(rows));
 
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < cols; j++) {
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
       B[j][i] = A[i][j];
     }
   }
@@ -64,12 +60,12 @@ Matrix inverse(const Matrix &A) {
 Matrix add(const Matrix &A, const Matrix &B) {
   assert(A.size() == B.size() && A[0].size() == B[0].size());
 
-  int rows = A.size();
-  int cols = A[0].size();
+  size_t rows = A.size();
+  size_t cols = A[0].size();
   Matrix C(rows, Vector(cols, 0.0));
 
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < cols; j++) {
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
       C[i][j] = A[i][j] + B[i][j];
     }
   }
@@ -86,7 +82,7 @@ Matrix subtractMean(const Matrix &data) {
     for (size_t i = 0; i < rows; i++)
       mean[j] += data[i][j];
   for (double &m : mean)
-    m /= rows;
+    m /= static_cast<double>(rows);
 
   Matrix centeredData = data;
   for (size_t i = 0; i < rows; i++)
@@ -105,21 +101,21 @@ Vector meanMatrix(const Matrix &X) {
   }
 
   for (double &value : meanVector) {
-    value /= X.size();
+    value /= static_cast<double>(X.size());
   }
 
   return meanVector;
 }
 
 Matrix invert_matrix(const Matrix &matrix) {
-  int n = matrix.size();
-  assert(n > 0 && matrix[0].size() == n); // Ensure square matrix
+  size_t n = matrix.size();
+  assert(n > 0 && matrix[0].size() == n);
 
-  Matrix inv(n, std::vector<double>(n, 0.0));
-  Matrix augmentedMatrix(n, std::vector<double>(2 * n, 0.0));
+  Matrix inv(n, Vector(n, 0.0));
+  Matrix augmentedMatrix(n, Vector(2 * n, 0.0));
 
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < n; j++) {
+  for (size_t i = 0; i < n; i++) {
+    for (size_t j = 0; j < n; j++) {
       augmentedMatrix[i][j] = matrix[i][j];
       if (i == j) {
         augmentedMatrix[i][j + n] = 1.0;
@@ -127,11 +123,9 @@ Matrix invert_matrix(const Matrix &matrix) {
     }
   }
 
-  // Gauss-Jordan elimination
-  for (int i = 0; i < n; i++) {
-    // Partial pivoting (to handle zero diagonal elements)
-    int pivot = i;
-    for (int j = i + 1; j < n; j++) {
+  for (size_t i = 0; i < n; i++) {
+    size_t pivot = i;
+    for (size_t j = i + 1; j < n; j++) {
       if (std::abs(augmentedMatrix[j][i]) >
           std::abs(augmentedMatrix[pivot][i])) {
         pivot = j;
@@ -141,21 +135,21 @@ Matrix invert_matrix(const Matrix &matrix) {
       std::swap(augmentedMatrix[i], augmentedMatrix[pivot]);
     }
 
-    assert(augmentedMatrix[i][i] != 0); // Ensure matrix is invertible
+    assert(augmentedMatrix[i][i] != 0);
 
-    for (int j = 0; j < n; j++) {
+    for (size_t j = 0; j < n; j++) {
       if (i != j) {
         double ratio = augmentedMatrix[j][i] / augmentedMatrix[i][i];
-        for (int k = 0; k < 2 * n; k++) {
+        for (size_t k = 0; k < 2 * n; k++) {
           augmentedMatrix[j][k] -= ratio * augmentedMatrix[i][k];
         }
       }
     }
   }
 
-  for (int i = 0; i < n; i++) {
+  for (size_t i = 0; i < n; i++) {
     double divisor = augmentedMatrix[i][i];
-    for (int j = n; j < 2 * n; j++) {
+    for (size_t j = n; j < 2 * n; j++) {
       inv[i][j - n] = augmentedMatrix[i][j] / divisor;
     }
   }

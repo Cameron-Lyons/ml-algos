@@ -1,6 +1,7 @@
 #include "../matrix.h"
 #include <cmath>
 #include <map>
+#include <numbers>
 #include <vector>
 
 struct Gaussian {
@@ -13,6 +14,7 @@ public:
   virtual void train(const Matrix &features,
                      const std::vector<int> &labels) = 0;
   virtual int predict(const std::vector<double> &features) = 0;
+  virtual ~NaiveBayes() = default;
 };
 
 class GaussianNaiveBayes {
@@ -27,27 +29,27 @@ private:
     for (double f : features) {
       sum += f;
     }
-    g.mean = sum / features.size();
+    g.mean = sum / static_cast<double>(features.size());
 
     double sumVar = 0.0;
     for (double f : features) {
       sumVar += (f - g.mean) * (f - g.mean);
     }
-    g.variance = sumVar / features.size();
+    g.variance = sumVar / static_cast<double>(features.size());
 
     return g;
   }
 
   double gaussianPDF(double x, double mean, double variance) {
-    return (1.0 / sqrt(2 * M_PI * variance)) *
+    return (1.0 / sqrt(2 * std::numbers::pi * variance)) *
            exp(-(x - mean) * (x - mean) / (2 * variance));
   }
 
 public:
   void train(const std::vector<std::vector<double>> &features,
              const std::vector<int> &labels) {
-    int numSamples = features.size();
-    int numFeatures = features[0].size();
+    int numSamples = static_cast<int>(features.size());
+    int numFeatures = static_cast<int>(features[0].size());
     int countClass0 = 0;
     Matrix valuesClass0, valuesClass1;
 
@@ -57,24 +59,28 @@ public:
     }
 
     for (int i = 0; i < numSamples; ++i) {
-      if (labels[i] == 0) {
+      if (labels[static_cast<size_t>(i)] == 0) {
         countClass0++;
         for (int j = 0; j < numFeatures; ++j) {
-          valuesClass0[j].push_back(features[i][j]);
+          valuesClass0[static_cast<size_t>(j)].push_back(
+              features[static_cast<size_t>(i)][static_cast<size_t>(j)]);
         }
       } else {
         for (int j = 0; j < numFeatures; ++j) {
-          valuesClass1[j].push_back(features[i][j]);
+          valuesClass1[static_cast<size_t>(j)].push_back(
+              features[static_cast<size_t>(i)][static_cast<size_t>(j)]);
         }
       }
     }
 
-    prior0 = (double)countClass0 / numSamples;
+    prior0 = static_cast<double>(countClass0) / numSamples;
     prior1 = 1.0 - prior0;
 
     for (int i = 0; i < numFeatures; ++i) {
-      featureStatsClass0[i] = computeStats(valuesClass0[i]);
-      featureStatsClass1[i] = computeStats(valuesClass1[i]);
+      featureStatsClass0[i] =
+          computeStats(valuesClass0[static_cast<size_t>(i)]);
+      featureStatsClass1[i] =
+          computeStats(valuesClass1[static_cast<size_t>(i)]);
     }
   }
 
@@ -82,11 +88,12 @@ public:
     double logProb0 = log(prior0);
     double logProb1 = log(prior1);
 
-    for (int i = 0; i < features.size(); ++i) {
-      logProb0 += log(gaussianPDF(features[i], featureStatsClass0[i].mean,
-                                  featureStatsClass0[i].variance));
-      logProb1 += log(gaussianPDF(features[i], featureStatsClass1[i].mean,
-                                  featureStatsClass1[i].variance));
+    for (size_t i = 0; i < features.size(); ++i) {
+      int idx = static_cast<int>(i);
+      logProb0 += log(gaussianPDF(features[i], featureStatsClass0[idx].mean,
+                                  featureStatsClass0[idx].variance));
+      logProb1 += log(gaussianPDF(features[i], featureStatsClass1[idx].mean,
+                                  featureStatsClass1[idx].variance));
     }
 
     return (logProb0 > logProb1) ? 0 : 1;
@@ -101,15 +108,15 @@ private:
   double alpha;
 
 public:
-  MultinomialNaiveBayes(double a = 1.0) : alpha(a) {}
+  MultinomialNaiveBayes(double a = 1.0) : totalSamples(0), alpha(a) {}
 
   void train(const Matrix &features, const std::vector<int> &labels) override {
-    totalSamples = features.size();
+    totalSamples = static_cast<double>(features.size());
 
-    for (int i = 0; i < totalSamples; ++i) {
+    for (size_t i = 0; i < features.size(); ++i) {
       classCounts[labels[i]] += 1;
-      for (int j = 0; j < features[i].size(); ++j) {
-        featureCounts[labels[i]][j] += features[i][j];
+      for (size_t j = 0; j < features[i].size(); ++j) {
+        featureCounts[labels[i]][static_cast<int>(j)] += features[i][j];
       }
     }
   }
@@ -122,17 +129,19 @@ public:
       int c = classEntry.first;
       double logProb = log(classEntry.second / totalSamples);
 
-      for (int j = 0; j < features.size(); ++j) {
+      for (size_t j = 0; j < features.size(); ++j) {
+        int jIdx = static_cast<int>(j);
         double countForFeatureInClass =
-            featureCounts[c].count(j) ? featureCounts[c][j] : 0;
+            featureCounts[c].count(jIdx) ? featureCounts[c][jIdx] : 0;
         double totalFeatureCountForClass = 0;
         for (const auto &featureEntry : featureCounts[c]) {
           totalFeatureCountForClass += featureEntry.second;
         }
 
-        logProb += features[j] *
-                   log((countForFeatureInClass + alpha) /
-                       (totalFeatureCountForClass + features.size() * alpha));
+        logProb +=
+            features[j] * log((countForFeatureInClass + alpha) /
+                              (totalFeatureCountForClass +
+                               static_cast<double>(features.size()) * alpha));
       }
 
       if (logProb > maxLogProb) {
@@ -153,15 +162,15 @@ private:
   double alpha;
 
 public:
-  ComplementNaiveBayes(double a = 1.0) : alpha(a) {}
+  ComplementNaiveBayes(double a = 1.0) : totalSamples(0), alpha(a) {}
 
   void train(const Matrix &features, const std::vector<int> &labels) override {
-    totalSamples = features.size();
+    totalSamples = static_cast<double>(features.size());
 
-    for (int i = 0; i < totalSamples; ++i) {
+    for (size_t i = 0; i < features.size(); ++i) {
       classCounts[labels[i]] += 1;
-      for (int j = 0; j < features[i].size(); ++j) {
-        featureCounts[labels[i]][j] += features[i][j];
+      for (size_t j = 0; j < features[i].size(); ++j) {
+        featureCounts[labels[i]][static_cast<int>(j)] += features[i][j];
       }
     }
   }
@@ -185,12 +194,15 @@ public:
         }
       }
 
-      for (int j = 0; j < features.size(); ++j) {
-        double countForFeatureInComplement =
-            complementFeatureCounts.count(j) ? complementFeatureCounts[j] : 0;
+      for (size_t j = 0; j < features.size(); ++j) {
+        int jIdx = static_cast<int>(j);
+        double countForFeatureInComplement = complementFeatureCounts.count(jIdx)
+                                                 ? complementFeatureCounts[jIdx]
+                                                 : 0;
         logProb +=
             features[j] * log((countForFeatureInComplement + alpha) /
-                              (complementTotalCount + features.size() * alpha));
+                              (complementTotalCount +
+                               static_cast<double>(features.size()) * alpha));
       }
 
       if (logProb < minLogProb) {
@@ -211,16 +223,16 @@ private:
   double alpha;
 
 public:
-  BernoulliNaiveBayes(double a = 1.0) : alpha(a) {}
+  BernoulliNaiveBayes(double a = 1.0) : totalSamples(0), alpha(a) {}
 
   void train(const Matrix &features, const std::vector<int> &labels) override {
-    totalSamples = features.size();
+    totalSamples = static_cast<double>(features.size());
 
-    for (int i = 0; i < totalSamples; ++i) {
+    for (size_t i = 0; i < features.size(); ++i) {
       classCounts[labels[i]] += 1;
-      for (int j = 0; j < features[i].size(); ++j) {
+      for (size_t j = 0; j < features[i].size(); ++j) {
         if (features[i][j] == 1) {
-          featureCounts[labels[i]][j] += 1;
+          featureCounts[labels[i]][static_cast<int>(j)] += 1;
         }
       }
     }
@@ -234,9 +246,10 @@ public:
       int c = classEntry.first;
       double logProb = log(classEntry.second / totalSamples);
 
-      for (int j = 0; j < features.size(); ++j) {
+      for (size_t j = 0; j < features.size(); ++j) {
+        int jIdx = static_cast<int>(j);
         double probabilityOfFeatureInClass =
-            (featureCounts[c][j] + alpha) / (classCounts[c] + 2 * alpha);
+            (featureCounts[c][jIdx] + alpha) / (classCounts[c] + 2 * alpha);
 
         if (features[j] == 1) {
           logProb += log(probabilityOfFeatureInClass);
@@ -260,18 +273,19 @@ private:
   std::map<int, std::map<int, std::map<int, double>>> featureCategoryCounts;
   std::map<int, double> classCounts;
   double totalSamples;
-    double alpha;
+  double alpha;
 
 public:
-  CategoricalNaiveBayes(double a = 1.0) : alpha(a) {}
+  CategoricalNaiveBayes(double a = 1.0) : totalSamples(0), alpha(a) {}
 
   void train(const Matrix &features, const std::vector<int> &labels) override {
-    totalSamples = features.size();
+    totalSamples = static_cast<double>(features.size());
 
-    for (int i = 0; i < totalSamples; ++i) {
+    for (size_t i = 0; i < features.size(); ++i) {
       classCounts[labels[i]] += 1;
-      for (int j = 0; j < features[i].size(); ++j) {
-        featureCategoryCounts[labels[i]][j][features[i][j]] += 1;
+      for (size_t j = 0; j < features[i].size(); ++j) {
+        featureCategoryCounts[labels[i]][static_cast<int>(j)]
+                             [static_cast<int>(features[i][j])] += 1;
       }
     }
   }
@@ -284,17 +298,20 @@ public:
       int c = classEntry.first;
       double logProb = log(classEntry.second / totalSamples);
 
-      for (int j = 0; j < features.size(); ++j) {
+      for (size_t j = 0; j < features.size(); ++j) {
+        int jIdx = static_cast<int>(j);
         double countForCategoryInFeature =
-            featureCategoryCounts[c][j][features[j]];
+            featureCategoryCounts[c][jIdx][static_cast<int>(features[j])];
         double totalCountForFeature = 0;
-        for (const auto &categoryEntry : featureCategoryCounts[c][j]) {
+        for (const auto &categoryEntry : featureCategoryCounts[c][jIdx]) {
           totalCountForFeature += categoryEntry.second;
         }
 
-        logProb += log((countForCategoryInFeature + alpha) /
-                       (totalCountForFeature +
-                        featureCategoryCounts[c][j].size() * alpha));
+        logProb +=
+            log((countForCategoryInFeature + alpha) /
+                (totalCountForFeature +
+                 static_cast<double>(featureCategoryCounts[c][jIdx].size()) *
+                     alpha));
       }
 
       if (logProb > maxLogProb) {

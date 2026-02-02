@@ -1,22 +1,23 @@
 #include "../matrix.h"
 #include <limits>
+#include <memory>
 #include <set>
 
 struct TreeNode {
-  TreeNode *left;
-  TreeNode *right;
-  int splitFeature;
+  std::unique_ptr<TreeNode> left;
+  std::unique_ptr<TreeNode> right;
+  size_t splitFeature;
   double splitValue;
   double output;
 
   TreeNode()
-      : left(nullptr), right(nullptr), splitFeature(-1), splitValue(0.0),
+      : left(nullptr), right(nullptr), splitFeature(0), splitValue(0.0),
         output(0.0) {}
 };
 
 class DecisionTree {
 private:
-  TreeNode *root;
+  std::unique_ptr<TreeNode> root;
   int maxDepth;
 
   double computeMean(const Vector &values) {
@@ -24,7 +25,7 @@ private:
     for (double value : values) {
       sum += value;
     }
-    return sum / values.size();
+    return sum / static_cast<double>(values.size());
   }
 
   double computeVariance(const Vector &values, double mean) {
@@ -32,18 +33,19 @@ private:
     for (double value : values) {
       variance += (value - mean) * (value - mean);
     }
-    return variance / values.size();
+    return variance / static_cast<double>(values.size());
   }
 
-  TreeNode *buildTree(const Matrix &X, const Vector &y, int depth) {
-    TreeNode *node = new TreeNode();
+  std::unique_ptr<TreeNode> buildTree(const Matrix &X, const Vector &y,
+                                      int depth) {
+    auto node = std::make_unique<TreeNode>();
 
     if (depth == maxDepth) {
       node->output = computeMean(y);
       return node;
     }
 
-    int bestFeature = -1;
+    size_t bestFeature = X[0].size();
     double bestVariance = std::numeric_limits<double>::max();
     double bestSplit = 0.0;
 
@@ -72,9 +74,11 @@ private:
         double leftMean = computeMean(currentLeftY);
         double rightMean = computeMean(currentRightY);
         double currentVariance =
-            (currentLeftY.size() * computeVariance(currentLeftY, leftMean) +
-             currentRightY.size() * computeVariance(currentRightY, rightMean)) /
-            y.size();
+            (static_cast<double>(currentLeftY.size()) *
+                 computeVariance(currentLeftY, leftMean) +
+             static_cast<double>(currentRightY.size()) *
+                 computeVariance(currentRightY, rightMean)) /
+            static_cast<double>(y.size());
 
         if (currentVariance < bestVariance) {
           bestVariance = currentVariance;
@@ -89,7 +93,7 @@ private:
       }
     }
 
-    if (bestFeature == -1) {
+    if (bestFeature == X[0].size()) {
       node->output = computeMean(y);
       return node;
     }
@@ -105,25 +109,23 @@ private:
 public:
   DecisionTree(int depth) : root(nullptr), maxDepth(depth) {}
 
-    void fit(const Matrix &X, const Vector &y) {
-    root = buildTree(X, y, 0);
-  }
+  void fit(const Matrix &X, const Vector &y) { root = buildTree(X, y, 0); }
 
-  double predict(const Vector &instance, TreeNode *node) const {
+  double predict(const Vector &instance, const TreeNode *node) const {
     if (!node->left && !node->right) {
       return node->output;
     }
 
     if (instance[node->splitFeature] <= node->splitValue) {
-      return predict(instance, node->left);
+      return predict(instance, node->left.get());
     } else {
-      return predict(instance, node->right);
+      return predict(instance, node->right.get());
     }
   }
 
   double predict(const Vector &instance) const {
     if (!root)
       return 0.0;
-    return predict(instance, root);
+    return predict(instance, root.get());
   }
 };

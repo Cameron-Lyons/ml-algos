@@ -3,10 +3,10 @@
 
 #include <vector>
 
-typedef std::vector<std::vector<double>> Matrix;
-typedef std::vector<double> Vector;
-typedef std::vector<double> Point;
-typedef std::vector<Point> Points;
+using Matrix = std::vector<std::vector<double>>;
+using Vector = std::vector<double>;
+using Point = std::vector<double>;
+using Points = std::vector<Point>;
 
 Matrix multiply(const Matrix &A, const Matrix &B);
 Matrix transpose(const Matrix &A);
