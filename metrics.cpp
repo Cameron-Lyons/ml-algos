@@ -27,22 +27,18 @@ double r2(const Vector &y_true, const Vector &y_pred) {
     return -1.0;
   }
 
-  double mean_true = 0.0;
-  for (const double value : y_true) {
-    mean_true += value;
-  }
-  mean_true /= static_cast<double>(y_true.size());
-
-  double ss_total = 0.0;
+  double n = static_cast<double>(y_true.size());
+  double sum_true = 0.0, sum_true_sq = 0.0;
   double ss_res = 0.0;
 
   for (size_t i = 0; i < y_true.size(); i++) {
+    sum_true += y_true[i];
+    sum_true_sq += y_true[i] * y_true[i];
     double residual = y_true[i] - y_pred[i];
     ss_res += residual * residual;
-
-    double total = y_true[i] - mean_true;
-    ss_total += total * total;
   }
+
+  double ss_total = sum_true_sq - (sum_true * sum_true) / n;
 
   if (ss_total == 0.0) {
     std::println(stderr, "Division by zero encountered in R2 calculation!");

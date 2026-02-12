@@ -11,7 +11,7 @@ Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
   Matrix S_W(n_features, Vector(n_features, 0.0));
   Matrix S_B(n_features, Vector(n_features, 0.0));
 
-  int num_classes = *std::max_element(y.begin(), y.end()) + 1;
+  int num_classes = static_cast<int>(*std::max_element(y.begin(), y.end())) + 1;
 
   for (int i = 0; i < num_classes; i++) {
     Matrix class_sc_mat(n_features, Vector(n_features, 0.0));
@@ -81,8 +81,9 @@ Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
   Matrix S_B_W_inv = multiply(S_B, S_W_inv);
 
   Matrix eigenvectors = invert_matrix(S_B_W_inv);
-  Matrix W(n_features, Vector(numComponents, 0.0));
-  for (int i = 0; i < numComponents && i < (int)n_features; i++) {
+  Matrix W(n_features, Vector(static_cast<size_t>(numComponents), 0.0));
+  for (size_t i = 0; i < static_cast<size_t>(numComponents) && i < n_features;
+       i++) {
     W[i][i] = 1.0;
   }
 

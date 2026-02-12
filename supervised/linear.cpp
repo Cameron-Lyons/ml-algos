@@ -36,6 +36,10 @@ public:
   }
 
   double getBias() const { return coefficients[0]; }
+
+  void setCoefficients(const Vector &coefs) { coefficients = coefs; }
+
+  const Vector &getRawCoefficients() const { return coefficients; }
 };
 
 class LinearRegression : public LinearModel {
@@ -130,7 +134,8 @@ public:
         if (j == 0) {
           coefficients[j] = tmp;
         } else {
-          coefficients[j] = soft_threshold(tmp, lambda) / num_samples;
+          coefficients[j] =
+              soft_threshold(tmp, lambda) / static_cast<double>(num_samples);
         }
       }
 
@@ -170,7 +175,6 @@ public:
 
   void fit(const Matrix &X, const Vector &y) override {
     Matrix X_bias = addBias(X);
-    size_t num_samples = X_bias.size();
     size_t num_features = X_bias[0].size();
 
     coefficients = Vector(num_features, 0.0);

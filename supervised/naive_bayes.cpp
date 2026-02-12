@@ -104,6 +104,7 @@ class MultinomialNaiveBayes : public NaiveBayes {
 private:
   std::map<int, std::map<int, double>> featureCounts;
   std::map<int, double> classCounts;
+  std::map<int, double> classTotalFeatureCounts;
   double totalSamples;
   double alpha;
 
@@ -117,6 +118,7 @@ public:
       classCounts[labels[i]] += 1;
       for (size_t j = 0; j < features[i].size(); ++j) {
         featureCounts[labels[i]][static_cast<int>(j)] += features[i][j];
+        classTotalFeatureCounts[labels[i]] += features[i][j];
       }
     }
   }
@@ -128,20 +130,19 @@ public:
     for (const auto &classEntry : classCounts) {
       int c = classEntry.first;
       double logProb = log(classEntry.second / totalSamples);
+      double totalForClass = classTotalFeatureCounts.count(c)
+                                 ? classTotalFeatureCounts.at(c)
+                                 : 0.0;
 
       for (size_t j = 0; j < features.size(); ++j) {
         int jIdx = static_cast<int>(j);
         double countForFeatureInClass =
             featureCounts[c].count(jIdx) ? featureCounts[c][jIdx] : 0;
-        double totalFeatureCountForClass = 0;
-        for (const auto &featureEntry : featureCounts[c]) {
-          totalFeatureCountForClass += featureEntry.second;
-        }
 
         logProb +=
-            features[j] * log((countForFeatureInClass + alpha) /
-                              (totalFeatureCountForClass +
-                               static_cast<double>(features.size()) * alpha));
+            features[j] *
+            log((countForFeatureInClass + alpha) /
+                (totalForClass + static_cast<double>(features.size()) * alpha));
       }
 
       if (logProb > maxLogProb) {
@@ -158,6 +159,7 @@ class ComplementNaiveBayes : public NaiveBayes {
 private:
   std::map<int, std::map<int, double>> featureCounts;
   std::map<int, double> classCounts;
+  std::map<int, double> classTotalFeatureCounts;
   double totalSamples;
   double alpha;
 
@@ -171,6 +173,7 @@ public:
       classCounts[labels[i]] += 1;
       for (size_t j = 0; j < features[i].size(); ++j) {
         featureCounts[labels[i]][static_cast<int>(j)] += features[i][j];
+        classTotalFeatureCounts[labels[i]] += features[i][j];
       }
     }
   }
@@ -179,29 +182,34 @@ public:
     double minLogProb = std::numeric_limits<double>::max();
     int bestClass = -1;
 
+    double globalTotal = 0.0;
+    std::map<int, double> globalFeatureCounts;
+    for (const auto &[cls, fmap] : featureCounts) {
+      for (const auto &[feat, count] : fmap) {
+        globalFeatureCounts[feat] += count;
+        globalTotal += count;
+      }
+    }
+
     for (const auto &classEntry : classCounts) {
       int c = classEntry.first;
       double logProb = 0.0;
 
-      std::map<int, double> complementFeatureCounts;
-      double complementTotalCount = 0.0;
-      for (const auto &otherClassEntry : classCounts) {
-        if (otherClassEntry.first == c)
-          continue;
-        for (const auto &featureEntry : featureCounts[otherClassEntry.first]) {
-          complementFeatureCounts[featureEntry.first] += featureEntry.second;
-          complementTotalCount += featureEntry.second;
-        }
-      }
+      double complementTotal =
+          globalTotal - (classTotalFeatureCounts.count(c)
+                             ? classTotalFeatureCounts.at(c)
+                             : 0.0);
 
       for (size_t j = 0; j < features.size(); ++j) {
         int jIdx = static_cast<int>(j);
-        double countForFeatureInComplement = complementFeatureCounts.count(jIdx)
-                                                 ? complementFeatureCounts[jIdx]
-                                                 : 0;
+        double globalCount =
+            globalFeatureCounts.count(jIdx) ? globalFeatureCounts[jIdx] : 0.0;
+        double classCount =
+            featureCounts[c].count(jIdx) ? featureCounts[c][jIdx] : 0.0;
+        double complementCount = globalCount - classCount;
         logProb +=
-            features[j] * log((countForFeatureInComplement + alpha) /
-                              (complementTotalCount +
+            features[j] * log((complementCount + alpha) /
+                              (complementTotal +
                                static_cast<double>(features.size()) * alpha));
       }
 
@@ -271,6 +279,8 @@ public:
 class CategoricalNaiveBayes : public NaiveBayes {
 private:
   std::map<int, std::map<int, std::map<int, double>>> featureCategoryCounts;
+  std::map<int, std::map<int, double>> classFeatureTotalCounts;
+  std::map<int, std::map<int, size_t>> classFeatureNumCategories;
   std::map<int, double> classCounts;
   double totalSamples;
   double alpha;
@@ -284,10 +294,16 @@ public:
     for (size_t i = 0; i < features.size(); ++i) {
       classCounts[labels[i]] += 1;
       for (size_t j = 0; j < features[i].size(); ++j) {
-        featureCategoryCounts[labels[i]][static_cast<int>(j)]
+        int jIdx = static_cast<int>(j);
+        featureCategoryCounts[labels[i]][jIdx]
                              [static_cast<int>(features[i][j])] += 1;
+        classFeatureTotalCounts[labels[i]][jIdx] += 1;
       }
     }
+
+    for (auto &[cls, fmap] : featureCategoryCounts)
+      for (auto &[feat, cmap] : fmap)
+        classFeatureNumCategories[cls][feat] = cmap.size();
   }
 
   int predict(const std::vector<double> &features) override {
@@ -302,16 +318,12 @@ public:
         int jIdx = static_cast<int>(j);
         double countForCategoryInFeature =
             featureCategoryCounts[c][jIdx][static_cast<int>(features[j])];
-        double totalCountForFeature = 0;
-        for (const auto &categoryEntry : featureCategoryCounts[c][jIdx]) {
-          totalCountForFeature += categoryEntry.second;
-        }
+        double totalCountForFeature = classFeatureTotalCounts[c][jIdx];
+        auto numCategories =
+            static_cast<double>(classFeatureNumCategories[c][jIdx]);
 
-        logProb +=
-            log((countForCategoryInFeature + alpha) /
-                (totalCountForFeature +
-                 static_cast<double>(featureCategoryCounts[c][jIdx].size()) *
-                     alpha));
+        logProb += log((countForCategoryInFeature + alpha) /
+                       (totalCountForFeature + numCategories * alpha));
       }
 
       if (logProb > maxLogProb) {

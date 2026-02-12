@@ -25,11 +25,11 @@ public:
     X_train = X;
     y_train = y;
 
-    int n = X_train.size();
+    size_t n = X_train.size();
     Matrix K(n, Vector(n, 0.0));
 
-    for (int i = 0; i < n; i++) {
-      for (int j = 0; j < n; j++) {
+    for (size_t i = 0; i < n; i++) {
+      for (size_t j = 0; j < n; j++) {
         K[i][j] = rbf_kernel(X_train[i], X_train[j]);
         if (i == j) {
           K[i][j] += sigma_n * sigma_n;
@@ -41,17 +41,17 @@ public:
   };
 
   double predict(const Vector &X_test) {
-    int n = X_train.size();
+    size_t n = X_train.size();
     Matrix k_star(n, Vector(1));
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
       k_star[i][0] = rbf_kernel(X_test, X_train[i]);
     }
     Matrix y_col(n, Vector(1));
-    for (int i = 0; i < n; ++i)
+    for (size_t i = 0; i < n; ++i)
       y_col[i][0] = y_train[i];
-    Matrix alpha = multiply(K_inv, y_col); // (n x 1)
+    Matrix alpha = multiply(K_inv, y_col);
     double mu = 0.0;
-    for (int i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i) {
       mu += k_star[i][0] * alpha[i][0];
     }
     return mu;

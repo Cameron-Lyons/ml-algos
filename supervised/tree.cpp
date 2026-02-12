@@ -1,7 +1,8 @@
 #include "../matrix.h"
+#include <algorithm>
 #include <limits>
 #include <memory>
-#include <set>
+#include <vector>
 
 struct TreeNode {
   std::unique_ptr<TreeNode> left;
@@ -20,88 +21,112 @@ private:
   std::unique_ptr<TreeNode> root;
   int maxDepth;
 
-  double computeMean(const Vector &values) {
+  static double computeMean(const Vector &y,
+                            const std::vector<size_t> &indices) {
     double sum = 0.0;
-    for (double value : values) {
-      sum += value;
-    }
-    return sum / static_cast<double>(values.size());
+    for (size_t idx : indices)
+      sum += y[idx];
+    return sum / static_cast<double>(indices.size());
   }
 
-  double computeVariance(const Vector &values, double mean) {
+  static double computeVariance(const Vector &y,
+                                const std::vector<size_t> &indices,
+                                double mean) {
     double variance = 0.0;
-    for (double value : values) {
-      variance += (value - mean) * (value - mean);
+    for (size_t idx : indices) {
+      double d = y[idx] - mean;
+      variance += d * d;
     }
-    return variance / static_cast<double>(values.size());
+    return variance / static_cast<double>(indices.size());
   }
 
   std::unique_ptr<TreeNode> buildTree(const Matrix &X, const Vector &y,
+                                      const std::vector<size_t> &indices,
                                       int depth) {
     auto node = std::make_unique<TreeNode>();
 
-    if (depth == maxDepth) {
-      node->output = computeMean(y);
+    if (depth == maxDepth || indices.size() <= 1) {
+      node->output = computeMean(y, indices);
       return node;
     }
 
-    size_t bestFeature = X[0].size();
+    size_t n = indices.size();
+    size_t nFeatures = X[indices[0]].size();
+    size_t bestFeature = nFeatures;
     double bestVariance = std::numeric_limits<double>::max();
     double bestSplit = 0.0;
 
-    Matrix leftX, rightX;
-    Vector leftY, rightY;
+    std::vector<size_t> leftIndices, rightIndices;
+    Vector featureVals(n);
 
-    for (size_t featureIdx = 0; featureIdx < X[0].size(); ++featureIdx) {
-      std::set<double> unique_values;
-      for (size_t i = 0; i < X.size(); ++i) {
-        unique_values.insert(X[i][featureIdx]);
-      }
-      for (const double &value : unique_values) {
-        Matrix currentLeftX, currentRightX;
-        Vector currentLeftY, currentRightY;
+    for (size_t featureIdx = 0; featureIdx < nFeatures; ++featureIdx) {
+      for (size_t i = 0; i < n; ++i)
+        featureVals[i] = X[indices[i]][featureIdx];
+      std::sort(featureVals.begin(), featureVals.end());
+      auto last = std::unique(featureVals.begin(), featureVals.end());
 
-        for (size_t i = 0; i < X.size(); ++i) {
-          if (X[i][featureIdx] <= value) {
-            currentLeftX.push_back(X[i]);
-            currentLeftY.push_back(y[i]);
+      for (auto it = featureVals.begin(); it != last; ++it) {
+        double value = *it;
+
+        double leftSum = 0.0, rightSum = 0.0;
+        size_t leftCount = 0, rightCount = 0;
+        for (size_t i = 0; i < n; ++i) {
+          if (X[indices[i]][featureIdx] <= value) {
+            leftSum += y[indices[i]];
+            leftCount++;
           } else {
-            currentRightX.push_back(X[i]);
-            currentRightY.push_back(y[i]);
+            rightSum += y[indices[i]];
+            rightCount++;
+          }
+        }
+        if (leftCount == 0 || rightCount == 0)
+          continue;
+
+        double leftMean = leftSum / static_cast<double>(leftCount);
+        double rightMean = rightSum / static_cast<double>(rightCount);
+
+        double leftVar = 0.0, rightVar = 0.0;
+        for (size_t i = 0; i < n; ++i) {
+          double d;
+          if (X[indices[i]][featureIdx] <= value) {
+            d = y[indices[i]] - leftMean;
+            leftVar += d * d;
+          } else {
+            d = y[indices[i]] - rightMean;
+            rightVar += d * d;
           }
         }
 
-        double leftMean = computeMean(currentLeftY);
-        double rightMean = computeMean(currentRightY);
-        double currentVariance =
-            (static_cast<double>(currentLeftY.size()) *
-                 computeVariance(currentLeftY, leftMean) +
-             static_cast<double>(currentRightY.size()) *
-                 computeVariance(currentRightY, rightMean)) /
-            static_cast<double>(y.size());
+        double currentVariance = (leftVar + rightVar) / static_cast<double>(n);
 
         if (currentVariance < bestVariance) {
           bestVariance = currentVariance;
           bestFeature = featureIdx;
           bestSplit = value;
-
-          leftX = currentLeftX;
-          rightX = currentRightX;
-          leftY = currentLeftY;
-          rightY = currentRightY;
         }
       }
     }
 
-    if (bestFeature == X[0].size()) {
-      node->output = computeMean(y);
+    if (bestFeature == nFeatures) {
+      node->output = computeMean(y, indices);
       return node;
+    }
+
+    leftIndices.clear();
+    rightIndices.clear();
+    leftIndices.reserve(n);
+    rightIndices.reserve(n);
+    for (size_t idx : indices) {
+      if (X[idx][bestFeature] <= bestSplit)
+        leftIndices.push_back(idx);
+      else
+        rightIndices.push_back(idx);
     }
 
     node->splitFeature = bestFeature;
     node->splitValue = bestSplit;
-    node->left = buildTree(leftX, leftY, depth + 1);
-    node->right = buildTree(rightX, rightY, depth + 1);
+    node->left = buildTree(X, y, leftIndices, depth + 1);
+    node->right = buildTree(X, y, rightIndices, depth + 1);
 
     return node;
   }
@@ -109,7 +134,12 @@ private:
 public:
   DecisionTree(int depth) : root(nullptr), maxDepth(depth) {}
 
-  void fit(const Matrix &X, const Vector &y) { root = buildTree(X, y, 0); }
+  void fit(const Matrix &X, const Vector &y) {
+    std::vector<size_t> indices(X.size());
+    for (size_t i = 0; i < X.size(); ++i)
+      indices[i] = i;
+    root = buildTree(X, y, indices, 0);
+  }
 
   double predict(const Vector &instance, const TreeNode *node) const {
     if (!node->left && !node->right) {
@@ -128,4 +158,10 @@ public:
       return 0.0;
     return predict(instance, root.get());
   }
+
+  const TreeNode *getRoot() const { return root.get(); }
+
+  void setRoot(std::unique_ptr<TreeNode> newRoot) { root = std::move(newRoot); }
+
+  int getMaxDepth() const { return maxDepth; }
 };

@@ -5,40 +5,54 @@
 Vector powerIteration(const Matrix &matrix, int maxIter = 1000,
                       double tolerance = 1e-6) {
   size_t n = matrix.size();
-  Vector vector(n, 0.0);
+  Vector vec(n, 0.0);
   Vector lastVector(n, 1.0);
   for (int iter = 0; iter < maxIter; iter++) {
-    Matrix lastVectorCol(n, Vector(1));
-    for (size_t i = 0; i < n; ++i)
-      lastVectorCol[i][0] = lastVector[i];
-    Matrix result = multiply(matrix, lastVectorCol);
-    for (size_t i = 0; i < n; ++i)
-      vector[i] = result[i][0];
+    for (size_t i = 0; i < n; ++i) {
+      vec[i] = 0.0;
+      for (size_t j = 0; j < n; ++j)
+        vec[i] += matrix[i][j] * lastVector[j];
+    }
 
-    double norm = std::sqrt(
-        std::inner_product(vector.begin(), vector.end(), vector.begin(), 0.0));
+    double norm =
+        std::sqrt(std::inner_product(vec.begin(), vec.end(), vec.begin(), 0.0));
     for (size_t i = 0; i < n; i++)
-      vector[i] /= norm;
+      vec[i] /= norm;
 
     double diff = 0.0;
     for (size_t i = 0; i < n; i++)
-      diff += std::abs(vector[i] - lastVector[i]);
+      diff += std::abs(vec[i] - lastVector[i]);
 
     if (diff < tolerance)
       break;
 
-    lastVector = vector;
+    lastVector = vec;
   }
-  return vector;
+  return vec;
 }
 
 Vector pca(const Matrix &data) {
   Matrix centeredData = subtractMean(data);
-  Matrix covMatrix = multiply(transpose(centeredData), centeredData);
 
-  for (size_t i = 0; i < covMatrix.size(); i++)
-    for (size_t j = 0; j < covMatrix[0].size(); j++)
-      covMatrix[i][j] /= (data.size() - 1);
+  size_t rows = centeredData.size();
+  size_t cols = centeredData[0].size();
+  double scale = 1.0 / static_cast<double>(rows - 1);
+  Matrix covMatrix(cols, Vector(cols, 0.0));
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      double val = centeredData[i][j];
+      for (size_t k = j; k < cols; k++) {
+        covMatrix[j][k] += val * centeredData[i][k];
+      }
+    }
+  }
+  for (size_t j = 0; j < cols; j++) {
+    covMatrix[j][j] *= scale;
+    for (size_t k = j + 1; k < cols; k++) {
+      covMatrix[j][k] *= scale;
+      covMatrix[k][j] = covMatrix[j][k];
+    }
+  }
 
   return powerIteration(covMatrix);
 }

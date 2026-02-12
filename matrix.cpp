@@ -1,24 +1,22 @@
 #include "matrix.h"
 #include <cassert>
 #include <cmath>
-#include <print>
 #include <vector>
 
 Matrix multiply(const Matrix &A, const Matrix &B) {
   size_t rowsA = A.size();
   size_t colsA = A[0].size();
-  size_t rowsB = B.size();
+  [[maybe_unused]] size_t rowsB = B.size();
   size_t colsB = B[0].size();
-  std::println("multiply: A is {} x {}, B is {} x {}", rowsA, colsA, rowsB,
-               colsB);
   assert(colsA == rowsB);
 
   Matrix C(rowsA, Vector(colsB, 0.0));
 
   for (size_t i = 0; i < rowsA; i++) {
-    for (size_t j = 0; j < colsB; j++) {
-      for (size_t k = 0; k < colsA; k++) {
-        C[i][j] += A[i][k] * B[k][j];
+    for (size_t k = 0; k < colsA; k++) {
+      double a_ik = A[i][k];
+      for (size_t j = 0; j < colsB; j++) {
+        C[i][j] += a_ik * B[k][j];
       }
     }
   }
@@ -105,6 +103,19 @@ Vector meanMatrix(const Matrix &X) {
   }
 
   return meanVector;
+}
+
+double squaredEuclideanDistance(const Point &a, const Point &b) {
+  double sum = 0.0;
+  for (size_t i = 0; i < a.size(); i++) {
+    double d = a[i] - b[i];
+    sum += d * d;
+  }
+  return sum;
+}
+
+double euclideanDistance(const Point &a, const Point &b) {
+  return std::sqrt(squaredEuclideanDistance(a, b));
 }
 
 Matrix invert_matrix(const Matrix &matrix) {

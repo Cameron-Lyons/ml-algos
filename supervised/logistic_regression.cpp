@@ -67,4 +67,6 @@ public:
 
   Vector getWeights() const { return weights; }
   double getBias() const { return bias; }
+  void setWeights(const Vector &w) { weights = w; }
+  void setBias(double b) { bias = b; }
 };
