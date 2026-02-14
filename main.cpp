@@ -13,6 +13,7 @@
 #include "matrix.cpp"
 #include "metrics.cpp"
 #include "cross_validation.cpp"
+#include "preprocessing.cpp"
 // clang-format on
 
 template <typename M>
@@ -103,6 +104,8 @@ AlgorithmResult evaluateClassifier(const std::string &name, M model,
 #include "supervised/adaboost.cpp"
 #include "unsupervised/dbscan.cpp"
 #include "unsupervised/k_means.cpp"
+#include "unsupervised/hierarchical.cpp"
+#include "unsupervised/spectral.cpp"
 #include "unsupervised/lda.cpp"
 #include "unsupervised/pca.cpp"
 #include "unsupervised/tsne.cpp"
@@ -207,19 +210,47 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                              y_tr, y_te);
   };
 
-  algos["svr"] = [n_features](auto &X_tr, auto &X_te, auto &y_tr, auto &y_te) {
-    return evaluateRegressor("svr", SVR(n_features), X_tr, X_te, y_tr, y_te);
+  algos["svr"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
+                              const Vector &y_tr,
+                              const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateRegressor("svr", SVR(n_features), Xs_tr, Xs_te, y_tr, y_te);
   };
 
-  algos["kernel-svm"] = [n_features](auto &X_tr, auto &X_te, auto &y_tr,
-                                     auto &y_te) {
+  algos["kernel-svm"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
+                                     const Vector &y_tr,
+                                     const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
     return evaluateRegressor("kernel-svm", KernelSVM(n_features, 0.01, 1.0),
-                             X_tr, X_te, y_tr, y_te);
+                             Xs_tr, Xs_te, y_tr, y_te);
   };
 
-  algos["knn-regressor"] = [](auto &X_tr, auto &X_te, auto &y_tr, auto &y_te) {
-    return evaluateRegressor("knn-regressor", KNNRegressor(5), X_tr, X_te, y_tr,
-                             y_te);
+  algos["linear-svm"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
+                                     const Vector &y_tr,
+                                     const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateRegressor(
+        "linear-svm",
+        KernelSVM(n_features, 0.01, 1.0, 0.1, 1000, KernelType::Linear),
+        Xs_tr, Xs_te, y_tr, y_te);
+  };
+
+  algos["poly-svm"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
+                                   const Vector &y_tr,
+                                   const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateRegressor(
+        "poly-svm",
+        KernelSVM(n_features, 0.01, 1.0, 0.1, 1000, KernelType::Polynomial),
+        Xs_tr, Xs_te, y_tr, y_te);
+  };
+
+  algos["knn-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
+                              const Vector &y_tr,
+                              const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateRegressor("knn-regressor", KNNRegressor(5), Xs_tr, Xs_te,
+                             y_tr, y_te);
   };
 
   algos["gp"] = [](auto &X_tr, auto &X_te, auto &y_tr, auto &y_te) {
@@ -230,15 +261,16 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["mlp"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
     MLP model(n_features, 5, 1);
     for (int epoch = 0; epoch < 500; ++epoch) {
-      for (size_t i = 0; i < X_tr.size(); ++i) {
+      for (size_t i = 0; i < Xs_tr.size(); ++i) {
         Vector target = {y_tr[i]};
-        model.train(X_tr[i], target);
+        model.train(Xs_tr[i], target);
       }
     }
     Vector preds;
-    for (const auto &x : X_te)
+    for (const auto &x : Xs_te)
       preds.push_back(model.predict(x)[0]);
     return {"mlp", "R²", r2(y_te, preds)};
   };
@@ -250,19 +282,27 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                                                               int n_classes) {
   std::map<std::string, AlgoFunc> algos;
 
-  algos["logistic"] = [](auto &X_tr, auto &X_te, auto &y_tr, auto &y_te) {
-    return evaluateClassifier("logistic", LogisticRegression(0.01, 1000), X_tr,
-                              X_te, y_tr, y_te);
+  algos["logistic"] = [](const Matrix &X_tr, const Matrix &X_te,
+                         const Vector &y_tr,
+                         const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateClassifier("logistic", LogisticRegression(0.01, 1000),
+                              Xs_tr, Xs_te, y_tr, y_te);
   };
 
-  algos["svc"] = [n_features, n_classes](auto &X_tr, auto &X_te, auto &y_tr,
-                                         auto &y_te) {
-    return evaluateClassifier("svc", SVC(n_features, n_classes), X_tr, X_te,
+  algos["svc"] = [n_features, n_classes](const Matrix &X_tr, const Matrix &X_te,
+                                         const Vector &y_tr,
+                                         const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateClassifier("svc", SVC(n_features, n_classes), Xs_tr, Xs_te,
                               y_tr, y_te);
   };
 
-  algos["knn-classifier"] = [](auto &X_tr, auto &X_te, auto &y_tr, auto &y_te) {
-    return evaluateClassifier("knn-classifier", KNNClassifier(5), X_tr, X_te,
+  algos["knn-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
+                               const Vector &y_tr,
+                               const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateClassifier("knn-classifier", KNNClassifier(5), Xs_tr, Xs_te,
                               y_tr, y_te);
   };
 

@@ -8,6 +8,7 @@ cc_library(
         "hyperparameter_search.cpp",
         "matrix.cpp",
         "metrics.cpp",
+        "preprocessing.cpp",
         "serialization.cpp",
     ] + glob([
         "supervised/*.cpp",

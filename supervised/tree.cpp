@@ -159,9 +159,31 @@ public:
     return predict(instance, root.get());
   }
 
+  Vector featureImportance(size_t n_features) const {
+    Vector importance(n_features, 0.0);
+    accumulateImportance(root.get(), importance, 1.0);
+    double total = 0.0;
+    for (double v : importance)
+      total += v;
+    if (total > 0.0)
+      for (double &v : importance)
+        v /= total;
+    return importance;
+  }
+
   const TreeNode *getRoot() const { return root.get(); }
 
   void setRoot(std::unique_ptr<TreeNode> newRoot) { root = std::move(newRoot); }
 
   int getMaxDepth() const { return maxDepth; }
+
+private:
+  void accumulateImportance(const TreeNode *node, Vector &importance,
+                            double weight) const {
+    if (!node || (!node->left && !node->right))
+      return;
+    importance[node->splitFeature] += weight;
+    accumulateImportance(node->left.get(), importance, weight * 0.5);
+    accumulateImportance(node->right.get(), importance, weight * 0.5);
+  }
 };
