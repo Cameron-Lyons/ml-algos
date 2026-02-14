@@ -16,6 +16,7 @@ protected:
   }
 
 public:
+  virtual ~LinearModel() = default;
   virtual void fit(const Matrix &X, const Vector &y) = 0;
 
   Vector predict(const Matrix &X) const {

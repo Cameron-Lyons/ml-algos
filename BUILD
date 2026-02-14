@@ -10,6 +10,7 @@ cc_library(
         "metrics.cpp",
         "preprocessing.cpp",
         "serialization.cpp",
+        "feature_importance.cpp",
     ] + glob([
         "supervised/*.cpp",
         "unsupervised/*.cpp",

@@ -98,21 +98,26 @@ AlgorithmResult evaluateClassifier(const std::string &name, M model,
 #include "supervised/logistic_regression.cpp"
 #include "supervised/knn.cpp"
 #include "supervised/mlp.cpp"
+#include "supervised/modern_mlp.cpp"
 #include "supervised/naive_bayes.cpp"
 #include "supervised/svm.cpp"
 #include "supervised/ensemble.cpp"
 #include "supervised/gaussian_process.cpp"
 #include "supervised/xgboost.cpp"
 #include "supervised/adaboost.cpp"
+#include "supervised/meta_ensemble.cpp"
 #include "unsupervised/dbscan.cpp"
 #include "unsupervised/k_means.cpp"
 #include "unsupervised/hierarchical.cpp"
 #include "unsupervised/spectral.cpp"
+#include "unsupervised/gmm.cpp"
+#include "unsupervised/isolation_forest.cpp"
 #include "unsupervised/lda.cpp"
 #include "unsupervised/pca.cpp"
 #include "unsupervised/tsne.cpp"
 #include "hyperparameter_search.cpp"
 #include "serialization.cpp"
+#include "feature_importance.cpp"
 // clang-format on
 
 Matrix readCSV(const std::string &filename) {
@@ -290,6 +295,37 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
     return {"mlp", "R²", r2(y_te, preds)};
   };
 
+  algos["modern-mlp"] = [](const Matrix &X_tr, const Matrix &X_te,
+                           const Vector &y_tr,
+                           const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateRegressor("modern-mlp",
+                             ModernMLP({64, 32}, Activation::ReLU, 0.01, 200),
+                             Xs_tr, Xs_te, y_tr, y_te);
+  };
+
+  algos["voting-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
+                                 const Vector &y_tr,
+                                 const Vector &y_te) -> AlgorithmResult {
+    VotingRegressor voter;
+    voter.addModel(makeBaseModel(RidgeRegression(1.0)));
+    voter.addModel(makeBaseModel(DecisionTree(5)));
+    voter.addModel(makeBaseModel(KNNRegressor(5)));
+    return evaluateRegressor("voting-regressor", std::move(voter), X_tr, X_te,
+                             y_tr, y_te);
+  };
+
+  algos["stacking-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
+                                   const Vector &y_tr,
+                                   const Vector &y_te) -> AlgorithmResult {
+    StackingRegressor stacker;
+    stacker.addModel(makeBaseModel(RidgeRegression(1.0)));
+    stacker.addModel(makeBaseModel(DecisionTree(5)));
+    stacker.addModel(makeBaseModel(KNNRegressor(5)));
+    return evaluateRegressor("stacking-regressor", std::move(stacker), X_tr,
+                             X_te, y_tr, y_te);
+  };
+
   return algos;
 }
 
@@ -377,6 +413,42 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
     return evaluateClassifier("xgb-classifier-es",
                               XGBoostClassifier(100, 0.1, 3, 1.0, 0.0, 0.2),
                               X_tr, X_te, y_tr, y_te);
+  };
+
+  algos["modern-mlp-cls"] = [](const Matrix &X_tr, const Matrix &X_te,
+                               const Vector &y_tr,
+                               const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    ModernMLP model({64, 32}, Activation::ReLU, 0.01, 200);
+    model.fit(Xs_tr, y_tr);
+    Vector preds;
+    for (const auto &x : Xs_te)
+      preds.push_back(model.predict(x) >= 0.5 ? 1.0 : 0.0);
+    return {"modern-mlp-cls", "Accuracy", accuracy(y_te, preds)};
+  };
+
+  algos["voting-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
+                                  const Vector &y_tr,
+                                  const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    VotingClassifier voter;
+    voter.addModel(makeBaseModel(LogisticRegression(0.01, 1000)));
+    voter.addModel(makeBaseModel(DecisionTree(5)));
+    voter.addModel(makeBaseModel(KNNClassifier(5)));
+    return evaluateClassifier("voting-classifier", std::move(voter), Xs_tr,
+                              Xs_te, y_tr, y_te);
+  };
+
+  algos["stacking-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
+                                    const Vector &y_tr,
+                                    const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    StackingClassifier stacker;
+    stacker.addModel(makeBaseModel(LogisticRegression(0.01, 1000)));
+    stacker.addModel(makeBaseModel(DecisionTree(5)));
+    stacker.addModel(makeBaseModel(KNNClassifier(5)));
+    return evaluateClassifier("stacking-classifier", std::move(stacker), Xs_tr,
+                              Xs_te, y_tr, y_te);
   };
 
   return algos;
@@ -564,10 +636,10 @@ void runLoad(const std::string &filepath, const Matrix &X_test,
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
-    std::println(
-        stderr,
-        "Usage: {} <csv_file> [algorithm|cv|gridsearch|cluster|save|load]",
-        argv[0]);
+    std::println(stderr,
+                 "Usage: {} <csv_file> "
+                 "[algorithm|cv|gridsearch|cluster|importance|save|load]",
+                 argv[0]);
     return 1;
   }
 
@@ -602,6 +674,20 @@ int main(int argc, char *argv[]) {
         results.push_back(func(X_train, X_test, y_train, y_test));
     }
     printTable(results);
+
+    std::println("\n{}", "Anomaly Detection");
+    std::println("{}", std::string(42, '-'));
+    {
+      IsolationForest iforest(100, std::min(size_t{256}, X_train.size()));
+      iforest.fit(X_train);
+      int anomalies = 0;
+      for (const auto &x : X_test) {
+        if (iforest.predict(x) < 0.0)
+          anomalies++;
+      }
+      std::println("{:<20} {:<10} {}", "isolation-forest", "Anomalies",
+                   anomalies);
+    }
   } else {
     std::string mode = argv[2];
     if (mode == "cv") {
@@ -663,6 +749,12 @@ int main(int argc, char *argv[]) {
         std::println("{:<25} {:<10} {:.4f}", "spectral", "Silhouette",
                      silhouetteScore(points, labels));
       }
+
+      {
+        auto labels = gaussianMixture(points, k_sz);
+        std::println("{:<25} {:<10} {:.4f}", "gmm", "Silhouette",
+                     silhouetteScore(points, labels));
+      }
     } else if (mode == "save") {
       if (argc < 5) {
         std::println(stderr, "Usage: {} <csv_file> save <algorithm> <filepath>",
@@ -679,6 +771,24 @@ int main(int argc, char *argv[]) {
       Vector y_train, y_test;
       trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
       runLoad(argv[3], X_test, y_test);
+    } else if (mode == "importance") {
+      Matrix X_train, X_test;
+      Vector y_train, y_test;
+      trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+
+      DecisionTree model(5);
+      model.fit(X_train, y_train);
+
+      Vector importances =
+          permutationImportance(model, X_test, y_test, 5, 42, false);
+
+      std::println("Permutation Feature Importance (Decision Tree)");
+      std::println("{:<15} {}", "Feature", "Importance");
+      std::println("{}", std::string(30, '-'));
+      for (size_t i = 0; i < importances.size(); i++) {
+        std::println("{:<15} {:.4f}", std::format("Feature {}", i),
+                     importances[i]);
+      }
     } else {
       Matrix X_train, X_test;
       Vector y_train, y_test;
