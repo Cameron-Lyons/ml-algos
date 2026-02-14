@@ -2,6 +2,7 @@
 #include <concepts>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <map>
 #include <print>
 #include <random>
@@ -258,6 +259,21 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                              X_te, y_tr, y_te);
   };
 
+  algos["gbt-regressor-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
+                                 auto &y_te) {
+    return evaluateRegressor("gbt-regressor-es",
+                             GradientBoostedTreesRegressor(100, 0.1, 0.2),
+                             X_tr, X_te, y_tr, y_te);
+  };
+
+  algos["xgb-regressor-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
+                                  auto &y_te) {
+    return evaluateRegressor(
+        "xgb-regressor-es",
+        XGBoostRegressor(100, 0.1, 3, 1.0, 0.0, 0.2), X_tr, X_te, y_tr,
+        y_te);
+  };
+
   algos["mlp"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
@@ -342,17 +358,42 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
     return {"naive-bayes", "Accuracy", accuracy(y_te, preds)};
   };
 
+  algos["softmax"] = [](const Matrix &X_tr, const Matrix &X_te,
+                         const Vector &y_tr,
+                         const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    return evaluateClassifier("softmax", SoftmaxRegression(0.01, 1000), Xs_tr,
+                              Xs_te, y_tr, y_te);
+  };
+
+  algos["gbt-classifier-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
+                                   auto &y_te) {
+    return evaluateClassifier("gbt-classifier-es",
+                              GradientBoostedTreesClassifier(100, 0.1, 0.2),
+                              X_tr, X_te, y_tr, y_te);
+  };
+
+  algos["xgb-classifier-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
+                                   auto &y_te) {
+    return evaluateClassifier(
+        "xgb-classifier-es",
+        XGBoostClassifier(100, 0.1, 3, 1.0, 0.0, 0.2), X_tr, X_te, y_tr,
+        y_te);
+  };
+
   return algos;
 }
 
 void runCrossValidation(const Matrix &X, const Vector &y,
                         const std::map<std::string, AlgoFunc> &algos,
-                        int k = 5) {
-  auto folds = kFoldSplit(X.size(), k, 42);
+                        int k = 5, bool stratified = false) {
+  auto folds = stratified ? stratifiedKFoldSplit(y, k, 42)
+                          : kFoldSplit(X.size(), k, 42);
 
   std::vector<AlgorithmResult> results;
   for (const auto &[name, func] : algos) {
     double total_score = 0.0;
+    std::string metric_name;
     for (const auto &[train_idx, test_idx] : folds) {
       Matrix X_tr = subsetByIndices(X, train_idx);
       Matrix X_te = subsetByIndices(X, test_idx);
@@ -361,16 +402,19 @@ void runCrossValidation(const Matrix &X, const Vector &y,
 
       auto result = func(X_tr, X_te, y_tr, y_te);
       total_score += result.score;
+      metric_name = result.metric;
     }
-    results.push_back({name, "R² (CV)", total_score / k});
+    results.push_back(
+        {name, metric_name + " (CV)", total_score / k});
   }
 
   printTable(results);
 }
 
 void runGridSearch(const Matrix &X, const Vector &y) {
+  int folds = std::min(5, std::max(2, static_cast<int>(X.size()) / 2));
+
   {
-    int folds = std::min(5, std::max(2, static_cast<int>(X.size()) / 2));
     auto ridgeGrid = buildParamGrid({{"lambda", {0.01, 0.1, 1.0, 10.0}}});
     auto ridgeResult = gridSearchCV(
         [](const ParamSet &ps) {
@@ -386,13 +430,58 @@ void runGridSearch(const Matrix &X, const Vector &y) {
     for (int kv = 1; kv <= maxK && kv <= 9; kv += 2)
       kValues.push_back(kv);
     auto knnGrid = buildParamGrid({{"k", kValues}});
-    int nFolds = std::min(5, std::max(2, static_cast<int>(X.size()) / 2));
     auto knnResult = gridSearchCV(
         [](const ParamSet &ps) {
           return KNNRegressor(static_cast<int>(ps.params.at("k")));
         },
-        knnGrid, X, y, nFolds, true);
+        knnGrid, X, y, folds, true);
     printGridSearchResult(knnResult, "KNN Regressor");
+  }
+
+  {
+    auto dtGrid = buildParamGrid({{"maxDepth", {2, 3, 5, 7, 10}}});
+    auto dtResult = gridSearchCV(
+        [](const ParamSet &ps) {
+          return DecisionTree(static_cast<int>(ps.params.at("maxDepth")));
+        },
+        dtGrid, X, y, folds, true);
+    printGridSearchResult(dtResult, "Decision Tree");
+  }
+
+  {
+    auto rfGrid =
+        buildParamGrid({{"n_trees", {5, 10, 20}}, {"max_features", {2, 3, 5}}});
+    auto rfResult = gridSearchCV(
+        [](const ParamSet &ps) {
+          return RandomForestRegressor(
+              static_cast<size_t>(ps.params.at("n_trees")),
+              static_cast<int>(ps.params.at("max_features")));
+        },
+        rfGrid, X, y, folds, true);
+    printGridSearchResult(rfResult, "Random Forest");
+  }
+
+  {
+    auto xgbGrid = buildParamGrid(
+        {{"learning_rate", {0.01, 0.1, 0.3}}, {"max_depth", {2, 3, 5}}});
+    auto xgbResult = gridSearchCV(
+        [](const ParamSet &ps) {
+          return XGBoostRegressor(
+              50, ps.params.at("learning_rate"),
+              static_cast<int>(ps.params.at("max_depth")));
+        },
+        xgbGrid, X, y, folds, true);
+    printGridSearchResult(xgbResult, "XGBoost Regressor");
+  }
+
+  {
+    auto lrGrid = buildParamGrid({{"learning_rate", {0.001, 0.01, 0.1}}});
+    auto lrResult = gridSearchCV(
+        [](const ParamSet &ps) {
+          return LogisticRegression(ps.params.at("learning_rate"), 1000);
+        },
+        lrGrid, X, y, folds, true, true);
+    printGridSearchResult(lrResult, "Logistic Regression");
   }
 }
 
@@ -479,9 +568,10 @@ void runLoad(const std::string &filepath, const Matrix &X_test,
 
 int main(int argc, char *argv[]) {
   if (argc < 2) {
-    std::println(stderr,
-                 "Usage: {} <csv_file> [algorithm|cv|gridsearch|save|load]",
-                 argv[0]);
+    std::println(
+        stderr,
+        "Usage: {} <csv_file> [algorithm|cv|gridsearch|cluster|save|load]",
+        argv[0]);
     return 1;
   }
 
@@ -519,9 +609,65 @@ int main(int argc, char *argv[]) {
   } else {
     std::string mode = argv[2];
     if (mode == "cv") {
-      runCrossValidation(X, y, regression_algos);
+      int k = std::min(5, std::max(2, static_cast<int>(X.size()) / 2));
+      runCrossValidation(X, y, regression_algos, k);
+      if (run_classification) {
+        bool use_stratified =
+            static_cast<int>(unique_classes.size()) <= k;
+        runCrossValidation(X, y, classification_algos, k, use_stratified);
+      }
     } else if (mode == "gridsearch") {
       runGridSearch(X, y);
+    } else if (mode == "cluster") {
+      Points points;
+      for (const auto &row : X)
+        points.push_back(row);
+
+      int n_unique = static_cast<int>(unique_classes.size());
+      int k = (n_unique >= 2 && n_unique <= static_cast<int>(X.size()) / 2)
+                  ? n_unique
+                  : 3;
+      auto k_sz = static_cast<size_t>(k);
+
+      std::println("Clustering with k={}", k);
+      std::println("{:<25} {:<10} {}", "Algorithm", "Metric", "Score");
+      std::println("{}", std::string(47, '-'));
+
+      {
+        Points centroids = kMeans(points, k_sz);
+        std::vector<int> labels(points.size());
+        for (size_t i = 0; i < points.size(); i++) {
+          double minDist = std::numeric_limits<double>::max();
+          for (size_t j = 0; j < k_sz; j++) {
+            double d = squaredEuclideanDistance(points[i], centroids[j]);
+            if (d < minDist) {
+              minDist = d;
+              labels[i] = static_cast<int>(j);
+            }
+          }
+        }
+        std::println("{:<25} {:<10} {:.4f}", "k-means", "Silhouette",
+                     silhouetteScore(points, labels));
+      }
+
+      {
+        double eps = 0.5;
+        auto labels = dbscan(points, eps, 3);
+        std::println("{:<25} {:<10} {:.4f}", "DBSCAN", "Silhouette",
+                     silhouetteScore(points, labels));
+      }
+
+      {
+        auto labels = agglomerativeClustering(points, k_sz, Linkage::Average);
+        std::println("{:<25} {:<10} {:.4f}", "agglomerative (avg)", "Silhouette",
+                     silhouetteScore(points, labels));
+      }
+
+      {
+        auto labels = spectralClustering(points, k_sz);
+        std::println("{:<25} {:<10} {:.4f}", "spectral", "Silhouette",
+                     silhouetteScore(points, labels));
+      }
     } else if (mode == "save") {
       if (argc < 5) {
         std::println(stderr, "Usage: {} <csv_file> save <algorithm> <filepath>",

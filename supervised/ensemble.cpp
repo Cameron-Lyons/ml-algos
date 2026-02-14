@@ -1,4 +1,6 @@
 #include "tree.cpp"
+#include <algorithm>
+#include <limits>
 #include <numeric>
 #include <random>
 #include <unordered_map>
@@ -120,10 +122,34 @@ protected:
   std::vector<DecisionTree> trees;
   int n_estimators;
   double learning_rate;
+  double validationFraction;
+  int patience;
+
+  void splitValidation(const Matrix &X, const Vector &y, Matrix &X_tr,
+                       Vector &y_tr, Matrix &X_val, Vector &y_val) const {
+    size_t n = X.size();
+    std::vector<size_t> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::shuffle(indices.begin(), indices.end(),
+                 std::default_random_engine(42));
+    size_t val_size = static_cast<size_t>(
+        static_cast<double>(n) * validationFraction);
+    for (size_t i = 0; i < n; i++) {
+      if (i < val_size) {
+        X_val.push_back(X[indices[i]]);
+        y_val.push_back(y[indices[i]]);
+      } else {
+        X_tr.push_back(X[indices[i]]);
+        y_tr.push_back(y[indices[i]]);
+      }
+    }
+  }
 
 public:
-  GradientBoostedTrees(int n_estimators, double learning_rate)
-      : n_estimators(n_estimators), learning_rate(learning_rate) {}
+  GradientBoostedTrees(int n_estimators, double learning_rate,
+                       double validationFraction = 0.0, int patience = 5)
+      : n_estimators(n_estimators), learning_rate(learning_rate),
+        validationFraction(validationFraction), patience(patience) {}
 
   virtual void fit(const Matrix &X, const Vector &y) = 0;
   virtual double predict(const Vector &x) const = 0;
@@ -132,24 +158,69 @@ public:
 
 class GradientBoostedTreesRegressor : public GradientBoostedTrees {
 public:
-  GradientBoostedTreesRegressor(int n_estimators, double learning_rate)
-      : GradientBoostedTrees(n_estimators, learning_rate) {}
+  GradientBoostedTreesRegressor(int n_estimators, double learning_rate,
+                                double validationFraction = 0.0,
+                                int patience = 5)
+      : GradientBoostedTrees(n_estimators, learning_rate, validationFraction,
+                             patience) {}
 
   void fit(const Matrix &X, const Vector &y) override {
-    Vector residuals = y;
-    Vector predictions(X.size(), 0.0);
+    Matrix X_tr, X_val;
+    Vector y_tr, y_val;
+    bool useES = validationFraction > 0.0;
+
+    if (useES) {
+      splitValidation(X, y, X_tr, y_tr, X_val, y_val);
+    } else {
+      X_tr = X;
+      y_tr = y;
+    }
+
+    Vector residuals = y_tr;
+    Vector predictions(X_tr.size(), 0.0);
+    Vector val_preds;
+    if (useES)
+      val_preds.assign(X_val.size(), 0.0);
+
+    double bestValLoss = std::numeric_limits<double>::max();
+    int bestRound = 0;
+    int wait = 0;
 
     for (int i = 0; i < n_estimators; i++) {
       DecisionTree tree(n_estimators);
-      tree.fit(X, residuals);
+      tree.fit(X_tr, residuals);
 
-      for (size_t j = 0; j < X.size(); j++) {
-        double prediction = tree.predict(X[j]);
+      for (size_t j = 0; j < X_tr.size(); j++) {
+        double prediction = tree.predict(X_tr[j]);
         predictions[j] += learning_rate * prediction;
-        residuals[j] = y[j] - predictions[j];
+        residuals[j] = y_tr[j] - predictions[j];
       }
 
       trees.push_back(std::move(tree));
+
+      if (useES) {
+        for (size_t j = 0; j < X_val.size(); j++)
+          val_preds[j] += learning_rate * trees.back().predict(X_val[j]);
+
+        double valLoss = 0.0;
+        for (size_t j = 0; j < X_val.size(); j++) {
+          double e = y_val[j] - val_preds[j];
+          valLoss += e * e;
+        }
+        valLoss /= static_cast<double>(X_val.size());
+
+        if (valLoss < bestValLoss) {
+          bestValLoss = valLoss;
+          bestRound = i + 1;
+          wait = 0;
+        } else {
+          wait++;
+          if (wait >= patience) {
+            trees.erase(trees.begin() + bestRound, trees.end());
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -164,29 +235,75 @@ public:
 
 class GradientBoostedTreesClassifier : public GradientBoostedTrees {
 public:
-  GradientBoostedTreesClassifier(int n_estimators, double learning_rate)
-      : GradientBoostedTrees(n_estimators, learning_rate) {}
+  GradientBoostedTreesClassifier(int n_estimators, double learning_rate,
+                                 double validationFraction = 0.0,
+                                 int patience = 5)
+      : GradientBoostedTrees(n_estimators, learning_rate, validationFraction,
+                             patience) {}
 
   void fit(const Matrix &X, const Vector &y) override {
-    Vector probabilities(X.size(), 0.5);
-    Vector residuals(X.size(), 0.0);
+    Matrix X_tr, X_val;
+    Vector y_tr, y_val;
+    bool useES = validationFraction > 0.0;
+
+    if (useES) {
+      splitValidation(X, y, X_tr, y_tr, X_val, y_val);
+    } else {
+      X_tr = X;
+      y_tr = y;
+    }
+
+    Vector probabilities(X_tr.size(), 0.5);
+    Vector residuals(X_tr.size(), 0.0);
+    Vector val_logOdds;
+    if (useES)
+      val_logOdds.assign(X_val.size(), 0.0);
+
+    double bestValLoss = std::numeric_limits<double>::max();
+    int bestRound = 0;
+    int wait = 0;
 
     for (int i = 0; i < n_estimators; i++) {
-      for (size_t j = 0; j < X.size(); j++) {
-        residuals[j] = y[j] - probabilities[j];
+      for (size_t j = 0; j < X_tr.size(); j++) {
+        residuals[j] = y_tr[j] - probabilities[j];
       }
 
       DecisionTree tree(n_estimators);
-      tree.fit(X, residuals);
+      tree.fit(X_tr, residuals);
 
-      for (size_t j = 0; j < X.size(); j++) {
-        double prediction = tree.predict(X[j]);
+      for (size_t j = 0; j < X_tr.size(); j++) {
+        double prediction = tree.predict(X_tr[j]);
         double logOdds = log(probabilities[j] / (1 - probabilities[j]));
         logOdds += learning_rate * prediction;
         probabilities[j] = 1.0 / (1.0 + exp(-logOdds));
       }
 
       trees.push_back(std::move(tree));
+
+      if (useES) {
+        for (size_t j = 0; j < X_val.size(); j++)
+          val_logOdds[j] += learning_rate * trees.back().predict(X_val[j]);
+
+        double valLoss = 0.0;
+        for (size_t j = 0; j < X_val.size(); j++) {
+          double p = 1.0 / (1.0 + exp(-val_logOdds[j]));
+          double lbl = y_val[j];
+          valLoss -= lbl * log(p + 1e-15) + (1 - lbl) * log(1 - p + 1e-15);
+        }
+        valLoss /= static_cast<double>(X_val.size());
+
+        if (valLoss < bestValLoss) {
+          bestValLoss = valLoss;
+          bestRound = i + 1;
+          wait = 0;
+        } else {
+          wait++;
+          if (wait >= patience) {
+            trees.erase(trees.begin() + bestRound, trees.end());
+            break;
+          }
+        }
+      }
     }
   }
 
