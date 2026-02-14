@@ -1,213 +1,194 @@
 # ML Algorithms Library
 
-A comprehensive C++23 implementation of machine learning algorithms for both supervised and unsupervised learning tasks, using modern features like concepts, ranges, and `std::println`.
+A from-scratch machine learning library in C++23. No external dependencies — just the standard library.
 
-## Features
+## Algorithms
 
-### Supervised Learning Algorithms
-- **Linear Models**
-  - Linear Regression (`LinearRegression`)
-  - Ridge Regression (`RidgeRegression`)
-  - Lasso Regression (`LassoRegression`)
-  - Elastic Net Regression (`ElasticNet`)
-- **Tree-Based Models**
-  - Decision Tree (`DecisionTree`)
-  - Random Forest Regressor/Classifier (`RandomForestRegressor`, `RandomForestClassifier`)
-  - Gradient Boosted Trees Regressor/Classifier (`GradientBoostedTreesRegressor`, `GradientBoostedTreesClassifier`)
-  - XGBoost Regressor/Classifier (`XGBoostRegressor`, `XGBoostClassifier`)
-  - AdaBoost Classifier (`AdaBoostClassifier`)
-- **Support Vector Machines**
-  - Support Vector Classification (`SVC`)
-  - Support Vector Regression (`SVR`)
-  - Kernel SVM (`KernelSVM`)
-- **K-Nearest Neighbors**
-  - KNN Regressor (`KNNRegressor`)
-  - KNN Classifier (`KNNClassifier`)
-- **Neural Networks**
-  - Multi-Layer Perceptron (`MLP`)
-- **Probabilistic Models**
-  - Gaussian Naive Bayes (`GaussianNaiveBayes`)
-  - Multinomial Naive Bayes (`MultinomialNaiveBayes`)
-  - Complement Naive Bayes (`ComplementNaiveBayes`)
-  - Bernoulli Naive Bayes (`BernoulliNaiveBayes`)
-  - Categorical Naive Bayes (`CategoricalNaiveBayes`)
-- **Other**
-  - Logistic Regression (`LogisticRegression`)
-  - Gaussian Process Regression (`GaussianProcessRegressor`)
+### Supervised Learning
 
-### Unsupervised Learning Algorithms
-- **Clustering**
-  - K-Means Clustering (`kMeans`)
-  - DBSCAN (`dbscan`) — templated on a `DistanceMetric` concept
-- **Dimensionality Reduction**
-  - Principal Component Analysis (`PCA`)
-  - Linear Discriminant Analysis (`LDA`)
-  - t-SNE (`tSNE`)
+- **Linear Models**: Linear Regression, Ridge, Lasso, ElasticNet, Logistic Regression, Softmax Regression
+- **Trees**: Decision Tree, Random Forest, Gradient Boosted Trees, XGBoost, AdaBoost
+- **Neural Networks**: MLP (single hidden layer), Modern MLP (multi-layer, ReLU/Sigmoid/Tanh, mini-batch SGD, L2 regularization)
+- **Instance-based**: KNN Classifier, KNN Regressor
+- **SVM**: SVC, SVR, Kernel SVM (RBF, Linear, Polynomial)
+- **Probabilistic**: Gaussian Naive Bayes, Gaussian Process Regressor
+- **Meta-ensembles**: Voting Classifier/Regressor, Stacking Classifier/Regressor
+
+### Unsupervised Learning
+
+- **Clustering**: k-Means, DBSCAN, Agglomerative (Average/Complete/Single), Spectral, Gaussian Mixture Model
+- **Dimensionality Reduction**: PCA, LDA, t-SNE
+- **Anomaly Detection**: Isolation Forest
 
 ### Utilities
-- Matrix operations (addition, multiplication, transpose, inverse, euclidean distance)
-- Metrics (R² score, MSE, MAE, accuracy)
-- Cross-validation (k-fold split, `Subsettable` concept for generic subsetting)
-- Hyperparameter optimization (grid search with k-fold cross-validation)
-- Model serialization (text-based save/load for linear models, decision trees, KNN, logistic regression)
-- Data preprocessing (train-test split, CSV reading)
+
+- **Preprocessing**: StandardScaler, MinMaxScaler
+- **Metrics**: MSE, R², MAE, Accuracy, Precision, Recall, F1, MCC, AUC, Silhouette Score
+- **Cross-validation**: k-Fold, Stratified k-Fold
+- **Hyperparameter search**: Grid Search with CV
+- **Feature importance**: Permutation importance (model-agnostic)
+- **Serialization**: Save/load for linear models, logistic regression, decision trees, KNN
 
 ### C++23 Concepts
 
 The library uses concepts to constrain templates and dispatch evaluation logic:
 
-- `Subsettable` — types supporting `push_back` and `reserve` (used by `subsetByIndices`)
-- `DistanceMetric` — callables `(Point, Point) -> double` (used by DBSCAN)
 - `Fittable` — models with `fit(Matrix, Vector)`
 - `BatchPredictor` — models with `predict(Matrix) -> Vector`
 - `PointPredictor` — models with `predict(Vector) -> double`
+- `Subsettable` — types supporting `push_back` and `reserve` (used by `subsetByIndices`)
+- `DistanceMetric` — callables `(Point, Point) -> double` (used by DBSCAN)
 
 ## Project Structure
 
 ```
 ml-algos/
 ├── CMakeLists.txt
-├── main.cpp                     # CLI with algorithm benchmarking and cross-validation
-├── matrix.h                     # Matrix and vector type definitions
-├── matrix.cpp                   # Matrix operations and euclidean distance
-├── metrics.cpp                  # Evaluation metrics (R², MSE, MAE, accuracy)
-├── cross_validation.cpp         # K-fold split and Subsettable concept
-├── hyperparameter_search.cpp    # Grid search with cross-validation
-├── serialization.cpp            # Text-based model save/load
-├── sample_data.csv              # Sample dataset for testing
+├── BUILD                            # Bazel build configuration
+├── main.cpp                         # CLI with algorithm benchmarking
+├── matrix.h / matrix.cpp            # Matrix/vector types and operations
+├── metrics.cpp                      # Evaluation metrics
+├── cross_validation.cpp             # k-fold and stratified k-fold splitting
+├── preprocessing.cpp                # StandardScaler, MinMaxScaler
+├── hyperparameter_search.cpp        # Grid search with CV
+├── serialization.cpp                # Model save/load
+├── feature_importance.cpp           # Permutation feature importance
+├── sample_data.csv                  # Sample dataset
 ├── supervised/
-│   ├── linear.cpp               # Linear, Ridge, Lasso, ElasticNet
-│   ├── tree.cpp                 # Decision tree
-│   ├── ensemble.cpp             # Random forest and gradient boosting
-│   ├── xgboost.cpp              # XGBoost regressor and classifier
-│   ├── adaboost.cpp             # AdaBoost classifier with decision stumps
-│   ├── svm.cpp                  # SVC, SVR, KernelSVM
-│   ├── knn.cpp                  # KNN regressor and classifier
-│   ├── logistic_regression.cpp  # Logistic regression
-│   ├── mlp.cpp                  # Multi-layer perceptron
-│   ├── naive_bayes.cpp          # Naive Bayes variants
-│   └── gaussian_process.cpp     # Gaussian process regression
+│   ├── linear.cpp                   # Linear, Ridge, Lasso, ElasticNet
+│   ├── logistic_regression.cpp      # Logistic and Softmax regression
+│   ├── tree.cpp                     # Decision tree
+│   ├── ensemble.cpp                 # Random forest and gradient boosting
+│   ├── xgboost.cpp                  # XGBoost
+│   ├── adaboost.cpp                 # AdaBoost
+│   ├── meta_ensemble.cpp            # Voting and Stacking ensembles
+│   ├── svm.cpp                      # SVC, SVR, Kernel SVM
+│   ├── knn.cpp                      # KNN regressor and classifier
+│   ├── mlp.cpp                      # Single-layer perceptron
+│   ├── modern_mlp.cpp               # Multi-layer perceptron
+│   ├── naive_bayes.cpp              # Naive Bayes variants
+│   └── gaussian_process.cpp         # Gaussian process regression
 └── unsupervised/
-    ├── k_means.cpp              # K-means clustering
-    ├── dbscan.cpp               # DBSCAN with DistanceMetric concept
-    ├── lda.cpp                  # Linear discriminant analysis
-    ├── pca.cpp                  # Principal component analysis
-    └── tsne.cpp                 # t-SNE dimensionality reduction
+    ├── k_means.cpp                  # k-Means clustering
+    ├── gmm.cpp                      # Gaussian Mixture Model
+    ├── dbscan.cpp                   # DBSCAN
+    ├── hierarchical.cpp             # Agglomerative clustering
+    ├── spectral.cpp                 # Spectral clustering
+    ├── isolation_forest.cpp         # Isolation Forest anomaly detection
+    ├── pca.cpp                      # Principal Component Analysis
+    ├── lda.cpp                      # Linear Discriminant Analysis
+    └── tsne.cpp                     # t-SNE
 ```
 
-## Installation and Compilation
+## Building
 
-### Prerequisites
-- C++23 compatible compiler (GCC 14+, Clang 18+)
-- CMake 3.20+
+Requires a C++23-capable compiler (GCC 14+, Clang 18+).
 
-### Building
-```bash
+### CMake
+
+```sh
 cmake -B build
 cmake --build build
 ```
 
-### Running
-```bash
-# Run all algorithms on sample data
-./build/ml-algos sample_data.csv
+### Bazel
 
-# Run a specific algorithm
-./build/ml-algos sample_data.csv linear
-./build/ml-algos sample_data.csv tree
-./build/ml-algos sample_data.csv knn-regressor
-
-# Run cross-validation on all regression algorithms
-./build/ml-algos sample_data.csv cv
-
-# Run hyperparameter grid search
-./build/ml-algos sample_data.csv gridsearch
-
-# Save a trained model
-./build/ml-algos sample_data.csv save linear model.txt
-
-# Load and evaluate a saved model
-./build/ml-algos sample_data.csv load model.txt
+```sh
+bazel build //:ml-algos
 ```
 
-Available algorithm names: `linear`, `ridge`, `lasso`, `elasticnet`, `tree`, `rf-regressor`, `gbt-regressor`, `xgb-regressor`, `svr`, `kernel-svm`, `knn-regressor`, `gp`, `mlp`, `logistic`, `svc`, `knn-classifier`, `rf-classifier`, `gbt-classifier`, `xgb-classifier`, `adaboost`, `naive-bayes`.
+## Usage
 
-## Usage Examples
+The CLI takes a CSV file (last column is the target) and an optional mode:
+
+```sh
+# Run all algorithms (train/test split with anomaly detection)
+./build/ml-algos data.csv
+
+# Run a single algorithm
+./build/ml-algos data.csv ridge
+./build/ml-algos data.csv xgb-regressor
+
+# Cross-validation
+./build/ml-algos data.csv cv
+
+# Hyperparameter grid search
+./build/ml-algos data.csv gridsearch
+
+# Clustering (k-Means, DBSCAN, Agglomerative, Spectral, GMM)
+./build/ml-algos data.csv cluster
+
+# Permutation feature importance
+./build/ml-algos data.csv importance
+
+# Save / load a model
+./build/ml-algos data.csv save linear model.txt
+./build/ml-algos data.csv load model.txt
+```
+
+Available algorithm names: `linear`, `ridge`, `lasso`, `elasticnet`, `tree`, `rf-regressor`, `gbt-regressor`, `xgb-regressor`, `svr`, `kernel-svm`, `linear-svm`, `poly-svm`, `knn-regressor`, `gp`, `mlp`, `modern-mlp`, `voting-regressor`, `stacking-regressor`, `logistic`, `svc`, `knn-classifier`, `rf-classifier`, `gbt-classifier`, `xgb-classifier`, `adaboost`, `naive-bayes`, `softmax`, `modern-mlp-cls`, `voting-classifier`, `stacking-classifier`.
+
+Early-stopping variants: `gbt-regressor-es`, `xgb-regressor-es`, `gbt-classifier-es`, `xgb-classifier-es`.
+
+## API Examples
 
 ### Linear Regression
+
 ```cpp
 LinearRegression model;
 model.fit(X_train, y_train);
 Vector predictions = model.predict(X_test);
 ```
 
-### Random Forest
+### Modern MLP
+
 ```cpp
-RandomForestRegressor model(10, 3);
+ModernMLP model({64, 32}, Activation::ReLU, 0.01, 500, 0.001, 32);
 model.fit(X_train, y_train);
-double prediction = model.predict(sample);
+double prediction = model.predict(x);
 ```
 
-### DBSCAN with Custom Distance
+### Voting Ensemble
+
 ```cpp
-auto manhattan = [](const Point &a, const Point &b) {
-  double sum = 0.0;
-  for (size_t i = 0; i < a.size(); i++)
-    sum += std::abs(a[i] - b[i]);
-  return sum;
-};
-auto labels = dbscan(data, 0.5, 5, manhattan);
+VotingRegressor voter;
+voter.addModel(makeBaseModel(RidgeRegression(1.0)));
+voter.addModel(makeBaseModel(DecisionTree(5)));
+voter.addModel(makeBaseModel(KNNRegressor(5)));
+voter.fit(X_train, y_train);
+double prediction = voter.predict(x);
 ```
 
-### Cross-Validation
+### Permutation Importance
+
 ```cpp
-auto folds = kFoldSplit(X.size(), 5, 42);
-for (const auto &[train_idx, test_idx] : folds) {
-  Matrix X_tr = subsetByIndices(X, train_idx);
-  Vector y_tr = subsetByIndices(y, train_idx);
-  // ...
-}
+DecisionTree model(5);
+model.fit(X_train, y_train);
+Vector importances = permutationImportance(model, X_test, y_test);
+```
+
+### Isolation Forest
+
+```cpp
+IsolationForest iforest(100, 256, 0.1);
+iforest.fit(X);
+double score = iforest.scoreSample(x);   // anomaly score in [0, 1]
+double label = iforest.predict(x);        // 1.0 normal, -1.0 anomaly
+```
+
+### Gaussian Mixture Model
+
+```cpp
+auto labels = gaussianMixture(points, 3);
+double score = silhouetteScore(points, labels);
 ```
 
 ## Data Format
 
-The library expects CSV files with:
-- Features in columns (except the last column)
-- Target values in the last column
-- No header row
-- Comma-separated values
+CSV files with features in all columns except the last, which is the target. No header row.
 
-Example:
 ```
 1.2,3.4,5.6,12.8
 2.1,4.2,6.3,18.9
 3.0,5.0,7.0,25.0
 ```
-
-## Customization
-
-### Adding New Algorithms
-1. Create a new `.cpp` file in the appropriate directory (`supervised/` or `unsupervised/`)
-2. Implement `fit(Matrix, Vector)` and `predict` methods to satisfy the `Fittable`/`BatchPredictor`/`PointPredictor` concepts
-3. Add a lambda in `buildRegressionAlgorithms` or `buildClassificationAlgorithms` in `main.cpp`
-
-### Configurable Parameters
-- **Random Forest**: Number of trees, max depth
-- **Gradient Boosting**: Number of estimators, learning rate
-- **SVM**: Learning rate, epsilon, max iterations
-- **MLP**: Hidden layer size, number of epochs
-- **XGBoost**: Number of estimators, learning rate, max depth, L2 regularization, min split gain
-- **AdaBoost**: Number of estimators
-- **KNN**: Number of neighbors
-- **K-Means**: Number of clusters, max iterations
-- **DBSCAN**: Epsilon, minimum points, distance function
-
-## Troubleshooting
-
-### Common Issues
-- **Compilation errors**: Ensure C++23 standard is used (`-std=c++23`)
-- **Matrix dimension errors**: Check that input data has consistent dimensions
-- **Poor performance**: Try different hyperparameters or more training epochs
-
-### Debug Output
-Matrix multiplication logs shapes to help diagnose dimension mismatches.
