@@ -7,3 +7,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(ml-algos main.cpp)
+target_compile_options(ml-algos PRIVATE
+  -Wall -Wextra -Wpedantic -Wsign-conversion -Wconversion -Werror
+)

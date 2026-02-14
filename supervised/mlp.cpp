@@ -1,5 +1,7 @@
 #include "../matrix.h"
+#include <algorithm>
 #include <cmath>
+#include <ranges>
 
 double sigmoid(double x) { return 1.0 / (1.0 + std::exp(-x)); }
 
@@ -12,9 +14,7 @@ double tanhFunction(double x) {
 
 Vector applyFunction(const Vector &vec, double (*func)(double)) {
   Vector result(vec.size());
-  for (size_t i = 0; i < vec.size(); i++) {
-    result[i] = func(vec[i]);
-  }
+  std::ranges::transform(vec, result.begin(), func);
   return result;
 }
 

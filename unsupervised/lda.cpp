@@ -1,6 +1,7 @@
 #include "../matrix.h"
 #include <algorithm>
 #include <cassert>
+#include <ranges>
 
 Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
   assert(X.size() == y.size() && "Data and labels must have the same length.");
@@ -11,7 +12,7 @@ Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
   Matrix S_W(n_features, Vector(n_features, 0.0));
   Matrix S_B(n_features, Vector(n_features, 0.0));
 
-  int num_classes = static_cast<int>(*std::max_element(y.begin(), y.end())) + 1;
+  int num_classes = static_cast<int>(std::ranges::max(y)) + 1;
 
   for (int i = 0; i < num_classes; i++) {
     Matrix class_sc_mat(n_features, Vector(n_features, 0.0));

@@ -6,6 +6,7 @@
 #include <map>
 #include <print>
 #include <random>
+#include <ranges>
 #include <set>
 #include <sstream>
 #include <string>
@@ -151,8 +152,7 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
   }
 
   const unsigned seed = 0;
-  std::shuffle(dataset.begin(), dataset.end(),
-               std::default_random_engine(seed));
+  std::ranges::shuffle(dataset, std::default_random_engine(seed));
 
   size_t test_count =
       static_cast<size_t>(test_size * static_cast<double>(dataset.size()));
@@ -232,8 +232,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
     return evaluateRegressor(
         "linear-svm",
-        KernelSVM(n_features, 0.01, 1.0, 0.1, 1000, KernelType::Linear),
-        Xs_tr, Xs_te, y_tr, y_te);
+        KernelSVM(n_features, 0.01, 1.0, 0.1, 1000, KernelType::Linear), Xs_tr,
+        Xs_te, y_tr, y_te);
   };
 
   algos["poly-svm"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
@@ -262,16 +262,15 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["gbt-regressor-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
                                  auto &y_te) {
     return evaluateRegressor("gbt-regressor-es",
-                             GradientBoostedTreesRegressor(100, 0.1, 0.2),
-                             X_tr, X_te, y_tr, y_te);
+                             GradientBoostedTreesRegressor(100, 0.1, 0.2), X_tr,
+                             X_te, y_tr, y_te);
   };
 
   algos["xgb-regressor-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                  auto &y_te) {
-    return evaluateRegressor(
-        "xgb-regressor-es",
-        XGBoostRegressor(100, 0.1, 3, 1.0, 0.0, 0.2), X_tr, X_te, y_tr,
-        y_te);
+                                 auto &y_te) {
+    return evaluateRegressor("xgb-regressor-es",
+                             XGBoostRegressor(100, 0.1, 3, 1.0, 0.0, 0.2), X_tr,
+                             X_te, y_tr, y_te);
   };
 
   algos["mlp"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
@@ -302,13 +301,13 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                          const Vector &y_tr,
                          const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
-    return evaluateClassifier("logistic", LogisticRegression(0.01, 1000),
-                              Xs_tr, Xs_te, y_tr, y_te);
+    return evaluateClassifier("logistic", LogisticRegression(0.01, 1000), Xs_tr,
+                              Xs_te, y_tr, y_te);
   };
 
-  algos["svc"] = [n_features, n_classes](const Matrix &X_tr, const Matrix &X_te,
-                                         const Vector &y_tr,
-                                         const Vector &y_te) -> AlgorithmResult {
+  algos["svc"] = [n_features, n_classes](
+                     const Matrix &X_tr, const Matrix &X_te, const Vector &y_tr,
+                     const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
     return evaluateClassifier("svc", SVC(n_features, n_classes), Xs_tr, Xs_te,
                               y_tr, y_te);
@@ -359,36 +358,35 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
   };
 
   algos["softmax"] = [](const Matrix &X_tr, const Matrix &X_te,
-                         const Vector &y_tr,
-                         const Vector &y_te) -> AlgorithmResult {
+                        const Vector &y_tr,
+                        const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
     return evaluateClassifier("softmax", SoftmaxRegression(0.01, 1000), Xs_tr,
                               Xs_te, y_tr, y_te);
   };
 
   algos["gbt-classifier-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                   auto &y_te) {
+                                  auto &y_te) {
     return evaluateClassifier("gbt-classifier-es",
                               GradientBoostedTreesClassifier(100, 0.1, 0.2),
                               X_tr, X_te, y_tr, y_te);
   };
 
   algos["xgb-classifier-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                   auto &y_te) {
-    return evaluateClassifier(
-        "xgb-classifier-es",
-        XGBoostClassifier(100, 0.1, 3, 1.0, 0.0, 0.2), X_tr, X_te, y_tr,
-        y_te);
+                                  auto &y_te) {
+    return evaluateClassifier("xgb-classifier-es",
+                              XGBoostClassifier(100, 0.1, 3, 1.0, 0.0, 0.2),
+                              X_tr, X_te, y_tr, y_te);
   };
 
   return algos;
 }
 
 void runCrossValidation(const Matrix &X, const Vector &y,
-                        const std::map<std::string, AlgoFunc> &algos,
-                        int k = 5, bool stratified = false) {
-  auto folds = stratified ? stratifiedKFoldSplit(y, k, 42)
-                          : kFoldSplit(X.size(), k, 42);
+                        const std::map<std::string, AlgoFunc> &algos, int k = 5,
+                        bool stratified = false) {
+  auto folds =
+      stratified ? stratifiedKFoldSplit(y, k, 42) : kFoldSplit(X.size(), k, 42);
 
   std::vector<AlgorithmResult> results;
   for (const auto &[name, func] : algos) {
@@ -404,8 +402,7 @@ void runCrossValidation(const Matrix &X, const Vector &y,
       total_score += result.score;
       metric_name = result.metric;
     }
-    results.push_back(
-        {name, metric_name + " (CV)", total_score / k});
+    results.push_back({name, metric_name + " (CV)", total_score / k});
   }
 
   printTable(results);
@@ -466,9 +463,8 @@ void runGridSearch(const Matrix &X, const Vector &y) {
         {{"learning_rate", {0.01, 0.1, 0.3}}, {"max_depth", {2, 3, 5}}});
     auto xgbResult = gridSearchCV(
         [](const ParamSet &ps) {
-          return XGBoostRegressor(
-              50, ps.params.at("learning_rate"),
-              static_cast<int>(ps.params.at("max_depth")));
+          return XGBoostRegressor(50, ps.params.at("learning_rate"),
+                                  static_cast<int>(ps.params.at("max_depth")));
         },
         xgbGrid, X, y, folds, true);
     printGridSearchResult(xgbResult, "XGBoost Regressor");
@@ -612,8 +608,7 @@ int main(int argc, char *argv[]) {
       int k = std::min(5, std::max(2, static_cast<int>(X.size()) / 2));
       runCrossValidation(X, y, regression_algos, k);
       if (run_classification) {
-        bool use_stratified =
-            static_cast<int>(unique_classes.size()) <= k;
+        bool use_stratified = static_cast<int>(unique_classes.size()) <= k;
         runCrossValidation(X, y, classification_algos, k, use_stratified);
       }
     } else if (mode == "gridsearch") {
@@ -659,8 +654,8 @@ int main(int argc, char *argv[]) {
 
       {
         auto labels = agglomerativeClustering(points, k_sz, Linkage::Average);
-        std::println("{:<25} {:<10} {:.4f}", "agglomerative (avg)", "Silhouette",
-                     silhouetteScore(points, labels));
+        std::println("{:<25} {:<10} {:.4f}", "agglomerative (avg)",
+                     "Silhouette", silhouetteScore(points, labels));
       }
 
       {

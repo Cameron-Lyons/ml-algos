@@ -1,7 +1,9 @@
 #include "../matrix.h"
 #include <algorithm>
+#include <functional>
 #include <limits>
 #include <memory>
+#include <ranges>
 #include <vector>
 
 struct TreeNode {
@@ -62,7 +64,7 @@ private:
     for (size_t featureIdx = 0; featureIdx < nFeatures; ++featureIdx) {
       for (size_t i = 0; i < n; ++i)
         featureVals[i] = X[indices[i]][featureIdx];
-      std::sort(featureVals.begin(), featureVals.end());
+      std::ranges::sort(featureVals);
       auto last = std::unique(featureVals.begin(), featureVals.end());
 
       for (auto it = featureVals.begin(); it != last; ++it) {
@@ -135,9 +137,8 @@ public:
   DecisionTree(int depth) : root(nullptr), maxDepth(depth) {}
 
   void fit(const Matrix &X, const Vector &y) {
-    std::vector<size_t> indices(X.size());
-    for (size_t i = 0; i < X.size(); ++i)
-      indices[i] = i;
+    auto indices =
+        std::views::iota(size_t{0}, X.size()) | std::ranges::to<std::vector>();
     root = buildTree(X, y, indices, 0);
   }
 
@@ -162,9 +163,7 @@ public:
   Vector featureImportance(size_t n_features) const {
     Vector importance(n_features, 0.0);
     accumulateImportance(root.get(), importance, 1.0);
-    double total = 0.0;
-    for (double v : importance)
-      total += v;
+    double total = std::ranges::fold_left(importance, 0.0, std::plus{});
     if (total > 0.0)
       for (double &v : importance)
         v /= total;
