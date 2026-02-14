@@ -1,7 +1,10 @@
 #include "matrix.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <map>
 #include <print>
+#include <set>
 
 double mse(const Vector &y_true, const Vector &y_pred) {
   if (y_true.size() != y_pred.size()) {
@@ -176,6 +179,57 @@ double mae(const Vector &y_true, const Vector &y_pred) {
   for (size_t i = 0; i < y_true.size(); i++)
     sum += std::abs(y_true[i] - y_pred[i]);
   return sum / static_cast<double>(y_true.size());
+}
+
+double silhouetteScore(const Points &data, const std::vector<int> &labels) {
+  size_t n = data.size();
+  if (n <= 1)
+    return 0.0;
+
+  std::set<int> unique_labels(labels.begin(), labels.end());
+  unique_labels.erase(-1);
+  if (unique_labels.size() <= 1)
+    return 0.0;
+
+  double total = 0.0;
+  size_t count = 0;
+
+  for (size_t i = 0; i < n; i++) {
+    if (labels[i] < 0)
+      continue;
+
+    double a_sum = 0.0;
+    int a_count = 0;
+    std::map<int, double> b_sums;
+    std::map<int, int> b_counts;
+
+    for (size_t j = 0; j < n; j++) {
+      if (i == j || labels[j] < 0)
+        continue;
+      double dist = euclideanDistance(data[i], data[j]);
+      if (labels[j] == labels[i]) {
+        a_sum += dist;
+        a_count++;
+      } else {
+        b_sums[labels[j]] += dist;
+        b_counts[labels[j]]++;
+      }
+    }
+
+    double a_i = a_count > 0 ? a_sum / a_count : 0.0;
+    double b_i = std::numeric_limits<double>::max();
+    for (const auto &[lbl, sum] : b_sums)
+      b_i = std::min(b_i, sum / b_counts.at(lbl));
+
+    if (b_i == std::numeric_limits<double>::max())
+      continue;
+
+    double s_i = (b_i - a_i) / std::max(a_i, b_i);
+    total += s_i;
+    count++;
+  }
+
+  return count > 0 ? total / static_cast<double>(count) : 0.0;
 }
 
 double computeAUC(const std::vector<int> &trueLabels,

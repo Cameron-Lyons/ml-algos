@@ -1,7 +1,10 @@
 #include "../matrix.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
+#include <numeric>
+#include <random>
 #include <vector>
 
 struct XGBTreeNode {
@@ -128,38 +131,104 @@ private:
   int maxDepth;
   double lambda;
   double gamma;
+  double validationFraction;
+  int patience;
   double basePrediction = 0.0;
   std::vector<XGBTree> trees;
 
+  void splitValidation(const Matrix &X, const Vector &y, Matrix &X_tr,
+                       Vector &y_tr, Matrix &X_val, Vector &y_val) const {
+    size_t n = X.size();
+    std::vector<size_t> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::shuffle(indices.begin(), indices.end(),
+                 std::default_random_engine(42));
+    size_t val_size =
+        static_cast<size_t>(static_cast<double>(n) * validationFraction);
+    for (size_t i = 0; i < n; i++) {
+      if (i < val_size) {
+        X_val.push_back(X[indices[i]]);
+        y_val.push_back(y[indices[i]]);
+      } else {
+        X_tr.push_back(X[indices[i]]);
+        y_tr.push_back(y[indices[i]]);
+      }
+    }
+  }
+
 public:
   XGBoostRegressor(int nEstimators = 100, double learningRate = 0.1,
-                   int maxDepth = 3, double lambda = 1.0, double gamma = 0.0)
+                   int maxDepth = 3, double lambda = 1.0, double gamma = 0.0,
+                   double validationFraction = 0.0, int patience = 5)
       : nEstimators(nEstimators), learningRate(learningRate),
-        maxDepth(maxDepth), lambda(lambda), gamma(gamma) {}
+        maxDepth(maxDepth), lambda(lambda), gamma(gamma),
+        validationFraction(validationFraction), patience(patience) {}
 
   void fit(const Matrix &X, const Vector &y) {
-    double sum = 0.0;
-    for (double v : y)
-      sum += v;
-    basePrediction = sum / static_cast<double>(y.size());
+    Matrix X_tr, X_val;
+    Vector y_tr, y_val;
+    bool useES = validationFraction > 0.0;
 
-    Vector preds(y.size(), basePrediction);
+    if (useES) {
+      splitValidation(X, y, X_tr, y_tr, X_val, y_val);
+    } else {
+      X_tr = X;
+      y_tr = y;
+    }
+
+    double sum = 0.0;
+    for (double v : y_tr)
+      sum += v;
+    basePrediction = sum / static_cast<double>(y_tr.size());
+
+    Vector preds(y_tr.size(), basePrediction);
+    Vector val_preds;
+    if (useES)
+      val_preds.assign(X_val.size(), basePrediction);
     trees.clear();
 
+    double bestValLoss = std::numeric_limits<double>::max();
+    int bestRound = 0;
+    int wait = 0;
+
     for (int t = 0; t < nEstimators; ++t) {
-      Vector grad(y.size()), hess(y.size());
-      for (size_t i = 0; i < y.size(); ++i) {
-        grad[i] = preds[i] - y[i];
+      Vector grad(y_tr.size()), hess(y_tr.size());
+      for (size_t i = 0; i < y_tr.size(); ++i) {
+        grad[i] = preds[i] - y_tr[i];
         hess[i] = 1.0;
       }
 
       XGBTree tree(maxDepth, lambda, gamma);
-      tree.fit(X, grad, hess);
+      tree.fit(X_tr, grad, hess);
 
-      for (size_t i = 0; i < X.size(); ++i)
-        preds[i] += learningRate * tree.predict(X[i]);
+      for (size_t i = 0; i < X_tr.size(); ++i)
+        preds[i] += learningRate * tree.predict(X_tr[i]);
 
       trees.push_back(std::move(tree));
+
+      if (useES) {
+        for (size_t i = 0; i < X_val.size(); ++i)
+          val_preds[i] += learningRate * trees.back().predict(X_val[i]);
+
+        double valLoss = 0.0;
+        for (size_t i = 0; i < X_val.size(); ++i) {
+          double e = y_val[i] - val_preds[i];
+          valLoss += e * e;
+        }
+        valLoss /= static_cast<double>(X_val.size());
+
+        if (valLoss < bestValLoss) {
+          bestValLoss = valLoss;
+          bestRound = t + 1;
+          wait = 0;
+        } else {
+          wait++;
+          if (wait >= patience) {
+            trees.erase(trees.begin() + bestRound, trees.end());
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -178,45 +247,113 @@ private:
   int maxDepth;
   double lambda;
   double gamma;
+  double validationFraction;
+  int patience;
   double baseLogOdds = 0.0;
   std::vector<XGBTree> trees;
 
   static double sigmoid_xgb(double z) { return 1.0 / (1.0 + std::exp(-z)); }
 
+  void splitValidation(const Matrix &X, const Vector &y, Matrix &X_tr,
+                       Vector &y_tr, Matrix &X_val, Vector &y_val) const {
+    size_t n = X.size();
+    std::vector<size_t> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+    std::shuffle(indices.begin(), indices.end(),
+                 std::default_random_engine(42));
+    size_t val_size =
+        static_cast<size_t>(static_cast<double>(n) * validationFraction);
+    for (size_t i = 0; i < n; i++) {
+      if (i < val_size) {
+        X_val.push_back(X[indices[i]]);
+        y_val.push_back(y[indices[i]]);
+      } else {
+        X_tr.push_back(X[indices[i]]);
+        y_tr.push_back(y[indices[i]]);
+      }
+    }
+  }
+
 public:
   XGBoostClassifier(int nEstimators = 100, double learningRate = 0.1,
-                    int maxDepth = 3, double lambda = 1.0, double gamma = 0.0)
+                    int maxDepth = 3, double lambda = 1.0, double gamma = 0.0,
+                    double validationFraction = 0.0, int patience = 5)
       : nEstimators(nEstimators), learningRate(learningRate),
-        maxDepth(maxDepth), lambda(lambda), gamma(gamma) {}
+        maxDepth(maxDepth), lambda(lambda), gamma(gamma),
+        validationFraction(validationFraction), patience(patience) {}
 
   void fit(const Matrix &X, const Vector &y) {
+    Matrix X_tr, X_val;
+    Vector y_tr, y_val;
+    bool useES = validationFraction > 0.0;
+
+    if (useES) {
+      splitValidation(X, y, X_tr, y_tr, X_val, y_val);
+    } else {
+      X_tr = X;
+      y_tr = y;
+    }
+
     double posCount = 0.0;
-    for (double v : y)
+    for (double v : y_tr)
       posCount += v;
-    double negCount = static_cast<double>(y.size()) - posCount;
+    double negCount = static_cast<double>(y_tr.size()) - posCount;
     baseLogOdds =
         (posCount > 0 && negCount > 0) ? std::log(posCount / negCount) : 0.0;
 
-    Vector rawPreds(y.size(), baseLogOdds);
+    Vector rawPreds(y_tr.size(), baseLogOdds);
+    Vector val_rawPreds;
+    if (useES)
+      val_rawPreds.assign(X_val.size(), baseLogOdds);
     trees.clear();
 
+    double bestValLoss = std::numeric_limits<double>::max();
+    int bestRound = 0;
+    int wait = 0;
+
     for (int t = 0; t < nEstimators; ++t) {
-      Vector grad(y.size()), hess(y.size());
-      for (size_t i = 0; i < y.size(); ++i) {
+      Vector grad(y_tr.size()), hess(y_tr.size());
+      for (size_t i = 0; i < y_tr.size(); ++i) {
         double p = sigmoid_xgb(rawPreds[i]);
-        grad[i] = p - y[i];
+        grad[i] = p - y_tr[i];
         hess[i] = p * (1.0 - p);
         if (hess[i] < 1e-8)
           hess[i] = 1e-8;
       }
 
       XGBTree tree(maxDepth, lambda, gamma);
-      tree.fit(X, grad, hess);
+      tree.fit(X_tr, grad, hess);
 
-      for (size_t i = 0; i < X.size(); ++i)
-        rawPreds[i] += learningRate * tree.predict(X[i]);
+      for (size_t i = 0; i < X_tr.size(); ++i)
+        rawPreds[i] += learningRate * tree.predict(X_tr[i]);
 
       trees.push_back(std::move(tree));
+
+      if (useES) {
+        for (size_t i = 0; i < X_val.size(); ++i)
+          val_rawPreds[i] += learningRate * trees.back().predict(X_val[i]);
+
+        double valLoss = 0.0;
+        for (size_t i = 0; i < X_val.size(); ++i) {
+          double p = sigmoid_xgb(val_rawPreds[i]);
+          double lbl = y_val[i];
+          valLoss -= lbl * std::log(p + 1e-15) +
+                     (1 - lbl) * std::log(1 - p + 1e-15);
+        }
+        valLoss /= static_cast<double>(X_val.size());
+
+        if (valLoss < bestValLoss) {
+          bestValLoss = valLoss;
+          bestRound = t + 1;
+          wait = 0;
+        } else {
+          wait++;
+          if (wait >= patience) {
+            trees.erase(trees.begin() + bestRound, trees.end());
+            break;
+          }
+        }
+      }
     }
   }
 
