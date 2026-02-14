@@ -5,6 +5,7 @@
 #include <memory>
 #include <numeric>
 #include <random>
+#include <ranges>
 #include <vector>
 
 struct XGBTreeNode {
@@ -50,7 +51,7 @@ private:
       featureVals.reserve(indices.size());
       for (size_t idx : indices)
         featureVals.emplace_back(X[idx][f], idx);
-      std::sort(featureVals.begin(), featureVals.end());
+      std::ranges::sort(featureVals);
 
       double GL = 0.0, HL = 0.0;
       for (size_t i = 0; i + 1 < featureVals.size(); ++i) {
@@ -111,9 +112,8 @@ public:
       : root(nullptr), maxDepth(maxDepth), lambda(lambda), gamma(gamma) {}
 
   void fit(const Matrix &X, const Vector &grad, const Vector &hess) {
-    std::vector<size_t> indices(X.size());
-    for (size_t i = 0; i < X.size(); ++i)
-      indices[i] = i;
+    auto indices =
+        std::views::iota(size_t{0}, X.size()) | std::ranges::to<std::vector>();
     root = buildTree(X, grad, hess, indices, 0);
   }
 
@@ -139,10 +139,9 @@ private:
   void splitValidation(const Matrix &X, const Vector &y, Matrix &X_tr,
                        Vector &y_tr, Matrix &X_val, Vector &y_val) const {
     size_t n = X.size();
-    std::vector<size_t> indices(n);
-    std::iota(indices.begin(), indices.end(), 0);
-    std::shuffle(indices.begin(), indices.end(),
-                 std::default_random_engine(42));
+    auto indices =
+        std::views::iota(size_t{0}, n) | std::ranges::to<std::vector>();
+    std::ranges::shuffle(indices, std::default_random_engine(42));
     size_t val_size =
         static_cast<size_t>(static_cast<double>(n) * validationFraction);
     for (size_t i = 0; i < n; i++) {
@@ -257,10 +256,9 @@ private:
   void splitValidation(const Matrix &X, const Vector &y, Matrix &X_tr,
                        Vector &y_tr, Matrix &X_val, Vector &y_val) const {
     size_t n = X.size();
-    std::vector<size_t> indices(n);
-    std::iota(indices.begin(), indices.end(), 0);
-    std::shuffle(indices.begin(), indices.end(),
-                 std::default_random_engine(42));
+    auto indices =
+        std::views::iota(size_t{0}, n) | std::ranges::to<std::vector>();
+    std::ranges::shuffle(indices, std::default_random_engine(42));
     size_t val_size =
         static_cast<size_t>(static_cast<double>(n) * validationFraction);
     for (size_t i = 0; i < n; i++) {
@@ -337,8 +335,8 @@ public:
         for (size_t i = 0; i < X_val.size(); ++i) {
           double p = sigmoid_xgb(val_rawPreds[i]);
           double lbl = y_val[i];
-          valLoss -= lbl * std::log(p + 1e-15) +
-                     (1 - lbl) * std::log(1 - p + 1e-15);
+          valLoss -=
+              lbl * std::log(p + 1e-15) + (1 - lbl) * std::log(1 - p + 1e-15);
         }
         valLoss /= static_cast<double>(X_val.size());
 

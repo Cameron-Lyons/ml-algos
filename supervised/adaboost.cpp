@@ -22,7 +22,7 @@ struct DecisionStump {
       vals.reserve(nSamples);
       for (size_t i = 0; i < nSamples; ++i)
         vals.push_back(X[i][f]);
-      std::sort(vals.begin(), vals.end());
+      std::ranges::sort(vals);
       auto last = std::unique(vals.begin(), vals.end());
 
       for (auto it = vals.begin(); it != last; ++it) {

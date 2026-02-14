@@ -62,8 +62,8 @@ std::vector<int> spectralClustering(const Points &data, size_t k,
           newVec[i] -= dot * eigenvectors[prev][i];
       }
 
-      double norm = std::sqrt(
-          std::inner_product(newVec.begin(), newVec.end(), newVec.begin(), 0.0));
+      double norm = std::sqrt(std::inner_product(newVec.begin(), newVec.end(),
+                                                 newVec.begin(), 0.0));
       if (norm < 1e-12)
         break;
       for (size_t i = 0; i < n; i++)

@@ -1,7 +1,9 @@
 #include "../matrix.h"
 #include <cmath>
+#include <functional>
 #include <map>
 #include <numbers>
+#include <ranges>
 #include <vector>
 
 struct Gaussian {
@@ -25,10 +27,7 @@ private:
 
   Gaussian computeStats(const std::vector<double> &features) {
     Gaussian g;
-    double sum = 0.0;
-    for (double f : features) {
-      sum += f;
-    }
+    double sum = std::ranges::fold_left(features, 0.0, std::plus{});
     g.mean = sum / static_cast<double>(features.size());
 
     double sumVar = 0.0;
@@ -130,14 +129,14 @@ public:
     for (const auto &classEntry : classCounts) {
       int c = classEntry.first;
       double logProb = log(classEntry.second / totalSamples);
-      double totalForClass = classTotalFeatureCounts.count(c)
+      double totalForClass = classTotalFeatureCounts.contains(c)
                                  ? classTotalFeatureCounts.at(c)
                                  : 0.0;
 
       for (size_t j = 0; j < features.size(); ++j) {
         int jIdx = static_cast<int>(j);
         double countForFeatureInClass =
-            featureCounts[c].count(jIdx) ? featureCounts[c][jIdx] : 0;
+            featureCounts[c].contains(jIdx) ? featureCounts[c][jIdx] : 0;
 
         logProb +=
             features[j] *
@@ -196,16 +195,17 @@ public:
       double logProb = 0.0;
 
       double complementTotal =
-          globalTotal - (classTotalFeatureCounts.count(c)
+          globalTotal - (classTotalFeatureCounts.contains(c)
                              ? classTotalFeatureCounts.at(c)
                              : 0.0);
 
       for (size_t j = 0; j < features.size(); ++j) {
         int jIdx = static_cast<int>(j);
-        double globalCount =
-            globalFeatureCounts.count(jIdx) ? globalFeatureCounts[jIdx] : 0.0;
+        double globalCount = globalFeatureCounts.contains(jIdx)
+                                 ? globalFeatureCounts[jIdx]
+                                 : 0.0;
         double classCount =
-            featureCounts[c].count(jIdx) ? featureCounts[c][jIdx] : 0.0;
+            featureCounts[c].contains(jIdx) ? featureCounts[c][jIdx] : 0.0;
         double complementCount = globalCount - classCount;
         logProb +=
             features[j] * log((complementCount + alpha) /

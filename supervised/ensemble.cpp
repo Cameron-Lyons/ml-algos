@@ -1,8 +1,9 @@
 #include "tree.cpp"
 #include <algorithm>
+#include <functional>
 #include <limits>
-#include <numeric>
 #include <random>
+#include <ranges>
 #include <unordered_map>
 #include <vector>
 
@@ -110,10 +111,8 @@ public:
     for (const auto &tree : trees) {
       predictions.push_back(tree.predict(x));
     }
-    double average =
-        std::accumulate(predictions.begin(), predictions.end(), 0.0) /
-        static_cast<double>(predictions.size());
-    return average;
+    return std::ranges::fold_left(predictions, 0.0, std::plus{}) /
+           static_cast<double>(predictions.size());
   }
 };
 
@@ -128,12 +127,11 @@ protected:
   void splitValidation(const Matrix &X, const Vector &y, Matrix &X_tr,
                        Vector &y_tr, Matrix &X_val, Vector &y_val) const {
     size_t n = X.size();
-    std::vector<size_t> indices(n);
-    std::iota(indices.begin(), indices.end(), 0);
-    std::shuffle(indices.begin(), indices.end(),
-                 std::default_random_engine(42));
-    size_t val_size = static_cast<size_t>(
-        static_cast<double>(n) * validationFraction);
+    auto indices =
+        std::views::iota(size_t{0}, n) | std::ranges::to<std::vector>();
+    std::ranges::shuffle(indices, std::default_random_engine(42));
+    size_t val_size =
+        static_cast<size_t>(static_cast<double>(n) * validationFraction);
     for (size_t i = 0; i < n; i++) {
       if (i < val_size) {
         X_val.push_back(X[indices[i]]);

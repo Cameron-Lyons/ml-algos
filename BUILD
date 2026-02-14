@@ -27,6 +27,7 @@ cc_binary(
         "-Wpedantic",
         "-Wsign-conversion",
         "-Wconversion",
+        "-Werror",
     ],
     data = ["sample_data.csv"],
     deps = [":ml-algos-lib"],

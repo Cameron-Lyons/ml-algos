@@ -4,6 +4,7 @@
 #include <limits>
 #include <map>
 #include <print>
+#include <ranges>
 #include <set>
 
 double mse(const Vector &y_true, const Vector &y_pred) {
@@ -244,14 +245,13 @@ double computeAUC(const std::vector<int> &trueLabels,
     pairs.emplace_back(predictedScores[i], trueLabels[i]);
   }
 
-  std::sort(pairs.begin(), pairs.end(),
-            [](const auto &a, const auto &b) { return a.first > b.first; });
+  std::ranges::sort(
+      pairs, [](const auto &a, const auto &b) { return a.first > b.first; });
 
   double auc = 0.0;
   double fprPrev = 0.0;
   double tprPrev = 0.0;
-  auto positiveCount =
-      static_cast<double>(std::count(trueLabels.begin(), trueLabels.end(), 1));
+  auto positiveCount = static_cast<double>(std::ranges::count(trueLabels, 1));
   double negativeCount = static_cast<double>(trueLabels.size()) - positiveCount;
 
   for (size_t i = 0; i < pairs.size(); ++i) {

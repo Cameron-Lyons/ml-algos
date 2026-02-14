@@ -1,6 +1,7 @@
 #include "../matrix.h"
 #include <algorithm>
 #include <cmath>
+#include <ranges>
 
 class LogisticRegression {
 private:
@@ -78,10 +79,10 @@ private:
   Vector biases;
   double learningRate;
   int maxIterations;
-  int nClasses = 0;
+  size_t nClasses = 0;
 
   Vector softmax(const Vector &z) const {
-    double maxZ = *std::max_element(z.begin(), z.end());
+    double maxZ = std::ranges::max(z);
     Vector exp_z(z.size());
     double sum = 0.0;
     for (size_t i = 0; i < z.size(); i++) {
@@ -103,7 +104,7 @@ public:
 
     nClasses = 0;
     for (double v : y)
-      nClasses = std::max(nClasses, static_cast<int>(v) + 1);
+      nClasses = std::max(nClasses, static_cast<size_t>(v) + 1);
 
     weights = Matrix(n_features, Vector(nClasses, 0.0));
     biases = Vector(nClasses, 0.0);
@@ -114,16 +115,16 @@ public:
 
       for (size_t i = 0; i < n_samples; i++) {
         Vector z(nClasses, 0.0);
-        for (int c = 0; c < nClasses; c++) {
+        for (size_t c = 0; c < nClasses; c++) {
           z[c] = biases[c];
           for (size_t j = 0; j < n_features; j++)
             z[c] += weights[j][c] * X[i][j];
         }
 
         Vector probs = softmax(z);
-        int label = static_cast<int>(y[i]);
+        size_t label = static_cast<size_t>(y[i]);
 
-        for (int c = 0; c < nClasses; c++) {
+        for (size_t c = 0; c < nClasses; c++) {
           double grad = probs[c] - (c == label ? 1.0 : 0.0);
           for (size_t j = 0; j < n_features; j++)
             dw[j][c] += grad * X[i][j];
@@ -133,22 +134,21 @@ public:
 
       auto n = static_cast<double>(n_samples);
       for (size_t j = 0; j < n_features; j++)
-        for (int c = 0; c < nClasses; c++)
+        for (size_t c = 0; c < nClasses; c++)
           weights[j][c] -= learningRate * dw[j][c] / n;
-      for (int c = 0; c < nClasses; c++)
+      for (size_t c = 0; c < nClasses; c++)
         biases[c] -= learningRate * db[c] / n;
     }
   }
 
   double predict(const Vector &x) const {
     Vector z(nClasses, 0.0);
-    for (int c = 0; c < nClasses; c++) {
+    for (size_t c = 0; c < nClasses; c++) {
       z[c] = biases[c];
       for (size_t j = 0; j < x.size(); j++)
         z[c] += weights[j][c] * x[j];
     }
     Vector probs = softmax(z);
-    return static_cast<double>(
-        std::max_element(probs.begin(), probs.end()) - probs.begin());
+    return static_cast<double>(std::ranges::max_element(probs) - probs.begin());
   }
 };
