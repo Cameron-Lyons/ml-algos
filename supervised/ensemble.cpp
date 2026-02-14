@@ -30,6 +30,19 @@ public:
   virtual void fit(const Matrix &X, const Vector &y) = 0;
   virtual double predict(const Vector &x) = 0;
   virtual ~RandomForestBase() = default;
+
+  Vector featureImportance(size_t n_features) const {
+    Vector importance(n_features, 0.0);
+    for (const auto &tree : trees) {
+      Vector ti = tree.featureImportance(n_features);
+      for (size_t j = 0; j < n_features; j++)
+        importance[j] += ti[j];
+    }
+    double n = static_cast<double>(trees.size());
+    for (double &v : importance)
+      v /= n;
+    return importance;
+  }
 };
 
 class RandomForestClassifier : public RandomForestBase {

@@ -115,6 +115,23 @@ double rbf_kernel(const Vector &x, const Vector &z, double sigma) {
   return exp(-norm_sq / (2 * sigma * sigma));
 }
 
+double linear_kernel(const Vector &x, const Vector &z) {
+  double result = 0.0;
+  for (size_t i = 0; i < x.size(); i++)
+    result += x[i] * z[i];
+  return result;
+}
+
+double polynomial_kernel(const Vector &x, const Vector &z, int degree,
+                         double coef0) {
+  double dot = 0.0;
+  for (size_t i = 0; i < x.size(); i++)
+    dot += x[i] * z[i];
+  return pow(dot + coef0, degree);
+}
+
+enum class KernelType { RBF, Linear, Polynomial };
+
 class KernelSVM : public SVM {
 private:
   Matrix support_vectors;
@@ -122,17 +139,35 @@ private:
   double bias = 0.0;
   double sigma;
   double epsilon;
+  KernelType kernel_type;
+  int poly_degree;
+  double poly_coef0;
+
+  double computeKernel(const Vector &x, const Vector &z) const {
+    switch (kernel_type) {
+    case KernelType::Linear:
+      return linear_kernel(x, z);
+    case KernelType::Polynomial:
+      return polynomial_kernel(x, z, poly_degree, poly_coef0);
+    case KernelType::RBF:
+    default:
+      return rbf_kernel(x, z, sigma);
+    }
+  }
 
 public:
   KernelSVM(size_t n_features, double learningRate, double sigma,
-            double epsilon = 0.1, int maxIterations = 1000)
+            double epsilon = 0.1, int maxIterations = 1000,
+            KernelType kernel = KernelType::RBF, int degree = 3,
+            double coef0 = 1.0)
       : SVM(n_features, learningRate, maxIterations), sigma(sigma),
-        epsilon(epsilon) {}
+        epsilon(epsilon), kernel_type(kernel), poly_degree(degree),
+        poly_coef0(coef0) {}
 
   double predict(const Vector &x) const override {
     double result = bias;
     for (size_t i = 0; i < support_vectors.size(); i++) {
-      result += alphas[i] * rbf_kernel(x, support_vectors[i], sigma);
+      result += alphas[i] * computeKernel(x, support_vectors[i]);
     }
     return result;
   }

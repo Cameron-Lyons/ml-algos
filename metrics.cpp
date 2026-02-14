@@ -141,6 +141,43 @@ double matthews_correlation_coefficient(const Vector &y_true,
               (true_negatives + false_negatives));
 }
 
+double precision(const Vector &y_true, const Vector &y_pred) {
+  int tp = 0, fp = 0;
+  for (size_t i = 0; i < y_true.size(); i++) {
+    if (y_pred[i] == 1.0) {
+      if (y_true[i] == 1.0)
+        tp++;
+      else
+        fp++;
+    }
+  }
+  if (tp + fp == 0)
+    return 0.0;
+  return static_cast<double>(tp) / (tp + fp);
+}
+
+double recall(const Vector &y_true, const Vector &y_pred) {
+  int tp = 0, fn = 0;
+  for (size_t i = 0; i < y_true.size(); i++) {
+    if (y_true[i] == 1.0) {
+      if (y_pred[i] == 1.0)
+        tp++;
+      else
+        fn++;
+    }
+  }
+  if (tp + fn == 0)
+    return 0.0;
+  return static_cast<double>(tp) / (tp + fn);
+}
+
+double mae(const Vector &y_true, const Vector &y_pred) {
+  double sum = 0.0;
+  for (size_t i = 0; i < y_true.size(); i++)
+    sum += std::abs(y_true[i] - y_pred[i]);
+  return sum / static_cast<double>(y_true.size());
+}
+
 double computeAUC(const std::vector<int> &trueLabels,
                   const std::vector<double> &predictedScores) {
   if (trueLabels.size() != predictedScores.size() || trueLabels.empty()) {
