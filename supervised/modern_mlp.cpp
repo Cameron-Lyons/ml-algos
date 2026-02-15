@@ -1,6 +1,7 @@
 #include "../matrix.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -8,11 +9,18 @@ enum class Activation { ReLU, Sigmoid, Tanh };
 
 namespace modern_mlp_detail {
 
+double clipFinite(double value, double limit = 1e6) {
+  if (!std::isfinite(value))
+    return 0.0;
+  return std::clamp(value, -limit, limit);
+}
+
 double activate(double x, Activation act) {
   switch (act) {
   case Activation::ReLU:
     return x > 0.0 ? x : 0.0;
   case Activation::Sigmoid:
+    x = std::clamp(x, -60.0, 60.0);
     return 1.0 / (1.0 + std::exp(-x));
   case Activation::Tanh:
     return std::tanh(x);
@@ -114,6 +122,9 @@ public:
         batchSize_(batchSize) {}
 
   void fit(const Matrix &X, const Vector &y) {
+    if (X.empty() || y.empty())
+      return;
+
     inputSize_ = X[0].size();
     std::mt19937 rng(42);
     initWeights(rng);
@@ -124,6 +135,7 @@ public:
       indices[i] = i;
 
     for (int epoch = 0; epoch < maxEpochs_; epoch++) {
+      double epochLearningRate = learningRate_ / (1.0 + 0.01 * epoch);
       std::ranges::shuffle(indices, rng);
 
       for (size_t batchStart = 0; batchStart < n; batchStart += batchSize_) {
@@ -144,7 +156,9 @@ public:
           std::vector<Vector> layerOutputs;
           Vector pred = forward(X[idx], layerOutputs);
 
-          double error = pred[0] - y[idx];
+          double error = modern_mlp_detail::clipFinite(pred[0] - y[idx], 100.0);
+          if (!std::isfinite(error))
+            continue;
 
           std::vector<Vector> deltas(weights_.size());
           deltas[weights_.size() - 1] = {error};
@@ -158,8 +172,9 @@ public:
               for (size_t j = 0; j < deltas[lu + 1].size(); j++) {
                 sum += deltas[lu + 1][j] * weights_[lu + 1][i][j];
               }
-              delta[i] = sum * modern_mlp_detail::activateDerivative(
-                                   layerOutputs[lu + 1][i], activation_);
+              double grad = modern_mlp_detail::activateDerivative(
+                  layerOutputs[lu + 1][i], activation_);
+              delta[i] = modern_mlp_detail::clipFinite(sum * grad, 10.0);
             }
             deltas[lu] = delta;
           }
@@ -167,11 +182,12 @@ public:
           for (size_t l = 0; l < weights_.size(); l++) {
             for (size_t i = 0; i < weights_[l].size(); i++) {
               for (size_t j = 0; j < weights_[l][0].size(); j++) {
-                wGrad[l][i][j] += layerOutputs[l][i] * deltas[l][j];
+                double grad = layerOutputs[l][i] * deltas[l][j];
+                wGrad[l][i][j] += modern_mlp_detail::clipFinite(grad, 10.0);
               }
             }
             for (size_t j = 0; j < biases_[l].size(); j++) {
-              bGrad[l][j] += deltas[l][j];
+              bGrad[l][j] += modern_mlp_detail::clipFinite(deltas[l][j], 10.0);
             }
           }
         }
@@ -179,13 +195,20 @@ public:
         for (size_t l = 0; l < weights_.size(); l++) {
           for (size_t i = 0; i < weights_[l].size(); i++) {
             for (size_t j = 0; j < weights_[l][0].size(); j++) {
-              weights_[l][i][j] -=
-                  learningRate_ *
+              double update =
+                  epochLearningRate *
                   (wGrad[l][i][j] * batchScale + l2Lambda_ * weights_[l][i][j]);
+              update = modern_mlp_detail::clipFinite(update, 1.0);
+              weights_[l][i][j] = modern_mlp_detail::clipFinite(
+                  weights_[l][i][j] - update, 1e6);
             }
           }
           for (size_t j = 0; j < biases_[l].size(); j++) {
-            biases_[l][j] -= learningRate_ * bGrad[l][j] * batchScale;
+            double update =
+                epochLearningRate *
+                modern_mlp_detail::clipFinite(bGrad[l][j] * batchScale, 1.0);
+            biases_[l][j] =
+                modern_mlp_detail::clipFinite(biases_[l][j] - update, 1e6);
           }
         }
       }
@@ -195,6 +218,6 @@ public:
   double predict(const Vector &x) const {
     std::vector<Vector> layerOutputs;
     Vector out = forward(x, layerOutputs);
-    return out[0];
+    return modern_mlp_detail::clipFinite(out[0], 1e6);
   }
 };

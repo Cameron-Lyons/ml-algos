@@ -26,6 +26,7 @@ add_test(
 )
 set_tests_properties(smoke_cv PROPERTIES PASS_REGULAR_EXPRESSION "Skipping classification CV")
 set_property(TEST smoke_cv APPEND PROPERTY FAIL_REGULAR_EXPRESSION "\\b-?nan\\b|\\b-?inf\\b")
+set_property(TEST smoke_cv APPEND PROPERTY FAIL_REGULAR_EXPRESSION "Skipping non-finite fold score")
 
 add_test(
   NAME smoke_importance

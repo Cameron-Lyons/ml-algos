@@ -287,9 +287,28 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                              y_tr, y_te);
   };
 
-  algos["gp"] = [](auto &X_tr, auto &X_te, auto &y_tr, auto &y_te) {
-    return evaluateRegressor("gp", GaussianProcessRegressor(1.0, 0.1), X_tr,
-                             X_te, y_tr, y_te);
+  algos["gp"] = [](const Matrix &X_tr, const Matrix &X_te, const Vector &y_tr,
+                   const Vector &y_te) -> AlgorithmResult {
+    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+
+    double y_mean = 0.0;
+    for (double yi : y_tr)
+      y_mean += yi;
+    y_mean /= static_cast<double>(y_tr.size());
+
+    Vector y_centered = y_tr;
+    for (double &yi : y_centered)
+      yi -= y_mean;
+
+    GaussianProcessRegressor model(1.0, 0.2);
+    model.fit(Xs_tr, y_centered);
+
+    Vector preds;
+    preds.reserve(Xs_te.size());
+    for (const auto &x : Xs_te)
+      preds.push_back(model.predict(x) + y_mean);
+
+    return {"gp", "R²", r2(y_te, preds)};
   };
 
   algos["gbt-regressor-es"] = [](auto &X_tr, auto &X_te, auto &y_tr,
@@ -310,16 +329,28 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+
+    double y_min = *std::ranges::min_element(y_tr);
+    double y_max = *std::ranges::max_element(y_tr);
+    double y_range = std::max(1e-12, y_max - y_min);
+
+    Vector y_scaled(y_tr.size(), 0.0);
+    for (size_t i = 0; i < y_tr.size(); i++)
+      y_scaled[i] = (y_tr[i] - y_min) / y_range;
+
     MLP model(n_features, 5, 1);
-    for (int epoch = 0; epoch < 500; ++epoch) {
+    for (int epoch = 0; epoch < 300; ++epoch) {
       for (size_t i = 0; i < Xs_tr.size(); ++i) {
-        Vector target = {y_tr[i]};
+        Vector target = {y_scaled[i]};
         model.train(Xs_tr[i], target);
       }
     }
     Vector preds;
-    for (const auto &x : Xs_te)
-      preds.push_back(model.predict(x)[0]);
+    for (const auto &x : Xs_te) {
+      double scaled_pred = model.predict(x)[0];
+      scaled_pred = std::clamp(scaled_pred, 0.0, 1.0);
+      preds.push_back(y_min + scaled_pred * y_range);
+    }
     return {"mlp", "R²", r2(y_te, preds)};
   };
 
@@ -327,9 +358,10 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                            const Vector &y_tr,
                            const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
-    return evaluateRegressor("modern-mlp",
-                             ModernMLP({64, 32}, Activation::ReLU, 0.01, 200),
-                             Xs_tr, Xs_te, y_tr, y_te);
+    return evaluateRegressor(
+        "modern-mlp",
+        ModernMLP({64, 32}, Activation::ReLU, 0.005, 300, 0.001, 16), Xs_tr,
+        Xs_te, y_tr, y_te);
   };
 
   algos["voting-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
