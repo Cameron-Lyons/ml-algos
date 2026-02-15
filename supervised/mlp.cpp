@@ -1,6 +1,7 @@
 #include "../matrix.h"
 #include <algorithm>
 #include <cmath>
+#include <random>
 #include <ranges>
 
 double sigmoid(double x) { return 1.0 / (1.0 + std::exp(-x)); }
@@ -44,13 +45,28 @@ public:
     weightsHiddenToOutput = Matrix(hiddenSize, Vector(outputSize));
     hiddenBias = Vector(hiddenSize, 0.1);
     outputBias = Vector(outputSize, 0.1);
+
+    std::mt19937 rng(42);
+    std::uniform_real_distribution<double> dist(-0.5, 0.5);
+    for (size_t i = 0; i < inputSize; i++) {
+      for (size_t j = 0; j < hiddenSize; j++)
+        weightsInputToHidden[i][j] = dist(rng);
+    }
+    for (size_t i = 0; i < hiddenSize; i++) {
+      for (size_t j = 0; j < outputSize; j++)
+        weightsHiddenToOutput[i][j] = dist(rng);
+    }
   }
 
   Vector predict(const Vector &input) {
     Matrix hidden = multiply({input}, weightsInputToHidden);
+    for (size_t j = 0; j < hidden[0].size(); j++)
+      hidden[0][j] += hiddenBias[j];
     Vector hiddenActivated = applyFunction(hidden[0], sigmoid);
 
     Matrix output = multiply({hiddenActivated}, weightsHiddenToOutput);
+    for (size_t j = 0; j < output[0].size(); j++)
+      output[0][j] += outputBias[j];
     Vector outputActivated = applyFunction(output[0], sigmoid);
 
     return outputActivated;
@@ -58,9 +74,13 @@ public:
 
   void train(const Vector &input, const Vector &targetOutput) {
     Matrix hidden = multiply({input}, weightsInputToHidden);
+    for (size_t j = 0; j < hidden[0].size(); j++)
+      hidden[0][j] += hiddenBias[j];
     Vector hiddenActivated = applyFunction(hidden[0], sigmoid);
 
     Matrix output = multiply({hiddenActivated}, weightsHiddenToOutput);
+    for (size_t j = 0; j < output[0].size(); j++)
+      output[0][j] += outputBias[j];
     Vector outputActivated = applyFunction(output[0], sigmoid);
 
     Vector outputError(targetOutput.size());

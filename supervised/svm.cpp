@@ -148,21 +148,24 @@ private:
 
   double computeKernel(const Vector &x, const Vector &z) const {
     double value = 0.0;
+    double clamp_limit = 1e6;
     switch (kernel_type) {
     case KernelType::Linear:
       value = linear_kernel(x, z);
       break;
     case KernelType::Polynomial:
       value = polynomial_kernel(x, z, poly_degree, poly_coef0);
+      clamp_limit = 100.0;
       break;
     case KernelType::RBF:
     default:
       value = rbf_kernel(x, z, sigma);
+      clamp_limit = 1.0;
       break;
     }
     if (!std::isfinite(value))
       return 0.0;
-    return std::clamp(value, -1e6, 1e6);
+    return std::clamp(value, -clamp_limit, clamp_limit);
   }
 
 public:
@@ -192,6 +195,10 @@ public:
 
     for (int iter = 0; iter < maxIterations; iter++) {
       bool any_update = false;
+
+      for (double &alpha : alphas)
+        alpha *= (1.0 - 0.01 * learningRate);
+
       for (size_t i = 0; i < X.size(); i++) {
         double prediction = predict(X[i]);
         double error = y[i] - prediction;
@@ -199,10 +206,12 @@ public:
         if (std::abs(error) <= epsilon)
           continue;
 
-        // Bound each dual update to keep kernels stable across feature scales.
-        double delta = learningRate * std::clamp(error, -1.0, 1.0);
-        alphas[i] += delta;
-        bias += delta;
+        double k_ii = std::max(computeKernel(X[i], X[i]), 1e-6);
+
+        // Normalize by kernel magnitude and softly regularize dual weights.
+        double delta = learningRate * std::clamp(error / k_ii, -1.0, 1.0);
+        alphas[i] = std::clamp(alphas[i] + delta, -10.0, 10.0);
+        bias += 0.1 * delta;
         any_update = true;
       }
 

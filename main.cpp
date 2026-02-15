@@ -80,6 +80,41 @@ AlgorithmResult evaluateRegressor(const std::string &name, M model,
 }
 
 template <Fittable M>
+  requires PointPredictor<M>
+AlgorithmResult evaluateRegressorWithTargetNormalization(
+    const std::string &name, M model, const Matrix &X_tr, const Matrix &X_te,
+    const Vector &y_tr, const Vector &y_te) {
+  double y_mean = 0.0;
+  for (double yi : y_tr)
+    y_mean += yi;
+  y_mean /= static_cast<double>(y_tr.size());
+
+  double variance = 0.0;
+  for (double yi : y_tr) {
+    double diff = yi - y_mean;
+    variance += diff * diff;
+  }
+  variance /= static_cast<double>(y_tr.size());
+  double y_std = std::sqrt(std::max(variance, 1e-12));
+
+  Vector y_normalized(y_tr.size());
+  for (size_t i = 0; i < y_tr.size(); i++)
+    y_normalized[i] = (y_tr[i] - y_mean) / y_std;
+
+  model.fit(X_tr, y_normalized);
+
+  Vector preds;
+  preds.reserve(X_te.size());
+  for (const auto &x : X_te) {
+    double pred = model.predict(x);
+    pred = std::clamp(pred, -20.0, 20.0);
+    preds.push_back(y_mean + y_std * pred);
+  }
+
+  return {name, "R²", r2(y_te, preds)};
+}
+
+template <Fittable M>
   requires BatchPredictor<M>
 AlgorithmResult evaluateClassifier(const std::string &name, M model,
                                    const Matrix &X_tr, const Matrix &X_te,
@@ -255,15 +290,16 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                      const Vector &y_tr,
                                      const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
-    return evaluateRegressor("kernel-svm", KernelSVM(n_features, 0.01, 1.0),
-                             Xs_tr, Xs_te, y_tr, y_te);
+    return evaluateRegressorWithTargetNormalization(
+        "kernel-svm", KernelSVM(n_features, 0.01, 1.0), Xs_tr, Xs_te, y_tr,
+        y_te);
   };
 
   algos["linear-svm"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
                                      const Vector &y_tr,
                                      const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
-    return evaluateRegressor(
+    return evaluateRegressorWithTargetNormalization(
         "linear-svm",
         KernelSVM(n_features, 0.001, 1.0, 0.2, 400, KernelType::Linear), Xs_tr,
         Xs_te, y_tr, y_te);
@@ -273,10 +309,11 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                    const Vector &y_tr,
                                    const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
-    return evaluateRegressor("poly-svm",
-                             KernelSVM(n_features, 0.0005, 1.0, 0.3, 300,
-                                       KernelType::Polynomial, 2, 1.0),
-                             Xs_tr, Xs_te, y_tr, y_te);
+    return evaluateRegressorWithTargetNormalization(
+        "poly-svm",
+        KernelSVM(n_features, 0.001, 1.0, 0.2, 500, KernelType::Polynomial, 1,
+                  0.0),
+        Xs_tr, Xs_te, y_tr, y_te);
   };
 
   algos["knn-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
