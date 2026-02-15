@@ -120,23 +120,42 @@ public:
     size_t num_samples = X_bias.size();
     size_t num_features = X_bias[0].size();
 
+    if (num_samples == 0 || y.empty()) {
+      coefficients.clear();
+      return;
+    }
+
     coefficients = Vector(num_features, 0.0);
+    Vector predictions(num_samples, 0.0);
 
     for (int iteration = 0; iteration < max_iter; ++iteration) {
       Vector old_coefficients = coefficients;
 
       for (size_t j = 0; j < num_features; ++j) {
-        double tmp = y[j];
-        for (size_t k = 0; k < num_features; ++k) {
-          if (j != k)
-            tmp -= coefficients[k] * X_bias[j][k];
+        double old_beta_j = coefficients[j];
+        double numerator = 0.0;
+        double denominator = 0.0;
+
+        for (size_t i = 0; i < num_samples; ++i) {
+          const double x_ij = X_bias[i][j];
+          const double residual = y[i] - predictions[i] + x_ij * old_beta_j;
+          numerator += x_ij * residual;
+          denominator += x_ij * x_ij;
         }
 
+        if (denominator <= 0.0)
+          continue;
+
         if (j == 0) {
-          coefficients[j] = tmp;
+          coefficients[j] = numerator / denominator;
         } else {
-          coefficients[j] =
-              soft_threshold(tmp, lambda) / static_cast<double>(num_samples);
+          coefficients[j] = soft_threshold(numerator, lambda) / denominator;
+        }
+
+        const double delta = coefficients[j] - old_beta_j;
+        if (delta != 0.0) {
+          for (size_t i = 0; i < num_samples; ++i)
+            predictions[i] += X_bias[i][j] * delta;
         }
       }
 
@@ -176,25 +195,47 @@ public:
 
   void fit(const Matrix &X, const Vector &y) override {
     Matrix X_bias = addBias(X);
+    size_t num_samples = X_bias.size();
     size_t num_features = X_bias[0].size();
 
+    if (num_samples == 0 || y.empty()) {
+      coefficients.clear();
+      return;
+    }
+
     coefficients = Vector(num_features, 0.0);
+    Vector predictions(num_samples, 0.0);
 
     for (int iteration = 0; iteration < max_iter; ++iteration) {
       Vector old_coefficients = coefficients;
 
       for (size_t j = 0; j < num_features; ++j) {
-        double tmp = y[j];
-        for (size_t k = 0; k < num_features; ++k) {
-          if (j != k)
-            tmp -= coefficients[k] * X_bias[j][k];
+        double old_beta_j = coefficients[j];
+        double numerator = 0.0;
+        double denominator = 0.0;
+
+        for (size_t i = 0; i < num_samples; ++i) {
+          const double x_ij = X_bias[i][j];
+          const double residual = y[i] - predictions[i] + x_ij * old_beta_j;
+          numerator += x_ij * residual;
+          denominator += x_ij * x_ij;
         }
 
+        if (denominator <= 0.0)
+          continue;
+
         if (j == 0) {
-          coefficients[j] = tmp;
+          coefficients[j] = numerator / denominator;
         } else {
-          coefficients[j] =
-              soft_threshold(tmp, alpha * rho) / (1 + alpha * (1 - rho));
+          const double l1 = alpha * rho;
+          const double l2 = alpha * (1.0 - rho);
+          coefficients[j] = soft_threshold(numerator, l1) / (denominator + l2);
+        }
+
+        const double delta = coefficients[j] - old_beta_j;
+        if (delta != 0.0) {
+          for (size_t i = 0; i < num_samples; ++i)
+            predictions[i] += X_bias[i][j] * delta;
         }
       }
 

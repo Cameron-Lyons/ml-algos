@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <concepts>
 #include <fstream>
 #include <functional>
@@ -41,10 +42,17 @@ struct AlgorithmResult {
 using AlgoFunc = std::function<AlgorithmResult(const Matrix &, const Matrix &,
                                                const Vector &, const Vector &)>;
 
+bool isFiniteScore(double score) { return std::isfinite(score); }
+
 void printTable(const std::vector<AlgorithmResult> &results) {
   std::println("{:<20} {:<10} {}", "Algorithm", "Metric", "Score");
   std::println("{}", std::string(42, '-'));
   for (const auto &r : results) {
+    if (!isFiniteScore(r.score)) {
+      std::println(stderr, "Skipping non-finite score for {} ({})", r.name,
+                   r.metric);
+      continue;
+    }
     std::println("{:<20} {:<10} {:.4f}", r.name, r.metric, r.score);
   }
 }
@@ -170,6 +178,26 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
       y_train.push_back(dataset[i].second);
     }
   }
+}
+
+bool isIntegerLike(double value, double tolerance = 1e-9) {
+  return std::abs(value - std::round(value)) <= tolerance;
+}
+
+bool shouldRunClassification(const Vector &y, size_t n_unique_classes) {
+  if (y.empty())
+    return false;
+  if (n_unique_classes < 2 || n_unique_classes > 20)
+    return false;
+
+  for (double value : y) {
+    if (!isIntegerLike(value))
+      return false;
+  }
+
+  const double unique_ratio =
+      static_cast<double>(n_unique_classes) / static_cast<double>(y.size());
+  return unique_ratio <= 0.5;
 }
 
 std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
@@ -463,6 +491,7 @@ void runCrossValidation(const Matrix &X, const Vector &y,
   std::vector<AlgorithmResult> results;
   for (const auto &[name, func] : algos) {
     double total_score = 0.0;
+    int valid_folds = 0;
     std::string metric_name;
     for (const auto &[train_idx, test_idx] : folds) {
       Matrix X_tr = subsetByIndices(X, train_idx);
@@ -471,10 +500,21 @@ void runCrossValidation(const Matrix &X, const Vector &y,
       Vector y_te = subsetByIndices(y, test_idx);
 
       auto result = func(X_tr, X_te, y_tr, y_te);
+      if (!isFiniteScore(result.score)) {
+        std::println(stderr, "Skipping non-finite fold score for {} ({})", name,
+                     result.metric);
+        continue;
+      }
       total_score += result.score;
+      valid_folds++;
       metric_name = result.metric;
     }
-    results.push_back({name, metric_name + " (CV)", total_score / k});
+    if (valid_folds == 0) {
+      std::println(stderr, "Skipping {} in CV: no valid fold scores", name);
+      continue;
+    }
+    results.push_back({name, metric_name + " (CV)",
+                       total_score / static_cast<double>(valid_folds)});
   }
 
   printTable(results);
@@ -655,7 +695,7 @@ int main(int argc, char *argv[]) {
   for (double val : y)
     unique_classes.insert(static_cast<int>(val));
   int n_classes = unique_classes.empty() ? 2 : *unique_classes.rbegin() + 1;
-  bool run_classification = unique_classes.size() <= 20;
+  bool run_classification = shouldRunClassification(y, unique_classes.size());
 
   auto regression_algos = buildRegressionAlgorithms(n_features);
   auto classification_algos =
@@ -696,6 +736,8 @@ int main(int argc, char *argv[]) {
       if (run_classification) {
         bool use_stratified = static_cast<int>(unique_classes.size()) <= k;
         runCrossValidation(X, y, classification_algos, k, use_stratified);
+      } else {
+        std::println("Skipping classification CV: target appears continuous.");
       }
     } else if (mode == "gridsearch") {
       runGridSearch(X, y);
@@ -796,10 +838,27 @@ int main(int argc, char *argv[]) {
 
       if (regression_algos.contains(mode)) {
         auto result = regression_algos[mode](X_train, X_test, y_train, y_test);
+        if (!isFiniteScore(result.score)) {
+          std::println(stderr, "Non-finite score for {} ({})", result.name,
+                       result.metric);
+          return 1;
+        }
         printTable({result});
       } else if (classification_algos.contains(mode)) {
+        if (!run_classification) {
+          std::println(stderr,
+                       "Selected algorithm '{}' is a classifier, but target "
+                       "appears continuous.",
+                       mode);
+          return 1;
+        }
         auto result =
             classification_algos[mode](X_train, X_test, y_train, y_test);
+        if (!isFiniteScore(result.score)) {
+          std::println(stderr, "Non-finite score for {} ({})", result.name,
+                       result.metric);
+          return 1;
+        }
         printTable({result});
       } else {
         std::println(stderr, "Unknown algorithm: {}", mode);
