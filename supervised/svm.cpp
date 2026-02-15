@@ -1,4 +1,5 @@
 #include "../matrix.h"
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -127,7 +128,9 @@ double polynomial_kernel(const Vector &x, const Vector &z, int degree,
   double dot = 0.0;
   for (size_t i = 0; i < x.size(); i++)
     dot += x[i] * z[i];
-  return pow(dot + coef0, degree);
+  double normalized_dot =
+      dot / static_cast<double>(std::max<size_t>(x.size(), 1));
+  return pow(normalized_dot + coef0, degree);
 }
 
 enum class KernelType { RBF, Linear, Polynomial };
@@ -144,15 +147,22 @@ private:
   double poly_coef0;
 
   double computeKernel(const Vector &x, const Vector &z) const {
+    double value = 0.0;
     switch (kernel_type) {
     case KernelType::Linear:
-      return linear_kernel(x, z);
+      value = linear_kernel(x, z);
+      break;
     case KernelType::Polynomial:
-      return polynomial_kernel(x, z, poly_degree, poly_coef0);
+      value = polynomial_kernel(x, z, poly_degree, poly_coef0);
+      break;
     case KernelType::RBF:
     default:
-      return rbf_kernel(x, z, sigma);
+      value = rbf_kernel(x, z, sigma);
+      break;
     }
+    if (!std::isfinite(value))
+      return 0.0;
+    return std::clamp(value, -1e6, 1e6);
   }
 
 public:
@@ -173,15 +183,31 @@ public:
   }
 
   void fit(const Matrix &X, const Vector &y) override {
-    for (size_t i = 0; i < X.size(); i++) {
-      double prediction = predict(X[i]);
-      double error = y[i] - prediction;
+    support_vectors = X;
+    alphas.assign(X.size(), 0.0);
+    bias = 0.0;
 
-      if (std::abs(error) > epsilon) {
-        alphas.push_back(error);
-        support_vectors.push_back(X[i]);
-        bias += learningRate * error;
+    if (X.empty())
+      return;
+
+    for (int iter = 0; iter < maxIterations; iter++) {
+      bool any_update = false;
+      for (size_t i = 0; i < X.size(); i++) {
+        double prediction = predict(X[i]);
+        double error = y[i] - prediction;
+
+        if (std::abs(error) <= epsilon)
+          continue;
+
+        // Bound each dual update to keep kernels stable across feature scales.
+        double delta = learningRate * std::clamp(error, -1.0, 1.0);
+        alphas[i] += delta;
+        bias += delta;
+        any_update = true;
       }
+
+      if (!any_update)
+        break;
     }
   }
 };

@@ -265,7 +265,7 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
     return evaluateRegressor(
         "linear-svm",
-        KernelSVM(n_features, 0.01, 1.0, 0.1, 1000, KernelType::Linear), Xs_tr,
+        KernelSVM(n_features, 0.001, 1.0, 0.2, 400, KernelType::Linear), Xs_tr,
         Xs_te, y_tr, y_te);
   };
 
@@ -273,10 +273,10 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                    const Vector &y_tr,
                                    const Vector &y_te) -> AlgorithmResult {
     auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
-    return evaluateRegressor(
-        "poly-svm",
-        KernelSVM(n_features, 0.01, 1.0, 0.1, 1000, KernelType::Polynomial),
-        Xs_tr, Xs_te, y_tr, y_te);
+    return evaluateRegressor("poly-svm",
+                             KernelSVM(n_features, 0.0005, 1.0, 0.3, 300,
+                                       KernelType::Polynomial, 2, 1.0),
+                             Xs_tr, Xs_te, y_tr, y_te);
   };
 
   algos["knn-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
