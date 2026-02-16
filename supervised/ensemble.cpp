@@ -12,15 +12,16 @@ protected:
   std::vector<DecisionTree> trees;
   size_t num_trees;
   int max_features;
+  std::mt19937 rng_{42};
 
   virtual void bootstrapSample(const Matrix &X, const Vector &y,
                                Matrix &X_sample, Vector &y_sample) {
-    std::random_device rd;
-    std::mt19937 gen(rd());
     std::uniform_int_distribution<size_t> dist(0, X.size() - 1);
+    X_sample.reserve(X.size());
+    y_sample.reserve(y.size());
 
     for (size_t i = 0; i < X.size(); i++) {
-      size_t idx = dist(gen);
+      size_t idx = dist(rng_);
       X_sample.push_back(X[idx]);
       y_sample.push_back(y[idx]);
     }
@@ -49,11 +50,29 @@ public:
 };
 
 class RandomForestClassifier : public RandomForestBase {
-private:
-  int majorityVote(const std::vector<int> &votes) {
+public:
+  using RandomForestBase::RandomForestBase;
+
+  void fit(const Matrix &X, const Vector &y) override {
+    trees.clear();
+    trees.reserve(num_trees);
+    for (size_t i = 0; i < num_trees; i++) {
+      Matrix X_sample;
+      Vector y_sample;
+      bootstrapSample(X, y, X_sample, y_sample);
+
+      DecisionTree tree(max_features);
+      tree.fit(X_sample, y_sample);
+      trees.push_back(std::move(tree));
+    }
+  }
+
+  double predict(const Vector &x) override {
     std::unordered_map<int, int> vote_count;
-    for (int vote : votes) {
-      vote_count[vote]++;
+    vote_count.reserve(trees.size());
+    for (const auto &tree : trees) {
+      int cls = static_cast<int>(tree.predict(x));
+      vote_count[cls]++;
     }
 
     int majority = -1;
@@ -64,30 +83,7 @@ private:
         max_count = count;
       }
     }
-    return majority;
-  }
-
-public:
-  using RandomForestBase::RandomForestBase;
-
-  void fit(const Matrix &X, const Vector &y) override {
-    for (size_t i = 0; i < num_trees; i++) {
-      Matrix X_sample;
-      Vector y_sample;
-      bootstrapSample(X, y, X_sample, y_sample);
-
-      DecisionTree tree(max_features);
-      tree.fit(X_sample, y_sample);
-      trees.push_back(std::move(tree));
-    }
-  }
-
-  double predict(const Vector &x) override {
-    std::vector<int> votes;
-    for (const auto &tree : trees) {
-      votes.push_back(static_cast<int>(tree.predict(x)));
-    }
-    return static_cast<double>(majorityVote(votes));
+    return static_cast<double>(majority);
   }
 };
 
@@ -96,6 +92,8 @@ public:
   using RandomForestBase::RandomForestBase;
 
   void fit(const Matrix &X, const Vector &y) override {
+    trees.clear();
+    trees.reserve(num_trees);
     for (size_t i = 0; i < num_trees; i++) {
       Matrix X_sample;
       Vector y_sample;
@@ -107,12 +105,11 @@ public:
   }
 
   double predict(const Vector &x) override {
-    std::vector<double> predictions;
+    double sum = 0.0;
     for (const auto &tree : trees) {
-      predictions.push_back(tree.predict(x));
+      sum += tree.predict(x);
     }
-    return std::ranges::fold_left(predictions, 0.0, std::plus{}) /
-           static_cast<double>(predictions.size());
+    return sum / static_cast<double>(trees.size());
   }
 };
 
@@ -121,6 +118,7 @@ protected:
   std::vector<DecisionTree> trees;
   int n_estimators;
   double learning_rate;
+  int max_depth;
   double validationFraction;
   int patience;
 
@@ -144,10 +142,11 @@ protected:
   }
 
 public:
-  GradientBoostedTrees(int n_estimators, double learning_rate,
+  GradientBoostedTrees(int n_estimators, double learning_rate, int max_depth,
                        double validationFraction = 0.0, int patience = 5)
       : n_estimators(n_estimators), learning_rate(learning_rate),
-        validationFraction(validationFraction), patience(patience) {}
+        max_depth(max_depth), validationFraction(validationFraction),
+        patience(patience) {}
 
   virtual void fit(const Matrix &X, const Vector &y) = 0;
   virtual double predict(const Vector &x) const = 0;
@@ -158,9 +157,9 @@ class GradientBoostedTreesRegressor : public GradientBoostedTrees {
 public:
   GradientBoostedTreesRegressor(int n_estimators, double learning_rate,
                                 double validationFraction = 0.0,
-                                int patience = 5)
-      : GradientBoostedTrees(n_estimators, learning_rate, validationFraction,
-                             patience) {}
+                                int patience = 5, int max_depth = 3)
+      : GradientBoostedTrees(n_estimators, learning_rate, max_depth,
+                             validationFraction, patience) {}
 
   void fit(const Matrix &X, const Vector &y) override {
     Matrix X_tr, X_val;
@@ -185,7 +184,7 @@ public:
     int wait = 0;
 
     for (int i = 0; i < n_estimators; i++) {
-      DecisionTree tree(n_estimators);
+      DecisionTree tree(max_depth);
       tree.fit(X_tr, residuals);
 
       for (size_t j = 0; j < X_tr.size(); j++) {
@@ -235,9 +234,9 @@ class GradientBoostedTreesClassifier : public GradientBoostedTrees {
 public:
   GradientBoostedTreesClassifier(int n_estimators, double learning_rate,
                                  double validationFraction = 0.0,
-                                 int patience = 5)
-      : GradientBoostedTrees(n_estimators, learning_rate, validationFraction,
-                             patience) {}
+                                 int patience = 5, int max_depth = 3)
+      : GradientBoostedTrees(n_estimators, learning_rate, max_depth,
+                             validationFraction, patience) {}
 
   void fit(const Matrix &X, const Vector &y) override {
     Matrix X_tr, X_val;
@@ -266,7 +265,7 @@ public:
         residuals[j] = y_tr[j] - probabilities[j];
       }
 
-      DecisionTree tree(n_estimators);
+      DecisionTree tree(max_depth);
       tree.fit(X_tr, residuals);
 
       for (size_t j = 0; j < X_tr.size(); j++) {

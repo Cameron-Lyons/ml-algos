@@ -59,52 +59,50 @@ private:
     double bestSplit = 0.0;
 
     std::vector<size_t> leftIndices, rightIndices;
-    Vector featureVals(n);
 
     for (size_t featureIdx = 0; featureIdx < nFeatures; ++featureIdx) {
-      for (size_t i = 0; i < n; ++i)
-        featureVals[i] = X[indices[i]][featureIdx];
-      std::ranges::sort(featureVals);
-      auto last = std::unique(featureVals.begin(), featureVals.end());
+      std::vector<std::pair<double, double>> values;
+      values.reserve(n);
+      for (size_t idx : indices)
+        values.emplace_back(X[idx][featureIdx], y[idx]);
+      std::ranges::sort(values, [](const auto &a, const auto &b) {
+        return a.first < b.first;
+      });
 
-      for (auto it = featureVals.begin(); it != last; ++it) {
-        double value = *it;
+      std::vector<double> prefixSum(n, 0.0);
+      std::vector<double> prefixSqSum(n, 0.0);
+      for (size_t i = 0; i < n; i++) {
+        double yv = values[i].second;
+        prefixSum[i] = yv + (i > 0 ? prefixSum[i - 1] : 0.0);
+        prefixSqSum[i] = yv * yv + (i > 0 ? prefixSqSum[i - 1] : 0.0);
+      }
 
-        double leftSum = 0.0, rightSum = 0.0;
-        size_t leftCount = 0, rightCount = 0;
-        for (size_t i = 0; i < n; ++i) {
-          if (X[indices[i]][featureIdx] <= value) {
-            leftSum += y[indices[i]];
-            leftCount++;
-          } else {
-            rightSum += y[indices[i]];
-            rightCount++;
-          }
-        }
-        if (leftCount == 0 || rightCount == 0)
+      double totalSum = prefixSum[n - 1];
+      double totalSqSum = prefixSqSum[n - 1];
+
+      for (size_t i = 0; i + 1 < n; i++) {
+        if (values[i].first == values[i + 1].first)
           continue;
 
-        double leftMean = leftSum / static_cast<double>(leftCount);
-        double rightMean = rightSum / static_cast<double>(rightCount);
+        size_t leftCount = i + 1;
+        size_t rightCount = n - leftCount;
 
-        double leftVar = 0.0, rightVar = 0.0;
-        for (size_t i = 0; i < n; ++i) {
-          double d;
-          if (X[indices[i]][featureIdx] <= value) {
-            d = y[indices[i]] - leftMean;
-            leftVar += d * d;
-          } else {
-            d = y[indices[i]] - rightMean;
-            rightVar += d * d;
-          }
-        }
+        double leftSum = prefixSum[i];
+        double leftSqSum = prefixSqSum[i];
+        double rightSum = totalSum - leftSum;
+        double rightSqSum = totalSqSum - leftSqSum;
 
-        double currentVariance = (leftVar + rightVar) / static_cast<double>(n);
+        double leftSSE =
+            leftSqSum - (leftSum * leftSum) / static_cast<double>(leftCount);
+        double rightSSE = rightSqSum - (rightSum * rightSum) /
+                                           static_cast<double>(rightCount);
+
+        double currentVariance = (leftSSE + rightSSE) / static_cast<double>(n);
 
         if (currentVariance < bestVariance) {
           bestVariance = currentVariance;
           bestFeature = featureIdx;
-          bestSplit = value;
+          bestSplit = values[i].first;
         }
       }
     }

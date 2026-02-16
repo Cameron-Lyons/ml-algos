@@ -1,14 +1,14 @@
 #include "../matrix.h"
-#include <cstdlib>
-#include <ctime>
 #include <limits>
+#include <random>
 #include <vector>
 
 Points initializeCentroids(const Points &data, size_t k) {
   Points centroids(k);
-  std::srand(static_cast<unsigned>(std::time(nullptr)));
+  std::mt19937 rng(42);
+  std::uniform_int_distribution<size_t> dist(0, data.size() - 1);
   for (size_t i = 0; i < k; i++) {
-    centroids[i] = data[static_cast<size_t>(rand()) % data.size()];
+    centroids[i] = data[dist(rng)];
   }
   return centroids;
 }
