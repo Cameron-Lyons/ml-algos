@@ -31,17 +31,6 @@ private:
     return sum / static_cast<double>(indices.size());
   }
 
-  static double computeVariance(const Vector &y,
-                                const std::vector<size_t> &indices,
-                                double mean) {
-    double variance = 0.0;
-    for (size_t idx : indices) {
-      double d = y[idx] - mean;
-      variance += d * d;
-    }
-    return variance / static_cast<double>(indices.size());
-  }
-
   std::unique_ptr<TreeNode> buildTree(const Matrix &X, const Vector &y,
                                       const std::vector<size_t> &indices,
                                       int depth) {

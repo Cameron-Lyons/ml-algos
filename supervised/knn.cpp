@@ -25,6 +25,9 @@ public:
   }
 
   double predict(const Vector &x) const {
+    if (X_train.empty())
+      return 0.0;
+
     std::vector<std::pair<double, double>> distances;
     distances.reserve(X_train.size());
     for (size_t i = 0; i < X_train.size(); i++) {
@@ -32,12 +35,18 @@ public:
                              y_train[i]);
     }
 
-    std::nth_element(
-        distances.begin(), distances.begin() + k, distances.end(),
-        [](const auto &a, const auto &b) { return a.first < b.first; });
+    size_t effective_k = std::clamp(static_cast<size_t>(std::max(k, 1)),
+                                    size_t{1}, distances.size());
+    if (effective_k < distances.size()) {
+      std::nth_element(distances.begin(),
+                       distances.begin() + static_cast<ptrdiff_t>(effective_k),
+                       distances.end(), [](const auto &a, const auto &b) {
+                         return a.first < b.first;
+                       });
+    }
 
     std::unordered_map<int, int> votes;
-    for (size_t i = 0; i < static_cast<size_t>(k); i++) {
+    for (size_t i = 0; i < effective_k; i++) {
       votes[static_cast<int>(distances[i].second)]++;
     }
 
@@ -85,6 +94,9 @@ public:
   }
 
   double predict(const Vector &x) const {
+    if (X_train.empty())
+      return 0.0;
+
     std::vector<std::pair<double, double>> distances;
     distances.reserve(X_train.size());
     for (size_t i = 0; i < X_train.size(); i++) {
@@ -92,15 +104,21 @@ public:
                              y_train[i]);
     }
 
-    std::nth_element(
-        distances.begin(), distances.begin() + k, distances.end(),
-        [](const auto &a, const auto &b) { return a.first < b.first; });
+    size_t effective_k = std::clamp(static_cast<size_t>(std::max(k, 1)),
+                                    size_t{1}, distances.size());
+    if (effective_k < distances.size()) {
+      std::nth_element(distances.begin(),
+                       distances.begin() + static_cast<ptrdiff_t>(effective_k),
+                       distances.end(), [](const auto &a, const auto &b) {
+                         return a.first < b.first;
+                       });
+    }
 
     double sum = 0.0;
-    for (size_t i = 0; i < static_cast<size_t>(k); i++) {
+    for (size_t i = 0; i < effective_k; i++) {
       sum += distances[i].second;
     }
-    return sum / static_cast<double>(k);
+    return sum / static_cast<double>(effective_k);
   }
 
   Vector predict(const Matrix &X) const {
