@@ -130,6 +130,10 @@ protected:
     std::ranges::shuffle(indices, std::default_random_engine(42));
     size_t val_size =
         static_cast<size_t>(static_cast<double>(n) * validationFraction);
+    X_val.reserve(val_size);
+    y_val.reserve(val_size);
+    X_tr.reserve(n - val_size);
+    y_tr.reserve(n - val_size);
     for (size_t i = 0; i < n; i++) {
       if (i < val_size) {
         X_val.push_back(X[indices[i]]);
@@ -173,6 +177,8 @@ public:
       y_tr = y;
     }
 
+    trees.clear();
+    trees.reserve(static_cast<size_t>(n_estimators));
     Vector residuals = y_tr;
     Vector predictions(X_tr.size(), 0.0);
     Vector val_preds;
@@ -250,6 +256,8 @@ public:
       y_tr = y;
     }
 
+    trees.clear();
+    trees.reserve(static_cast<size_t>(n_estimators));
     Vector probabilities(X_tr.size(), 0.5);
     Vector residuals(X_tr.size(), 0.0);
     Vector val_logOdds;

@@ -1,15 +1,17 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <concepts>
+#include <expected>
 #include <fstream>
 #include <functional>
 #include <limits>
 #include <map>
-#include <optional>
 #include <print>
 #include <random>
 #include <ranges>
 #include <set>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -176,37 +178,39 @@ AlgorithmResult evaluateClassifier(const std::string &name, M model,
 #include "feature_importance.cpp"
 // clang-format on
 
-std::optional<std::string> validateCSVData(const Matrix &data) {
+std::expected<void, std::string> validateCSVData(const Matrix &data) {
   if (data.empty())
-    return "CSV contains no data rows.";
+    return std::unexpected("CSV contains no data rows.");
 
   const size_t expected_cols = data.front().size();
   if (expected_cols < 2)
-    return "CSV must contain at least one feature column and one target "
-           "column.";
+    return std::unexpected(
+        "CSV must contain at least one feature column and one target column.");
 
   for (size_t i = 0; i < data.size(); i++) {
     const auto &row = data[i];
     if (row.size() != expected_cols) {
-      return std::format(
+      return std::unexpected(std::format(
           "Inconsistent column count at row {}: expected {}, got {}.", i + 1,
-          expected_cols, row.size());
+          expected_cols, row.size()));
     }
     for (size_t j = 0; j < row.size(); j++) {
       if (!std::isfinite(row[j])) {
-        return std::format("Non-finite value at row {}, column {}.", i + 1,
-                           j + 1);
+        return std::unexpected(std::format(
+            "Non-finite value at row {}, column {}.", i + 1, j + 1));
       }
     }
   }
 
-  return std::nullopt;
+  return {};
 }
 
-std::optional<std::string> readCSV(const std::string &filename, Matrix &data) {
+std::expected<void, std::string> readCSV(const std::string &filename,
+                                         Matrix &data) {
   std::ifstream file(filename);
   if (!file.is_open())
-    return std::format("Unable to open CSV file: {}", filename);
+    return std::unexpected(
+        std::format("Unable to open CSV file: {}", filename));
 
   std::string row;
   size_t line_number = 0;
@@ -226,18 +230,19 @@ std::optional<std::string> readCSV(const std::string &filename, Matrix &data) {
         double value = std::stod(item, &parsed_chars);
         if (parsed_chars != item.size() &&
             !isWhitespaceOnly(std::string_view(item).substr(parsed_chars))) {
-          return std::format(
-              "Invalid numeric value at row {}, column {}: '{}'.", line_number,
-              col_number, item);
+          return std::unexpected(
+              std::format("Invalid numeric value at row {}, column {}: '{}'.",
+                          line_number, col_number, item));
         }
         currentRow.push_back(value);
       } catch (const std::exception &) {
-        return std::format("Invalid numeric value at row {}, column {}: '{}'.",
-                           line_number, col_number, item);
+        return std::unexpected(
+            std::format("Invalid numeric value at row {}, column {}: '{}'.",
+                        line_number, col_number, item));
       }
     }
     if (currentRow.empty()) {
-      return std::format("Empty row at line {}.", line_number);
+      return std::unexpected(std::format("Empty row at line {}.", line_number));
     }
     data.push_back(std::move(currentRow));
   }
@@ -385,12 +390,27 @@ LabelEncoding encodeClassLabels(const Vector &y) {
   return encoding;
 }
 
+const std::pair<Matrix, Matrix> &scaleDataCached(const Matrix &X_train,
+                                                 const Matrix &X_test) {
+  static const Matrix *lastTrainPtr = nullptr;
+  static const Matrix *lastTestPtr = nullptr;
+  static std::pair<Matrix, Matrix> cached;
+
+  if (lastTrainPtr != &X_train || lastTestPtr != &X_test) {
+    cached = scaleData(X_train, X_test);
+    lastTrainPtr = &X_train;
+    lastTestPtr = &X_test;
+  }
+  return cached;
+}
+
 double scoreToProbability(double score) {
   score = std::clamp(score, -60.0, 60.0);
   return 1.0 / (1.0 + std::exp(-score));
 }
 
-Vector predictionsFromThreshold(const Vector &probabilities, double threshold) {
+Vector predictionsFromThreshold(std::span<const double> probabilities,
+                                double threshold) {
   Vector preds;
   preds.reserve(probabilities.size());
   for (double p : probabilities)
@@ -398,7 +418,8 @@ Vector predictionsFromThreshold(const Vector &probabilities, double threshold) {
   return preds;
 }
 
-double binaryF1(const Vector &y_true, const Vector &y_pred) {
+double binaryF1(std::span<const double> y_true,
+                std::span<const double> y_pred) {
   double tp = 0.0;
   double fp = 0.0;
   double fn = 0.0;
@@ -421,7 +442,8 @@ double binaryF1(const Vector &y_true, const Vector &y_pred) {
   return 2.0 * prec * rec / (prec + rec);
 }
 
-double tuneBinaryThreshold(const Vector &y_true, const Vector &probabilities) {
+double tuneBinaryThreshold(std::span<const double> y_true,
+                           std::span<const double> probabilities) {
   double best_threshold = 0.5;
   double best_f1 = -1.0;
   for (int i = 5; i <= 95; i++) {
@@ -577,14 +599,18 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["svr"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateRegressor("svr", SVR(n_features), Xs_tr, Xs_te, y_tr, y_te);
   };
 
   algos["kernel-svm"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
                                      const Vector &y_tr,
                                      const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateRegressorWithTargetNormalization(
         "kernel-svm", KernelSVM(n_features, 0.01, 1.0), Xs_tr, Xs_te, y_tr,
         y_te);
@@ -593,7 +619,9 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["linear-svm"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
                                      const Vector &y_tr,
                                      const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateRegressorWithTargetNormalization(
         "linear-svm",
         KernelSVM(n_features, 0.001, 1.0, 0.2, 400, KernelType::Linear), Xs_tr,
@@ -603,7 +631,9 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["poly-svm"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
                                    const Vector &y_tr,
                                    const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateRegressorWithTargetNormalization(
         "poly-svm",
         KernelSVM(n_features, 0.001, 1.0, 0.2, 500, KernelType::Polynomial, 1,
@@ -614,14 +644,18 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["knn-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateRegressor("knn-regressor", KNNRegressor(5), Xs_tr, Xs_te,
                              y_tr, y_te);
   };
 
   algos["gp"] = [](const Matrix &X_tr, const Matrix &X_te, const Vector &y_tr,
                    const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
 
     double y_mean = 0.0;
     for (double yi : y_tr)
@@ -660,7 +694,9 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["mlp"] = [n_features](const Matrix &X_tr, const Matrix &X_te,
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
 
     double y_min = *std::ranges::min_element(y_tr);
     double y_max = *std::ranges::max_element(y_tr);
@@ -689,7 +725,9 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["modern-mlp"] = [](const Matrix &X_tr, const Matrix &X_te,
                            const Vector &y_tr,
                            const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateRegressor(
         "modern-mlp",
         ModernMLP({64, 32}, Activation::ReLU, 0.005, 300, 0.001, 16), Xs_tr,
@@ -729,7 +767,9 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
     algos["logistic"] = [](const Matrix &X_tr, const Matrix &X_te,
                            const Vector &y_tr,
                            const Vector &y_te) -> AlgorithmResult {
-      auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+      const auto &scaled = scaleDataCached(X_tr, X_te);
+      const Matrix &Xs_tr = scaled.first;
+      const Matrix &Xs_te = scaled.second;
       LogisticRegression model(0.01, 1000);
       model.fit(Xs_tr, y_tr);
 
@@ -753,7 +793,9 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
   algos["svc"] = [n_features, n_classes](
                      const Matrix &X_tr, const Matrix &X_te, const Vector &y_tr,
                      const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateClassifier("svc", SVC(n_features, n_classes), Xs_tr, Xs_te,
                               y_tr, y_te);
   };
@@ -761,7 +803,9 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
   algos["knn-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
                                const Vector &y_tr,
                                const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateClassifier("knn-classifier", KNNClassifier(5), Xs_tr, Xs_te,
                               y_tr, y_te);
   };
@@ -805,7 +849,9 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
   algos["softmax"] = [](const Matrix &X_tr, const Matrix &X_te,
                         const Vector &y_tr,
                         const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     return evaluateClassifier("softmax", SoftmaxRegression(0.01, 1000), Xs_tr,
                               Xs_te, y_tr, y_te);
   };
@@ -828,7 +874,9 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
     algos["modern-mlp-cls"] = [](const Matrix &X_tr, const Matrix &X_te,
                                  const Vector &y_tr,
                                  const Vector &y_te) -> AlgorithmResult {
-      auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+      const auto &scaled = scaleDataCached(X_tr, X_te);
+      const Matrix &Xs_tr = scaled.first;
+      const Matrix &Xs_te = scaled.second;
       ModernMLP model({64, 32}, Activation::ReLU, 0.01, 200);
       model.fit(Xs_tr, y_tr);
 
@@ -852,7 +900,9 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
   algos["voting-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
                                   const Vector &y_tr,
                                   const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     VotingClassifier voter;
     voter.addModel(makeBaseModel(LogisticRegression(0.01, 1000)));
     voter.addModel(makeBaseModel(DecisionTree(5)));
@@ -864,7 +914,9 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
   algos["stacking-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
                                     const Vector &y_tr,
                                     const Vector &y_te) -> AlgorithmResult {
-    auto [Xs_tr, Xs_te] = scaleData(X_tr, X_te);
+    const auto &scaled = scaleDataCached(X_tr, X_te);
+    const Matrix &Xs_tr = scaled.first;
+    const Matrix &Xs_te = scaled.second;
     StackingClassifier stacker;
     stacker.addModel(makeBaseModel(LogisticRegression(0.01, 1000)));
     stacker.addModel(makeBaseModel(DecisionTree(5)));
@@ -1081,6 +1133,14 @@ void runLoad(const std::string &filepath, const Matrix &X_test,
 void printHelp(const char *program_name,
                const std::map<std::string, AlgoFunc> &regression_algos,
                const std::map<std::string, AlgoFunc> &classification_algos) {
+  constexpr std::array<std::pair<std::string_view, std::string_view>, 4>
+      kModes = {{
+          {"cv", "Run cross-validation"},
+          {"gridsearch", "Run grid search"},
+          {"cluster", "Run clustering algorithms"},
+          {"importance", "Run permutation feature importance"},
+      }};
+
   std::println("Usage:");
   std::println(
       "  {} <csv_file> [algorithm|cv|gridsearch|cluster|importance|save|load]",
@@ -1088,10 +1148,8 @@ void printHelp(const char *program_name,
   std::println("  {} [--help|-h|help]", program_name);
 
   std::println("\nModes:");
-  std::println("  cv          Run cross-validation");
-  std::println("  gridsearch  Run grid search");
-  std::println("  cluster     Run clustering algorithms");
-  std::println("  importance  Run permutation feature importance");
+  for (const auto &[mode, description] : kModes)
+    std::println("  {:<10} {}", mode, description);
   std::println(
       "  save        Save model: {} <csv_file> save <algorithm> <filepath>",
       program_name);
@@ -1124,8 +1182,9 @@ int main(int argc, char *argv[]) {
 
   std::string filename = argv[1];
   Matrix data;
-  if (auto error = readCSV(filename, data)) {
-    std::println(stderr, "{}", *error);
+  if (auto csv_read_result = readCSV(filename, data);
+      !csv_read_result.has_value()) {
+    std::println(stderr, "{}", csv_read_result.error());
     return 1;
   }
   Matrix X;

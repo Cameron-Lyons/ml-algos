@@ -34,6 +34,7 @@ std::vector<int> dbscan(const Points &data, double epsilon, int minPts,
   std::vector<int> labels(n, UNDEFINED);
   std::vector<std::vector<size_t>> neighborCache(n);
   std::vector<bool> cached(n, false);
+  std::vector<bool> enqueued(n, false);
   int clusterId = 0;
 
   auto getNeighbors = [&](size_t idx) -> const std::vector<size_t> & {
@@ -56,6 +57,8 @@ std::vector<int> dbscan(const Points &data, double epsilon, int minPts,
 
     labels[i] = clusterId;
     std::vector<size_t> seed_set(neighbors.begin(), neighbors.end());
+    for (size_t neighbor : seed_set)
+      enqueued[neighbor] = true;
 
     for (size_t j = 0; j < seed_set.size(); j++) {
       size_t q = seed_set[j];
@@ -70,10 +73,16 @@ std::vector<int> dbscan(const Points &data, double epsilon, int minPts,
       const auto &q_neighbors = getNeighbors(q);
       if (static_cast<int>(q_neighbors.size()) >= minPts) {
         for (size_t neighbor : q_neighbors) {
-          seed_set.push_back(neighbor);
+          if (!enqueued[neighbor]) {
+            seed_set.push_back(neighbor);
+            enqueued[neighbor] = true;
+          }
         }
       }
     }
+
+    for (size_t idx : seed_set)
+      enqueued[idx] = false;
 
     clusterId++;
   }

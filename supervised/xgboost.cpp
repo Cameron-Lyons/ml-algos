@@ -144,6 +144,10 @@ private:
     std::ranges::shuffle(indices, std::default_random_engine(42));
     size_t val_size =
         static_cast<size_t>(static_cast<double>(n) * validationFraction);
+    X_val.reserve(val_size);
+    y_val.reserve(val_size);
+    X_tr.reserve(n - val_size);
+    y_tr.reserve(n - val_size);
     for (size_t i = 0; i < n; i++) {
       if (i < val_size) {
         X_val.push_back(X[indices[i]]);
@@ -185,16 +189,17 @@ public:
     if (useES)
       val_preds.assign(X_val.size(), basePrediction);
     trees.clear();
+    trees.reserve(static_cast<size_t>(nEstimators));
 
     double bestValLoss = std::numeric_limits<double>::max();
     int bestRound = 0;
     int wait = 0;
 
+    Vector grad(y_tr.size(), 0.0);
+    Vector hess(y_tr.size(), 1.0);
     for (int t = 0; t < nEstimators; ++t) {
-      Vector grad(y_tr.size()), hess(y_tr.size());
       for (size_t i = 0; i < y_tr.size(); ++i) {
         grad[i] = preds[i] - y_tr[i];
-        hess[i] = 1.0;
       }
 
       XGBTree tree(maxDepth, lambda, gamma);
@@ -261,6 +266,10 @@ private:
     std::ranges::shuffle(indices, std::default_random_engine(42));
     size_t val_size =
         static_cast<size_t>(static_cast<double>(n) * validationFraction);
+    X_val.reserve(val_size);
+    y_val.reserve(val_size);
+    X_tr.reserve(n - val_size);
+    y_tr.reserve(n - val_size);
     for (size_t i = 0; i < n; i++) {
       if (i < val_size) {
         X_val.push_back(X[indices[i]]);
@@ -304,13 +313,15 @@ public:
     if (useES)
       val_rawPreds.assign(X_val.size(), baseLogOdds);
     trees.clear();
+    trees.reserve(static_cast<size_t>(nEstimators));
 
     double bestValLoss = std::numeric_limits<double>::max();
     int bestRound = 0;
     int wait = 0;
 
+    Vector grad(y_tr.size(), 0.0);
+    Vector hess(y_tr.size(), 0.0);
     for (int t = 0; t < nEstimators; ++t) {
-      Vector grad(y_tr.size()), hess(y_tr.size());
       for (size_t i = 0; i < y_tr.size(); ++i) {
         double p = sigmoid_xgb(rawPreds[i]);
         grad[i] = p - y_tr[i];
