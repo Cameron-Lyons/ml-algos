@@ -95,6 +95,8 @@ cmake --build build
 
 ```sh
 bazel build //:ml-algos
+bazel test //:smoke_cli_test
+bazel test //:smoke_cli_parity_test
 ```
 
 ## Usage
@@ -105,9 +107,15 @@ The CLI takes a CSV file (last column is the target) and an optional mode:
 # Run all algorithms (train/test split with anomaly detection)
 ./build/ml-algos data.csv
 
+# Show CLI help and available algorithms
+./build/ml-algos --help
+
 # Run a single algorithm
 ./build/ml-algos data.csv ridge
 ./build/ml-algos data.csv xgb-regressor
+
+# Single-classifier mode also prints Macro-F1, Micro-F1, and confusion matrix
+./build/ml-algos sample_binary_data.csv logistic
 
 # Cross-validation
 ./build/ml-algos data.csv cv

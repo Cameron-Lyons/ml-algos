@@ -30,6 +30,39 @@ cc_binary(
         "-Wconversion",
         "-Werror",
     ],
-    data = ["sample_data.csv"],
+    data = [
+        "sample_data.csv",
+        "sample_binary_data.csv",
+        "sample_binary_label_offset.csv",
+        "sample_binary_imbalanced.csv",
+        "sample_invalid_inconsistent.csv",
+        "sample_invalid_nonnumeric.csv",
+    ],
     deps = [":ml-algos-lib"],
+)
+
+sh_test(
+    name = "smoke_cli_test",
+    srcs = ["tests/smoke_cli_test.sh"],
+    data = [
+        ":ml-algos",
+        "sample_data.csv",
+        "sample_binary_data.csv",
+        "sample_binary_label_offset.csv",
+        "sample_invalid_nonnumeric.csv",
+    ],
+)
+
+sh_test(
+    name = "smoke_cli_parity_test",
+    srcs = ["tests/smoke_cli_parity_test.sh"],
+    data = [
+        ":ml-algos",
+        "sample_data.csv",
+        "sample_binary_data.csv",
+        "sample_binary_label_offset.csv",
+        "sample_binary_imbalanced.csv",
+        "sample_invalid_inconsistent.csv",
+        "sample_invalid_nonnumeric.csv",
+    ],
 )

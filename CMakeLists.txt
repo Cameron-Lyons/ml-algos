@@ -41,6 +41,34 @@ add_test(
 set_tests_properties(smoke_classifier_mode PROPERTIES PASS_REGULAR_EXPRESSION "Accuracy")
 
 add_test(
+  NAME smoke_classifier_label_offset
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_label_offset.csv logistic
+)
+set_tests_properties(smoke_classifier_label_offset PROPERTIES PASS_REGULAR_EXPRESSION "Accuracy")
+set_property(TEST smoke_classifier_label_offset APPEND PROPERTY FAIL_REGULAR_EXPRESSION "0\\.0000")
+
+add_test(
+  NAME smoke_classifier_report
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv logistic
+)
+set_tests_properties(smoke_classifier_report PROPERTIES PASS_REGULAR_EXPRESSION "Macro-F1")
+set_property(TEST smoke_classifier_report APPEND PROPERTY PASS_REGULAR_EXPRESSION "Confusion Matrix")
+set_property(TEST smoke_classifier_report APPEND PROPERTY PASS_REGULAR_EXPRESSION "Decision threshold")
+
+add_test(
+  NAME smoke_stratified_split_imbalanced
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_imbalanced.csv logistic
+)
+set_tests_properties(smoke_stratified_split_imbalanced PROPERTIES PASS_REGULAR_EXPRESSION "Confusion Matrix")
+set_property(TEST smoke_stratified_split_imbalanced APPEND PROPERTY PASS_REGULAR_EXPRESSION "  1:")
+
+add_test(
+  NAME smoke_modern_mlp_threshold
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv modern-mlp-cls
+)
+set_tests_properties(smoke_modern_mlp_threshold PROPERTIES PASS_REGULAR_EXPRESSION "Decision threshold")
+
+add_test(
   NAME smoke_help
   COMMAND $<TARGET_FILE:ml-algos> --help
 )
