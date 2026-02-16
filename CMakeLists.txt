@@ -39,3 +39,27 @@ add_test(
   COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv logistic
 )
 set_tests_properties(smoke_classifier_mode PROPERTIES PASS_REGULAR_EXPRESSION "Accuracy")
+
+add_test(
+  NAME smoke_help
+  COMMAND $<TARGET_FILE:ml-algos> --help
+)
+set_tests_properties(smoke_help PROPERTIES PASS_REGULAR_EXPRESSION "Regression algorithms:")
+
+add_test(
+  NAME smoke_missing_csv
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/does_not_exist.csv
+)
+set_tests_properties(smoke_missing_csv PROPERTIES WILL_FAIL TRUE)
+
+add_test(
+  NAME smoke_invalid_csv_inconsistent
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_invalid_inconsistent.csv
+)
+set_tests_properties(smoke_invalid_csv_inconsistent PROPERTIES WILL_FAIL TRUE)
+
+add_test(
+  NAME smoke_invalid_csv_nonnumeric
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_invalid_nonnumeric.csv
+)
+set_tests_properties(smoke_invalid_csv_nonnumeric PROPERTIES WILL_FAIL TRUE)

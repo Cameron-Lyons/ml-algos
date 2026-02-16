@@ -5,12 +5,14 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <optional>
 #include <print>
 #include <random>
 #include <ranges>
 #include <set>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 // clang-format off
 #include "matrix.cpp"
@@ -43,6 +45,14 @@ using AlgoFunc = std::function<AlgorithmResult(const Matrix &, const Matrix &,
                                                const Vector &, const Vector &)>;
 
 bool isFiniteScore(double score) { return std::isfinite(score); }
+
+bool isWhitespaceOnly(std::string_view text) {
+  return text.find_first_not_of(" \t\r\n") == std::string_view::npos;
+}
+
+bool isHelpFlag(std::string_view value) {
+  return value == "-h" || value == "--help" || value == "help";
+}
 
 void printTable(const std::vector<AlgorithmResult> &results) {
   std::println("{:<20} {:<10} {}", "Algorithm", "Metric", "Score");
@@ -163,35 +173,94 @@ AlgorithmResult evaluateClassifier(const std::string &name, M model,
 #include "feature_importance.cpp"
 // clang-format on
 
-Matrix readCSV(const std::string &filename) {
-  Matrix data;
-  std::ifstream file(filename);
-  std::string row, item;
+std::optional<std::string> validateCSVData(const Matrix &data) {
+  if (data.empty())
+    return "CSV contains no data rows.";
 
-  while (getline(file, row)) {
-    std::stringstream ss(row);
-    Vector currentRow;
-    while (getline(ss, item, ',')) {
-      currentRow.push_back(std::stod(item));
+  const size_t expected_cols = data.front().size();
+  if (expected_cols < 2)
+    return "CSV must contain at least one feature column and one target "
+           "column.";
+
+  for (size_t i = 0; i < data.size(); i++) {
+    const auto &row = data[i];
+    if (row.size() != expected_cols) {
+      return std::format(
+          "Inconsistent column count at row {}: expected {}, got {}.", i + 1,
+          expected_cols, row.size());
     }
-    data.push_back(currentRow);
+    for (size_t j = 0; j < row.size(); j++) {
+      if (!std::isfinite(row[j])) {
+        return std::format("Non-finite value at row {}, column {}.", i + 1,
+                           j + 1);
+      }
+    }
   }
-  return data;
+
+  return std::nullopt;
+}
+
+std::optional<std::string> readCSV(const std::string &filename, Matrix &data) {
+  std::ifstream file(filename);
+  if (!file.is_open())
+    return std::format("Unable to open CSV file: {}", filename);
+
+  std::string row;
+  size_t line_number = 0;
+  while (getline(file, row)) {
+    line_number++;
+    if (row.empty())
+      continue;
+
+    std::stringstream ss(row);
+    std::string item;
+    Vector currentRow;
+    size_t col_number = 0;
+    while (getline(ss, item, ',')) {
+      col_number++;
+      try {
+        size_t parsed_chars = 0;
+        double value = std::stod(item, &parsed_chars);
+        if (parsed_chars != item.size() &&
+            !isWhitespaceOnly(std::string_view(item).substr(parsed_chars))) {
+          return std::format(
+              "Invalid numeric value at row {}, column {}: '{}'.", line_number,
+              col_number, item);
+        }
+        currentRow.push_back(value);
+      } catch (const std::exception &) {
+        return std::format("Invalid numeric value at row {}, column {}: '{}'.",
+                           line_number, col_number, item);
+      }
+    }
+    if (currentRow.empty()) {
+      return std::format("Empty row at line {}.", line_number);
+    }
+    data.push_back(std::move(currentRow));
+  }
+
+  return validateCSVData(data);
 }
 
 void splitData(const Matrix &data, Matrix &X, Vector &y) {
+  X.reserve(data.size());
+  y.reserve(data.size());
   for (const auto &row : data) {
     y.push_back(row.back());
     X.push_back(Vector(row.begin(), row.end() - 1));
   }
 }
 
-void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
+bool trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
                     Matrix &X_test, Vector &y_train, Vector &y_test,
                     double test_size) {
   if (X.size() != y.size()) {
     std::println(stderr, "Features and target sizes don't match!");
-    return;
+    return false;
+  }
+  if (X.size() < 2) {
+    std::println(stderr, "Need at least 2 rows for train/test split.");
+    return false;
   }
   std::vector<std::pair<Vector, double>> dataset;
   dataset.reserve(X.size());
@@ -204,6 +273,7 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
 
   size_t test_count =
       static_cast<size_t>(test_size * static_cast<double>(dataset.size()));
+  test_count = std::clamp(test_count, size_t{1}, dataset.size() - 1);
   for (size_t i = 0; i < dataset.size(); i++) {
     if (i < test_count) {
       X_test.push_back(dataset[i].first);
@@ -213,6 +283,7 @@ void trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
       y_train.push_back(dataset[i].second);
     }
   }
+  return true;
 }
 
 bool isIntegerLike(double value, double tolerance = 1e-9) {
@@ -743,22 +814,66 @@ void runLoad(const std::string &filepath, const Matrix &X_test,
   }
 }
 
+void printHelp(const char *program_name,
+               const std::map<std::string, AlgoFunc> &regression_algos,
+               const std::map<std::string, AlgoFunc> &classification_algos) {
+  std::println("Usage:");
+  std::println(
+      "  {} <csv_file> [algorithm|cv|gridsearch|cluster|importance|save|load]",
+      program_name);
+  std::println("  {} [--help|-h|help]", program_name);
+
+  std::println("\nModes:");
+  std::println("  cv          Run cross-validation");
+  std::println("  gridsearch  Run grid search");
+  std::println("  cluster     Run clustering algorithms");
+  std::println("  importance  Run permutation feature importance");
+  std::println(
+      "  save        Save model: {} <csv_file> save <algorithm> <filepath>",
+      program_name);
+  std::println("  load        Load model: {} <csv_file> load <filepath>",
+               program_name);
+
+  std::println("\nRegression algorithms:");
+  for (const auto &[name, _] : regression_algos)
+    std::println("  {}", name);
+
+  std::println("\nClassification algorithms:");
+  for (const auto &[name, _] : classification_algos)
+    std::println("  {}", name);
+}
+
 int main(int argc, char *argv[]) {
+  if (argc >= 2 && isHelpFlag(argv[1])) {
+    auto regression_algos = buildRegressionAlgorithms(1);
+    auto classification_algos = buildClassificationAlgorithms(1, 2);
+    printHelp(argv[0], regression_algos, classification_algos);
+    return 0;
+  }
+
   if (argc < 2) {
-    std::println(stderr,
-                 "Usage: {} <csv_file> "
-                 "[algorithm|cv|gridsearch|cluster|importance|save|load]",
-                 argv[0]);
+    auto regression_algos = buildRegressionAlgorithms(1);
+    auto classification_algos = buildClassificationAlgorithms(1, 2);
+    printHelp(argv[0], regression_algos, classification_algos);
     return 1;
   }
 
   std::string filename = argv[1];
-  Matrix data = readCSV(filename);
+  Matrix data;
+  if (auto error = readCSV(filename, data)) {
+    std::println(stderr, "{}", *error);
+    return 1;
+  }
   Matrix X;
   Vector y;
   splitData(data, X, y);
 
-  size_t n_features = X[0].size();
+  if (X.empty()) {
+    std::println(stderr, "CSV contains no usable samples.");
+    return 1;
+  }
+
+  size_t n_features = X.front().size();
 
   std::set<int> unique_classes;
   for (double val : y)
@@ -770,10 +885,16 @@ int main(int argc, char *argv[]) {
   auto classification_algos =
       buildClassificationAlgorithms(n_features, n_classes);
 
+  if (argc >= 3 && isHelpFlag(argv[2])) {
+    printHelp(argv[0], regression_algos, classification_algos);
+    return 0;
+  }
+
   if (argc == 2) {
     Matrix X_train, X_test;
     Vector y_train, y_test;
-    trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+    if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2))
+      return 1;
 
     std::vector<AlgorithmResult> results;
     for (const auto &[name, func] : regression_algos)
@@ -880,12 +1001,14 @@ int main(int argc, char *argv[]) {
       }
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+      if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2))
+        return 1;
       runLoad(argv[3], X_test, y_test);
     } else if (mode == "importance") {
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+      if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2))
+        return 1;
 
       DecisionTree model(5);
       model.fit(X_train, y_train);
@@ -903,7 +1026,8 @@ int main(int argc, char *argv[]) {
     } else {
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+      if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2))
+        return 1;
 
       if (regression_algos.contains(mode)) {
         auto result = regression_algos[mode](X_train, X_test, y_train, y_test);
