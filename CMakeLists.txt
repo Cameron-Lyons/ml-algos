@@ -35,6 +35,12 @@ add_test(
 set_tests_properties(smoke_importance PROPERTIES PASS_REGULAR_EXPRESSION "Permutation Feature Importance")
 
 add_test(
+  NAME smoke_cluster_mode
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv cluster
+)
+set_tests_properties(smoke_cluster_mode PROPERTIES PASS_REGULAR_EXPRESSION "Clustering with k=")
+
+add_test(
   NAME smoke_classifier_mode
   COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv logistic
 )
@@ -69,10 +75,28 @@ add_test(
 set_tests_properties(smoke_modern_mlp_threshold PROPERTIES PASS_REGULAR_EXPRESSION "Decision threshold")
 
 add_test(
+  NAME smoke_gridsearch_regression_skip_logistic
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv gridsearch
+)
+set_tests_properties(smoke_gridsearch_regression_skip_logistic PROPERTIES PASS_REGULAR_EXPRESSION "requires binary target")
+
+add_test(
+  NAME smoke_gridsearch_binary_logistic
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv gridsearch
+)
+set_tests_properties(smoke_gridsearch_binary_logistic PROPERTIES PASS_REGULAR_EXPRESSION "Grid Search: Logistic Regression")
+
+add_test(
   NAME smoke_help
   COMMAND $<TARGET_FILE:ml-algos> --help
 )
 set_tests_properties(smoke_help PROPERTIES PASS_REGULAR_EXPRESSION "Regression algorithms:")
+
+add_test(
+  NAME smoke_help_subcommand
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv help
+)
+set_tests_properties(smoke_help_subcommand PROPERTIES PASS_REGULAR_EXPRESSION "Modes:")
 
 add_test(
   NAME smoke_missing_csv

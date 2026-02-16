@@ -42,9 +42,13 @@ expect_contains "${cv_output}" "Skipping classification CV" "cv"
 importance_output="$(${bin} "${sample_data}" importance)"
 expect_contains "${importance_output}" "Permutation Feature Importance" "importance"
 
+cluster_output="$(${bin} "${sample_data}" cluster)"
+expect_contains "${cluster_output}" "Clustering with k=" "cluster"
+
 classifier_output="$(${bin} "${sample_binary}" logistic)"
 expect_contains "${classifier_output}" "Accuracy" "classifier"
 expect_contains "${classifier_output}" "Macro-F1" "classifier"
+expect_contains "${classifier_output}" "Micro-F1" "classifier"
 expect_contains "${classifier_output}" "Confusion Matrix" "classifier"
 expect_contains "${classifier_output}" "Decision threshold" "classifier"
 
@@ -58,6 +62,15 @@ expect_contains "${classifier_imbalanced_output}" "  1:" "classifier-imbalanced"
 
 modern_mlp_output="$(${bin} "${sample_binary}" modern-mlp-cls)"
 expect_contains "${modern_mlp_output}" "Decision threshold" "modern-mlp-cls"
+
+grid_reg_output="$(${bin} "${sample_data}" gridsearch)"
+expect_contains "${grid_reg_output}" "requires binary target" "gridsearch-regression"
+
+grid_cls_output="$(${bin} "${sample_binary}" gridsearch)"
+expect_contains "${grid_cls_output}" "Grid Search: Logistic Regression" "gridsearch-binary"
+
+help_sub_output="$(${bin} "${sample_data}" help)"
+expect_contains "${help_sub_output}" "Modes:" "help-subcommand"
 
 if ${bin} "${invalid_inconsistent}" >/dev/null 2>&1; then
   echo "invalid_inconsistent: expected non-zero exit"
