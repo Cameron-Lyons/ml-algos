@@ -44,40 +44,43 @@ The library uses concepts to constrain templates and dispatch evaluation logic:
 ```
 ml-algos/
 ├── CMakeLists.txt
-├── BUILD                            # Bazel build configuration
-├── main.cpp                         # CLI with algorithm benchmarking
-├── matrix.h / matrix.cpp            # Matrix/vector types and operations
-├── metrics.cpp                      # Evaluation metrics
-├── cross_validation.cpp             # k-fold and stratified k-fold splitting
-├── preprocessing.cpp                # StandardScaler, MinMaxScaler
-├── hyperparameter_search.cpp        # Grid search with CV
-├── serialization.cpp                # Model save/load
-├── feature_importance.cpp           # Permutation feature importance
-├── sample_data.csv                  # Sample dataset
-├── supervised/
-│   ├── linear.cpp                   # Linear, Ridge, Lasso, ElasticNet
-│   ├── logistic_regression.cpp      # Logistic and Softmax regression
-│   ├── tree.cpp                     # Decision tree
-│   ├── ensemble.cpp                 # Random forest and gradient boosting
-│   ├── xgboost.cpp                  # XGBoost
-│   ├── adaboost.cpp                 # AdaBoost
-│   ├── meta_ensemble.cpp            # Voting and Stacking ensembles
-│   ├── svm.cpp                      # SVC, SVR, Kernel SVM
-│   ├── knn.cpp                      # KNN regressor and classifier
-│   ├── mlp.cpp                      # Single-layer perceptron
-│   ├── modern_mlp.cpp               # Multi-layer perceptron
-│   ├── naive_bayes.cpp              # Naive Bayes variants
-│   └── gaussian_process.cpp         # Gaussian process regression
-└── unsupervised/
-    ├── k_means.cpp                  # k-Means clustering
-    ├── gmm.cpp                      # Gaussian Mixture Model
-    ├── dbscan.cpp                   # DBSCAN
-    ├── hierarchical.cpp             # Agglomerative clustering
-    ├── spectral.cpp                 # Spectral clustering
-    ├── isolation_forest.cpp         # Isolation Forest anomaly detection
-    ├── pca.cpp                      # Principal Component Analysis
-    ├── lda.cpp                      # Linear Discriminant Analysis
-    └── tsne.cpp                     # t-SNE
+├── MODULE.bazel                     # Bazel module configuration
+├── src/
+│   ├── main.cpp                     # CLI with algorithm benchmarking
+│   ├── matrix.h / matrix.cpp        # Matrix/vector types and operations
+│   ├── metrics.cpp                  # Evaluation metrics
+│   ├── cross_validation.cpp         # k-fold and stratified k-fold splitting
+│   ├── preprocessing.cpp            # StandardScaler, MinMaxScaler
+│   ├── hyperparameter_search.cpp    # Grid search with CV
+│   ├── serialization.cpp            # Model save/load
+│   ├── feature_importance.cpp       # Permutation feature importance
+│   ├── supervised/
+│   │   ├── linear.cpp               # Linear, Ridge, Lasso, ElasticNet
+│   │   ├── logistic_regression.cpp  # Logistic and Softmax regression
+│   │   ├── tree.cpp                 # Decision tree
+│   │   ├── ensemble.cpp             # Random forest and gradient boosting
+│   │   ├── xgboost.cpp              # XGBoost
+│   │   ├── adaboost.cpp             # AdaBoost
+│   │   ├── meta_ensemble.cpp        # Voting and Stacking ensembles
+│   │   ├── svm.cpp                  # SVC, SVR, Kernel SVM
+│   │   ├── knn.cpp                  # KNN regressor and classifier
+│   │   ├── mlp.cpp                  # Single-layer perceptron
+│   │   ├── modern_mlp.cpp           # Multi-layer perceptron
+│   │   ├── naive_bayes.cpp          # Naive Bayes variants
+│   │   └── gaussian_process.cpp     # Gaussian process regression
+│   └── unsupervised/
+│       ├── k_means.cpp              # k-Means clustering
+│       ├── gmm.cpp                  # Gaussian Mixture Model
+│       ├── dbscan.cpp               # DBSCAN
+│       ├── hierarchical.cpp         # Agglomerative clustering
+│       ├── spectral.cpp             # Spectral clustering
+│       ├── isolation_forest.cpp     # Isolation Forest anomaly detection
+│       ├── pca.cpp                  # Principal Component Analysis
+│       ├── lda.cpp                  # Linear Discriminant Analysis
+│       └── tsne.cpp                 # t-SNE
+├── data/                            # Sample datasets and invalid CSV cases
+│   └── sample_*.csv
+└── tests/                           # Bazel smoke tests
 ```
 
 ## Building
@@ -115,7 +118,7 @@ The CLI takes a CSV file (last column is the target) and an optional mode:
 ./build/ml-algos data.csv xgb-regressor
 
 # Single-classifier mode also prints Macro-F1, Micro-F1, and confusion matrix
-./build/ml-algos sample_binary_data.csv logistic
+./build/ml-algos data/sample_binary_data.csv logistic
 
 # Cross-validation
 ./build/ml-algos data.csv cv

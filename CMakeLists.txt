@@ -8,21 +8,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(ml-algos main.cpp)
+add_executable(ml-algos src/main.cpp)
 target_compile_options(ml-algos PRIVATE
   -Wall -Wextra -Wpedantic -Wsign-conversion -Wconversion -Werror
 )
 
 add_test(
   NAME smoke_default
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv
 )
 set_tests_properties(smoke_default PROPERTIES FAIL_REGULAR_EXPRESSION "Accuracy")
 set_property(TEST smoke_default APPEND PROPERTY FAIL_REGULAR_EXPRESSION "\\b-?nan\\b|\\b-?inf\\b")
 
 add_test(
   NAME smoke_cv
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv cv
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv cv
 )
 set_tests_properties(smoke_cv PROPERTIES PASS_REGULAR_EXPRESSION "Skipping classification CV")
 set_property(TEST smoke_cv APPEND PROPERTY FAIL_REGULAR_EXPRESSION "\\b-?nan\\b|\\b-?inf\\b")
@@ -30,32 +30,32 @@ set_property(TEST smoke_cv APPEND PROPERTY FAIL_REGULAR_EXPRESSION "Skipping non
 
 add_test(
   NAME smoke_importance
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv importance
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv importance
 )
 set_tests_properties(smoke_importance PROPERTIES PASS_REGULAR_EXPRESSION "Permutation Feature Importance")
 
 add_test(
   NAME smoke_cluster_mode
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv cluster
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv cluster
 )
 set_tests_properties(smoke_cluster_mode PROPERTIES PASS_REGULAR_EXPRESSION "Clustering with k=")
 
 add_test(
   NAME smoke_classifier_mode
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv logistic
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv logistic
 )
 set_tests_properties(smoke_classifier_mode PROPERTIES PASS_REGULAR_EXPRESSION "Accuracy")
 
 add_test(
   NAME smoke_classifier_label_offset
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_label_offset.csv logistic
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_label_offset.csv logistic
 )
 set_tests_properties(smoke_classifier_label_offset PROPERTIES PASS_REGULAR_EXPRESSION "Accuracy")
 set_property(TEST smoke_classifier_label_offset APPEND PROPERTY FAIL_REGULAR_EXPRESSION "0\\.0000")
 
 add_test(
   NAME smoke_classifier_report
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv logistic
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv logistic
 )
 set_tests_properties(smoke_classifier_report PROPERTIES PASS_REGULAR_EXPRESSION "Macro-F1")
 set_property(TEST smoke_classifier_report APPEND PROPERTY PASS_REGULAR_EXPRESSION "Confusion Matrix")
@@ -63,26 +63,26 @@ set_property(TEST smoke_classifier_report APPEND PROPERTY PASS_REGULAR_EXPRESSIO
 
 add_test(
   NAME smoke_stratified_split_imbalanced
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_imbalanced.csv logistic
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_imbalanced.csv logistic
 )
 set_tests_properties(smoke_stratified_split_imbalanced PROPERTIES PASS_REGULAR_EXPRESSION "Confusion Matrix")
 set_property(TEST smoke_stratified_split_imbalanced APPEND PROPERTY PASS_REGULAR_EXPRESSION "  1:")
 
 add_test(
   NAME smoke_modern_mlp_threshold
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv modern-mlp-cls
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv modern-mlp-cls
 )
 set_tests_properties(smoke_modern_mlp_threshold PROPERTIES PASS_REGULAR_EXPRESSION "Decision threshold")
 
 add_test(
   NAME smoke_gridsearch_regression_skip_logistic
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv gridsearch
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv gridsearch
 )
 set_tests_properties(smoke_gridsearch_regression_skip_logistic PROPERTIES PASS_REGULAR_EXPRESSION "requires binary target")
 
 add_test(
   NAME smoke_gridsearch_binary_logistic
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_binary_data.csv gridsearch
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv gridsearch
 )
 set_tests_properties(smoke_gridsearch_binary_logistic PROPERTIES PASS_REGULAR_EXPRESSION "Grid Search: Logistic Regression")
 
@@ -94,24 +94,24 @@ set_tests_properties(smoke_help PROPERTIES PASS_REGULAR_EXPRESSION "Regression a
 
 add_test(
   NAME smoke_help_subcommand
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_data.csv help
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv help
 )
 set_tests_properties(smoke_help_subcommand PROPERTIES PASS_REGULAR_EXPRESSION "Modes:")
 
 add_test(
   NAME smoke_missing_csv
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/does_not_exist.csv
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/does_not_exist.csv
 )
 set_tests_properties(smoke_missing_csv PROPERTIES WILL_FAIL TRUE)
 
 add_test(
   NAME smoke_invalid_csv_inconsistent
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_invalid_inconsistent.csv
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_invalid_inconsistent.csv
 )
 set_tests_properties(smoke_invalid_csv_inconsistent PROPERTIES WILL_FAIL TRUE)
 
 add_test(
   NAME smoke_invalid_csv_nonnumeric
-  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/sample_invalid_nonnumeric.csv
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_invalid_nonnumeric.csv
 )
 set_tests_properties(smoke_invalid_csv_nonnumeric PROPERTIES WILL_FAIL TRUE)

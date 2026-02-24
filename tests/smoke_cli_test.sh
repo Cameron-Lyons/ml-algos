@@ -2,8 +2,8 @@
 set -euo pipefail
 
 bin="${TEST_SRCDIR}/${TEST_WORKSPACE}/ml-algos"
-sample_data="${TEST_SRCDIR}/${TEST_WORKSPACE}/sample_data.csv"
-invalid_csv="${TEST_SRCDIR}/${TEST_WORKSPACE}/sample_invalid_nonnumeric.csv"
+sample_data="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/sample_data.csv"
+invalid_csv="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/sample_invalid_nonnumeric.csv"
 
 help_output="$(${bin} --help)"
 if [[ "${help_output}" != *"Regression algorithms:"* ]]; then

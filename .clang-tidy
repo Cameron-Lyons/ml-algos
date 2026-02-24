@@ -1,0 +1,24 @@
+---
+# Checks that are actionable; others disabled to avoid noise:
+# - bugprone-suspicious-include: project intentionally includes .cpp for single-TU build
+# - bugprone-easily-swappable-parameters: would require broad API signature changes
+# - bugprone-exception-escape: main and constructors intentionally propagate errors
+Checks: >
+  -*,
+  clang-diagnostic-*,
+  bugprone-*,
+  -bugprone-suspicious-include,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  modernize-use-emplace,
+  modernize-use-integer-sign-comparison,
+  readability-braces-around-statements,
+  readability-math-missing-parentheses,
+  readability-redundant-casting
+CheckOptions:
+  - key:             readability-identifier-length.MinimumLength
+    value:           '1'
+  - key:             readability-magic-numbers.IgnoredValues
+    value:           '0,1,2,3,4,5,10,42,50,100'
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'

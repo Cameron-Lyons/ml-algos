@@ -2,12 +2,12 @@
 set -euo pipefail
 
 bin="${TEST_SRCDIR}/${TEST_WORKSPACE}/ml-algos"
-sample_data="${TEST_SRCDIR}/${TEST_WORKSPACE}/sample_data.csv"
-sample_binary="${TEST_SRCDIR}/${TEST_WORKSPACE}/sample_binary_data.csv"
-sample_binary_offset="${TEST_SRCDIR}/${TEST_WORKSPACE}/sample_binary_label_offset.csv"
-sample_binary_imbalanced="${TEST_SRCDIR}/${TEST_WORKSPACE}/sample_binary_imbalanced.csv"
-invalid_inconsistent="${TEST_SRCDIR}/${TEST_WORKSPACE}/sample_invalid_inconsistent.csv"
-invalid_nonnumeric="${TEST_SRCDIR}/${TEST_WORKSPACE}/sample_invalid_nonnumeric.csv"
+sample_data="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/sample_data.csv"
+sample_binary="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/sample_binary_data.csv"
+sample_binary_offset="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/sample_binary_label_offset.csv"
+sample_binary_imbalanced="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/sample_binary_imbalanced.csv"
+invalid_inconsistent="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/sample_invalid_inconsistent.csv"
+invalid_nonnumeric="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/sample_invalid_nonnumeric.csv"
 
 expect_contains() {
   local output="$1"
@@ -82,7 +82,7 @@ if ${bin} "${invalid_nonnumeric}" >/dev/null 2>&1; then
   exit 1
 fi
 
-if ${bin} "${TEST_SRCDIR}/${TEST_WORKSPACE}/does_not_exist.csv" >/dev/null 2>&1; then
+if ${bin} "${TEST_SRCDIR}/${TEST_WORKSPACE}/data/does_not_exist.csv" >/dev/null 2>&1; then
   echo "missing_csv: expected non-zero exit"
   exit 1
 fi
