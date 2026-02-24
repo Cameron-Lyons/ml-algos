@@ -1,6 +1,5 @@
 #include "tree.cpp"
 #include <algorithm>
-#include <functional>
 #include <limits>
 #include <random>
 #include <ranges>

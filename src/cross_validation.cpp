@@ -1,3 +1,4 @@
+#include "matrix.h"
 #include <algorithm>
 #include <map>
 #include <random>

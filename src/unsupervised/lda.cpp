@@ -1,5 +1,4 @@
 #include "../matrix.h"
-#include <algorithm>
 #include <cassert>
 #include <ranges>
 #include <utility>

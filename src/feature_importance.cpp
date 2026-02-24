@@ -1,5 +1,6 @@
 #include "matrix.h"
 #include <random>
+#include <ranges>
 #include <vector>
 
 template <typename Model>
