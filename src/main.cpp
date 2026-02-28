@@ -90,6 +90,7 @@ AlgorithmResult evaluateRegressor(const std::string &name, M model,
                                   const Vector &y_tr, const Vector &y_te) {
   model.fit(X_tr, y_tr);
   Vector preds;
+  preds.reserve(X_te.size());
   for (const auto &x : X_te) {
     preds.push_back(model.predict(x));
   }
@@ -150,6 +151,7 @@ AlgorithmResult evaluateClassifier(const std::string &name, M model,
                                    const Vector &y_tr, const Vector &y_te) {
   model.fit(X_tr, y_tr);
   Vector preds;
+  preds.reserve(X_te.size());
   for (const auto &x : X_te) {
     preds.push_back(model.predict(x));
   }

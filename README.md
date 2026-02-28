@@ -102,6 +102,33 @@ bazel test //:smoke_cli_test
 bazel test //:smoke_cli_parity_test
 ```
 
+## Benchmarking
+
+Use the runtime benchmark script to measure:
+
+- `gridsearch` CLI runtime
+- `tSNE` runtime via a synthetic harness compiled from `src/unsupervised/tsne.cpp`
+
+```sh
+# Candidate-only benchmark in current repo
+tests/benchmark_runtime.sh --runs 8 --warmup 2
+
+# Before/after comparison across two repo checkouts
+tests/benchmark_runtime.sh \
+  --baseline-repo /path/to/ml-algos-before \
+  --candidate-repo /path/to/ml-algos-after \
+  --runs 8 --warmup 2
+
+# Emit machine-readable outputs (writes both CSV + JSON)
+tests/benchmark_runtime.sh --output-dir /tmp/ml-bench --runs 8 --warmup 2
+
+# Or specify output files directly
+tests/benchmark_runtime.sh \
+  --csv-out /tmp/ml-bench/results.csv \
+  --json-out /tmp/ml-bench/results.json \
+  --runs 8 --warmup 2
+```
+
 ## Usage
 
 The CLI takes a CSV file (last column is the target) and an optional mode:

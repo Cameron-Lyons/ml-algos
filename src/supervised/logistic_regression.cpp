@@ -61,6 +61,7 @@ public:
 
   Vector predict(const Matrix &X, double threshold = 0.5) const {
     Vector predictions;
+    predictions.reserve(X.size());
     for (const auto &x : X) {
       predictions.push_back(predict(x, threshold));
     }

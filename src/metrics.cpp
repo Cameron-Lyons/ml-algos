@@ -264,20 +264,24 @@ double computeAUC(const std::vector<int> &trueLabels,
   double tprPrev = 0.0;
   auto positiveCount = static_cast<double>(std::ranges::count(trueLabels, 1));
   double negativeCount = static_cast<double>(trueLabels.size()) - positiveCount;
+  if (positiveCount == 0.0 || negativeCount == 0.0) {
+    std::println(stderr,
+                 "Error: AUC is undefined when only one class is present.");
+    return -1.0;
+  }
 
-  for (size_t i = 0; i < pairs.size(); ++i) {
-    double fpr =
-        static_cast<double>(std::count_if(
-            pairs.begin(), pairs.begin() + static_cast<ptrdiff_t>(i + 1),
-            [](const auto &pair) { return pair.second == 0; })) /
-        negativeCount;
+  size_t tp = 0;
+  size_t fp = 0;
+  for (const auto &entry : pairs) {
+    int label = entry.second;
+    if (label == 1) {
+      tp++;
+    } else {
+      fp++;
+    }
 
-    double tpr =
-        static_cast<double>(std::count_if(
-            pairs.begin(), pairs.begin() + static_cast<ptrdiff_t>(i + 1),
-            [](const auto &pair) { return pair.second == 1; })) /
-        positiveCount;
-
+    double fpr = static_cast<double>(fp) / negativeCount;
+    double tpr = static_cast<double>(tp) / positiveCount;
     auc += (fpr - fprPrev) * (tpr + tprPrev) / 2.0;
     fprPrev = fpr;
     tprPrev = tpr;

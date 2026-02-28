@@ -29,6 +29,7 @@ kFoldSplit(size_t n_samples, int k, unsigned int seed) {
   std::ranges::shuffle(indices, std::default_random_engine(seed));
 
   std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>> folds;
+  folds.reserve(static_cast<size_t>(k));
   size_t fold_size = n_samples / static_cast<size_t>(k);
 
   for (int i = 0; i < k; i++) {
@@ -39,6 +40,7 @@ kFoldSplit(size_t n_samples, int k, unsigned int seed) {
         indices.begin() + static_cast<ptrdiff_t>(start),
         indices.begin() + static_cast<ptrdiff_t>(end));
     std::vector<size_t> train_indices;
+    train_indices.reserve(n_samples - (end - start));
     train_indices.insert(train_indices.end(), indices.begin(),
                          indices.begin() + static_cast<ptrdiff_t>(start));
     train_indices.insert(train_indices.end(),
@@ -78,9 +80,11 @@ stratifiedKFoldSplit(const Vector &y, int k, unsigned int seed) {
   }
 
   std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>> folds;
+  folds.reserve(static_cast<size_t>(k));
   for (int i = 0; i < k; i++) {
     std::vector<size_t> test_indices = fold_indices[static_cast<size_t>(i)];
     std::vector<size_t> train_indices;
+    train_indices.reserve(y.size() - test_indices.size());
     for (int j = 0; j < k; j++) {
       if (j != i) {
         train_indices.insert(train_indices.end(),

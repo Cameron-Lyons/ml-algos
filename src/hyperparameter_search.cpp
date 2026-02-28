@@ -14,6 +14,13 @@ struct GridSearchResult {
   std::vector<std::pair<ParamSet, double>> allResults;
 };
 
+struct PreparedFold {
+  Matrix X_tr;
+  Matrix X_te;
+  Vector y_tr;
+  Vector y_te;
+};
+
 std::vector<ParamSet>
 buildParamGrid(const std::map<std::string, std::vector<double>> &grid) {
   std::vector<ParamSet> result;
@@ -21,6 +28,7 @@ buildParamGrid(const std::map<std::string, std::vector<double>> &grid) {
 
   for (const auto &[name, values] : grid) {
     std::vector<ParamSet> expanded;
+    expanded.reserve(result.size() * values.size());
     for (const auto &ps : result) {
       for (double v : values) {
         ParamSet newPs = ps;
@@ -42,6 +50,14 @@ gridSearchCV(Factory factory, const std::vector<ParamSet> &paramGrid,
              const Matrix &X, const Vector &y, int k, bool higherIsBetter,
              bool isClassification = false) {
   auto folds = kFoldSplit(X.size(), k, 42);
+  std::vector<PreparedFold> preparedFolds;
+  preparedFolds.reserve(folds.size());
+  for (const auto &[trainIdx, testIdx] : folds) {
+    preparedFolds.push_back({subsetByIndices(X, trainIdx),
+                             subsetByIndices(X, testIdx),
+                             subsetByIndices(y, trainIdx),
+                             subsetByIndices(y, testIdx)});
+  }
 
   GridSearchResult result;
   result.bestScore = higherIsBetter ? -1e18 : 1e18;
@@ -49,25 +65,22 @@ gridSearchCV(Factory factory, const std::vector<ParamSet> &paramGrid,
   for (const auto &ps : paramGrid) {
     double totalScore = 0.0;
 
-    for (const auto &[trainIdx, testIdx] : folds) {
-      Matrix X_tr = subsetByIndices(X, trainIdx);
-      Matrix X_te = subsetByIndices(X, testIdx);
-      Vector y_tr = subsetByIndices(y, trainIdx);
-      Vector y_te = subsetByIndices(y, testIdx);
-
+    for (const auto &fold : preparedFolds) {
       auto model = factory(ps);
-      model.fit(X_tr, y_tr);
+      model.fit(fold.X_tr, fold.y_tr);
 
       Vector preds;
-      if constexpr (requires { model.predict(X_te); }) {
-        preds = model.predict(X_te);
+      if constexpr (requires { model.predict(fold.X_te); }) {
+        preds = model.predict(fold.X_te);
       } else {
-        for (const auto &x : X_te) {
+        preds.reserve(fold.X_te.size());
+        for (const auto &x : fold.X_te) {
           preds.push_back(model.predict(x));
         }
       }
 
-      totalScore += isClassification ? accuracy(y_te, preds) : r2(y_te, preds);
+      totalScore +=
+          isClassification ? accuracy(fold.y_te, preds) : r2(fold.y_te, preds);
     }
 
     double avgScore = totalScore / k;

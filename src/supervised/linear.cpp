@@ -1,4 +1,5 @@
 #include "../matrix.h"
+#include <algorithm>
 #include <cmath>
 
 class LinearModel {
@@ -20,15 +21,19 @@ public:
   virtual void fit(const Matrix &X, const Vector &y) = 0;
 
   Vector predict(const Matrix &X) const {
-    Matrix X_bias = addBias(X);
-    Matrix coef_col(coefficients.size(), Vector(1));
-    for (size_t i = 0; i < coefficients.size(); ++i) {
-      coef_col[i][0] = coefficients[i];
+    if (X.empty() || coefficients.empty()) {
+      return {};
     }
-    Matrix result = multiply(X_bias, coef_col);
-    Vector preds(result.size());
-    for (size_t i = 0; i < result.size(); ++i) {
-      preds[i] = result[i][0];
+
+    Vector preds(X.size(), coefficients[0]);
+    for (size_t i = 0; i < X.size(); ++i) {
+      double sum = coefficients[0];
+      const size_t n_features =
+          std::min(X[i].size(), coefficients.size() - static_cast<size_t>(1));
+      for (size_t j = 0; j < n_features; ++j) {
+        sum += coefficients[j + 1] * X[i][j];
+      }
+      preds[i] = sum;
     }
     return preds;
   }

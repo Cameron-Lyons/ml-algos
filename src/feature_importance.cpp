@@ -1,5 +1,6 @@
 #include "matrix.h"
 #include <random>
+#include <numeric>
 #include <ranges>
 #include <vector>
 
@@ -37,16 +38,13 @@ Vector permutationImportance(const Model &model, const Matrix &X,
 
   for (size_t f = 0; f < nFeatures; f++) {
     double totalDrop = 0.0;
+    Matrix Xperm = X;
+    std::vector<size_t> indices(n);
 
     for (size_t rep = 0; rep < nRepeats; rep++) {
-      Matrix Xperm = X;
-
       auto permSeed = (seed + static_cast<unsigned int>((f * nRepeats) + rep));
       std::mt19937 rng(permSeed);
-      auto indices = std::vector<size_t>(n);
-      for (size_t i = 0; i < n; i++) {
-        indices[i] = i;
-      }
+      std::iota(indices.begin(), indices.end(), size_t{0});
       std::ranges::shuffle(indices, rng);
 
       for (size_t i = 0; i < n; i++) {
