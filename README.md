@@ -7,27 +7,29 @@ A from-scratch machine learning library in C++23. No external dependencies — j
 ### Supervised Learning
 
 - **Linear Models**: Linear Regression, Ridge, Lasso, ElasticNet, Logistic Regression, Softmax Regression
-- **Trees**: Decision Tree, Random Forest, Gradient Boosted Trees, XGBoost, AdaBoost
+- **Trees**: Decision Tree, Random Forest, Extra Trees, Gradient Boosted Trees, XGBoost, LightGBM-style Histogram Boosting, CatBoost-style Oblivious Boosting, AdaBoost
 - **Neural Networks**: MLP (single hidden layer), Modern MLP (multi-layer, ReLU/Sigmoid/Tanh, mini-batch SGD, L2 regularization)
+- **Sequence / Deep Learning**: Tiny CNN, RNN, LSTM, Transformer baselines (tabular-as-sequence) with jointly-trained feature adapter + readout head
 - **Instance-based**: KNN Classifier, KNN Regressor
 - **SVM**: SVC, SVR, Kernel SVM (RBF, Linear, Polynomial)
 - **Probabilistic**: Gaussian Naive Bayes, Gaussian Process Regressor
+- **Time-series**: ARIMA-style and SARIMA-style regressors
 - **Meta-ensembles**: Voting Classifier/Regressor, Stacking Classifier/Regressor
 
 ### Unsupervised Learning
 
-- **Clustering**: k-Means, DBSCAN, Agglomerative (Average/Complete/Single), Spectral, Gaussian Mixture Model
-- **Dimensionality Reduction**: PCA, LDA, t-SNE
-- **Anomaly Detection**: Isolation Forest
+- **Clustering**: k-Means, DBSCAN, OPTICS, Agglomerative (Average/Complete/Single), Spectral, Gaussian Mixture Model
+- **Dimensionality Reduction**: PCA, LDA, t-SNE, UMAP
+- **Anomaly Detection**: Isolation Forest, One-Class SVM, Local Outlier Factor (LOF)
 
 ### Utilities
 
 - **Preprocessing**: StandardScaler, MinMaxScaler
 - **Metrics**: MSE, R², MAE, Accuracy, Precision, Recall, F1, MCC, AUC, Silhouette Score
 - **Cross-validation**: k-Fold, Stratified k-Fold
-- **Hyperparameter search**: Grid Search with CV
+- **Hyperparameter search**: Grid Search with CV (Ridge, KNN, Decision Tree, Random Forest, XGBoost, Extra Trees, LightGBM-style, CatBoost-style, ARIMA/SARIMA, and binary-classification counterparts)
 - **Feature importance**: Permutation importance (model-agnostic)
-- **Serialization**: Save/load for linear models, logistic regression, decision trees, KNN
+- **Serialization**: Save/load for linear models, logistic regression, decision trees, KNN, ARIMA/SARIMA, and deep sequence models (CNN/RNN/LSTM/Transformer regressor/classifier)
 
 ### C++23 Concepts
 
@@ -59,6 +61,8 @@ ml-algos/
 │   │   ├── logistic_regression.cpp  # Logistic and Softmax regression
 │   │   ├── tree.cpp                 # Decision tree
 │   │   ├── ensemble.cpp             # Random forest and gradient boosting
+│   │   ├── extra_trees.cpp          # Extremely randomized trees
+│   │   ├── lightgbm_catboost.cpp    # LightGBM-style and CatBoost-style boosting
 │   │   ├── xgboost.cpp              # XGBoost
 │   │   ├── adaboost.cpp             # AdaBoost
 │   │   ├── meta_ensemble.cpp        # Voting and Stacking ensembles
@@ -66,18 +70,24 @@ ml-algos/
 │   │   ├── knn.cpp                  # KNN regressor and classifier
 │   │   ├── mlp.cpp                  # Single-layer perceptron
 │   │   ├── modern_mlp.cpp           # Multi-layer perceptron
+│   │   ├── deep_sequence_models.cpp # CNN, RNN, LSTM, Transformer baselines
+│   │   ├── time_series.cpp          # ARIMA/SARIMA-style regressors
 │   │   ├── naive_bayes.cpp          # Naive Bayes variants
 │   │   └── gaussian_process.cpp     # Gaussian process regression
 │   └── unsupervised/
 │       ├── k_means.cpp              # k-Means clustering
 │       ├── gmm.cpp                  # Gaussian Mixture Model
 │       ├── dbscan.cpp               # DBSCAN
+│       ├── optics.cpp               # OPTICS clustering
 │       ├── hierarchical.cpp         # Agglomerative clustering
 │       ├── spectral.cpp             # Spectral clustering
 │       ├── isolation_forest.cpp     # Isolation Forest anomaly detection
+│       ├── one_class_svm.cpp        # One-Class SVM anomaly detection
+│       ├── lof.cpp                  # Local Outlier Factor anomaly detection
 │       ├── pca.cpp                  # Principal Component Analysis
 │       ├── lda.cpp                  # Linear Discriminant Analysis
-│       └── tsne.cpp                 # t-SNE
+│       ├── tsne.cpp                 # t-SNE
+│       └── umap.cpp                 # UMAP
 ├── data/                            # Sample datasets and invalid CSV cases
 │   └── sample_*.csv
 └── tests/                           # Bazel smoke tests
@@ -153,8 +163,18 @@ The CLI takes a CSV file (last column is the target) and an optional mode:
 # Hyperparameter grid search
 ./build/ml-algos data.csv gridsearch
 
-# Clustering (k-Means, DBSCAN, Agglomerative, Spectral, GMM)
+# Clustering (k-Means, DBSCAN, OPTICS, Agglomerative Average/Complete/Single, Spectral, GMM)
 ./build/ml-algos data.csv cluster
+
+# Anomaly detection (Isolation Forest, One-Class SVM, LOF)
+./build/ml-algos data.csv anomaly
+
+# Dimensionality reduction
+./build/ml-algos data.csv reduce
+./build/ml-algos data.csv pca
+./build/ml-algos data.csv lda
+./build/ml-algos data.csv umap
+./build/ml-algos data.csv tsne
 
 # Permutation feature importance
 ./build/ml-algos data.csv importance
@@ -164,7 +184,7 @@ The CLI takes a CSV file (last column is the target) and an optional mode:
 ./build/ml-algos data.csv load model.txt
 ```
 
-Available algorithm names: `linear`, `ridge`, `lasso`, `elasticnet`, `tree`, `rf-regressor`, `gbt-regressor`, `xgb-regressor`, `svr`, `kernel-svm`, `linear-svm`, `poly-svm`, `knn-regressor`, `gp`, `mlp`, `modern-mlp`, `voting-regressor`, `stacking-regressor`, `logistic`, `svc`, `knn-classifier`, `rf-classifier`, `gbt-classifier`, `xgb-classifier`, `adaboost`, `naive-bayes`, `softmax`, `modern-mlp-cls`, `voting-classifier`, `stacking-classifier`.
+Available algorithm names: `linear`, `ridge`, `lasso`, `elasticnet`, `tree`, `rf-regressor`, `extra-trees-regressor`, `gbt-regressor`, `xgb-regressor`, `lightgbm-regressor`, `catboost-regressor`, `svr`, `kernel-svm`, `linear-svm`, `poly-svm`, `knn-regressor`, `gp`, `mlp`, `modern-mlp`, `cnn-regressor`, `rnn-regressor`, `lstm-regressor`, `transformer-regressor`, `arima`, `sarima`, `voting-regressor`, `stacking-regressor`, `logistic`, `svc`, `knn-classifier`, `rf-classifier`, `extra-trees-classifier`, `gbt-classifier`, `xgb-classifier`, `lightgbm-classifier`, `catboost-classifier`, `adaboost`, `naive-bayes`, `multinomial-nb`, `complement-nb`, `bernoulli-nb`, `softmax`, `modern-mlp-cls`, `cnn-classifier`, `rnn-classifier`, `lstm-classifier`, `transformer-classifier`, `voting-classifier`, `stacking-classifier`.
 
 Early-stopping variants: `gbt-regressor-es`, `xgb-regressor-es`, `gbt-classifier-es`, `xgb-classifier-es`.
 

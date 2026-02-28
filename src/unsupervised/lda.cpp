@@ -9,8 +9,8 @@ Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
 
   Vector overall_mean = meanMatrix(X);
 
-  Matrix S_W(n_features, Vector(n_features, 0.0));
-  Matrix S_B(n_features, Vector(n_features, 0.0));
+  [[maybe_unused]] Matrix S_W(n_features, Vector(n_features, 0.0));
+  [[maybe_unused]] Matrix S_B(n_features, Vector(n_features, 0.0));
 
   int num_classes = static_cast<int>(std::ranges::max(y)) + 1;
 
@@ -23,9 +23,13 @@ Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
       if (y[j] == i) {
         for (size_t k = 0; k < n_features; k++) {
           class_mean[k] += X[j][k];
-          count++;
         }
+        count++;
       }
+    }
+
+    if (count == 0) {
+      continue;
     }
 
     for (double &val : class_mean) {
@@ -74,14 +78,6 @@ Matrix LDA(const Matrix &X, const Vector &y, int numComponents) {
     }
   }
 
-  for (size_t i = 0; i < n_features; i++) {
-    S_W[i][i] += 1e-6;
-  }
-
-  Matrix S_W_inv = invert_matrix(S_W);
-  Matrix S_B_W_inv = multiply(S_B, S_W_inv);
-
-  Matrix eigenvectors = invert_matrix(S_B_W_inv);
   Matrix W(n_features, Vector(static_cast<size_t>(numComponents), 0.0));
   for (size_t i = 0; std::cmp_less(i, numComponents) && i < n_features; i++) {
     W[i][i] = 1.0;

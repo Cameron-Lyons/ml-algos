@@ -141,7 +141,7 @@ public:
         logProb +=
             features[j] *
             log((countForFeatureInClass + alpha) /
-                (totalForClass + static_cast<double>(features.size()) * alpha));
+                (totalForClass + (static_cast<double>(features.size()) * alpha)));
       }
 
       if (logProb > maxLogProb) {
@@ -210,7 +210,7 @@ public:
         logProb +=
             features[j] * log((complementCount + alpha) /
                               (complementTotal +
-                               static_cast<double>(features.size()) * alpha));
+                               (static_cast<double>(features.size()) * alpha)));
       }
 
       if (logProb < minLogProb) {
@@ -257,7 +257,7 @@ public:
       for (size_t j = 0; j < features.size(); ++j) {
         int jIdx = static_cast<int>(j);
         double probabilityOfFeatureInClass =
-            (featureCounts[c][jIdx] + alpha) / (classCounts[c] + 2 * alpha);
+            (featureCounts[c][jIdx] + alpha) / (classCounts[c] + (2 * alpha));
 
         if (features[j] == 1) {
           logProb += log(probabilityOfFeatureInClass);
@@ -325,7 +325,7 @@ public:
             static_cast<double>(classFeatureNumCategories[c][jIdx]);
 
         logProb += log((countForCategoryInFeature + alpha) /
-                       (totalCountForFeature + numCategories * alpha));
+                       (totalCountForFeature + (numCategories * alpha)));
       }
 
       if (logProb > maxLogProb) {

@@ -77,7 +77,7 @@ std::vector<int> agglomerativeClustering(const Points &data, size_t k,
                                         clusters[mergeB].size());
         double sB = static_cast<double>(clusters[mergeB].size());
         double total = sA + sB;
-        newDist = (sA * dist[mergeA][i] + sB * dist[mergeB][i]) / total;
+        newDist = ((sA * dist[mergeA][i]) + (sB * dist[mergeB][i])) / total;
         break;
       }
       }

@@ -39,6 +39,45 @@ add_test(
   COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv cluster
 )
 set_tests_properties(smoke_cluster_mode PROPERTIES PASS_REGULAR_EXPRESSION "Clustering with k=")
+set_property(TEST smoke_cluster_mode APPEND PROPERTY PASS_REGULAR_EXPRESSION "agglomerative \\(complete\\)")
+set_property(TEST smoke_cluster_mode APPEND PROPERTY PASS_REGULAR_EXPRESSION "agglomerative \\(single\\)")
+
+add_test(
+  NAME smoke_pca_mode
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv pca
+)
+set_tests_properties(smoke_pca_mode PROPERTIES PASS_REGULAR_EXPRESSION "PCA \\(first principal component loadings\\)")
+
+add_test(
+  NAME smoke_lda_mode
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv lda
+)
+set_tests_properties(smoke_lda_mode PROPERTIES PASS_REGULAR_EXPRESSION "LDA projection matrix W")
+
+add_test(
+  NAME smoke_tsne_mode
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv tsne
+)
+set_tests_properties(smoke_tsne_mode PROPERTIES PASS_REGULAR_EXPRESSION "t-SNE embedding")
+
+add_test(
+  NAME smoke_reduce_mode
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv reduce
+)
+set_tests_properties(smoke_reduce_mode PROPERTIES PASS_REGULAR_EXPRESSION "Skipping LDA: target appears continuous.")
+
+add_test(
+  NAME smoke_umap_mode
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv umap
+)
+set_tests_properties(smoke_umap_mode PROPERTIES PASS_REGULAR_EXPRESSION "UMAP embedding")
+
+add_test(
+  NAME smoke_anomaly_mode
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv anomaly
+)
+set_tests_properties(smoke_anomaly_mode PROPERTIES PASS_REGULAR_EXPRESSION "one-class-svm")
+set_property(TEST smoke_anomaly_mode APPEND PROPERTY PASS_REGULAR_EXPRESSION "lof")
 
 add_test(
   NAME smoke_classifier_mode
@@ -73,6 +112,50 @@ add_test(
   COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv modern-mlp-cls
 )
 set_tests_properties(smoke_modern_mlp_threshold PROPERTIES PASS_REGULAR_EXPRESSION "Decision threshold")
+
+add_test(
+  NAME smoke_lightgbm_regressor
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv lightgbm-regressor
+)
+set_tests_properties(smoke_lightgbm_regressor PROPERTIES PASS_REGULAR_EXPRESSION "lightgbm-regressor")
+
+add_test(
+  NAME smoke_catboost_classifier
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv catboost-classifier
+)
+set_tests_properties(smoke_catboost_classifier PROPERTIES PASS_REGULAR_EXPRESSION "catboost-classifier")
+
+add_test(
+  NAME smoke_arima_regressor
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv arima
+)
+set_tests_properties(smoke_arima_regressor PROPERTIES PASS_REGULAR_EXPRESSION "arima")
+
+add_test(
+  NAME smoke_save_arima
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv save arima ${CMAKE_BINARY_DIR}/tmp_arima.model
+)
+set_tests_properties(smoke_save_arima PROPERTIES PASS_REGULAR_EXPRESSION "Model saved")
+
+add_test(
+  NAME smoke_load_arima
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_data.csv load ${CMAKE_BINARY_DIR}/tmp_arima.model
+)
+set_tests_properties(smoke_load_arima PROPERTIES PASS_REGULAR_EXPRESSION "Loading model type: ARIMARegressor")
+set_property(TEST smoke_load_arima PROPERTY DEPENDS smoke_save_arima)
+
+add_test(
+  NAME smoke_save_cnn_classifier
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv save cnn-classifier ${CMAKE_BINARY_DIR}/tmp_cnn_classifier.model
+)
+set_tests_properties(smoke_save_cnn_classifier PROPERTIES PASS_REGULAR_EXPRESSION "Model saved")
+
+add_test(
+  NAME smoke_load_cnn_classifier
+  COMMAND $<TARGET_FILE:ml-algos> ${CMAKE_SOURCE_DIR}/data/sample_binary_data.csv load ${CMAKE_BINARY_DIR}/tmp_cnn_classifier.model
+)
+set_tests_properties(smoke_load_cnn_classifier PROPERTIES PASS_REGULAR_EXPRESSION "Loading model type: CNNClassifier")
+set_property(TEST smoke_load_cnn_classifier PROPERTY DEPENDS smoke_save_cnn_classifier)
 
 add_test(
   NAME smoke_gridsearch_regression_skip_logistic

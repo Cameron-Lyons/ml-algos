@@ -66,8 +66,8 @@ private:
           continue;
         }
 
-        double gain = (0.5 * (GL * GL / (HL + lambda) +
-                              GR * GR / (HR + lambda) - G * G / (H + lambda))) -
+        double gain = (0.5 * ((GL * GL / (HL + lambda)) +
+                              (GR * GR / (HR + lambda)) - (G * G / (H + lambda)))) -
                       gamma;
 
         if (gain > bestGain) {

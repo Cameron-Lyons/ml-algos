@@ -3,6 +3,7 @@
 # - bugprone-suspicious-include: project intentionally includes .cpp for single-TU build
 # - bugprone-easily-swappable-parameters: would require broad API signature changes
 # - bugprone-exception-escape: main and constructors intentionally propagate errors
+# - bugprone-random-generator-seed: fixed seeds are used intentionally for reproducible examples/tests
 Checks: >
   -*,
   clang-diagnostic-*,
@@ -10,6 +11,7 @@ Checks: >
   -bugprone-suspicious-include,
   -bugprone-easily-swappable-parameters,
   -bugprone-exception-escape,
+  -bugprone-random-generator-seed,
   modernize-use-emplace,
   modernize-use-integer-sign-comparison,
   readability-braces-around-statements,

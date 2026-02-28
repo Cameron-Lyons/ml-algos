@@ -138,7 +138,7 @@ double matthews_correlation_coefficient(const Vector &y_true,
     return -1.0;
   }
 
-  return (true_positives * true_negatives - false_positives * false_negatives) /
+  return ((true_positives * true_negatives) - (false_positives * false_negatives)) /
          sqrt((true_positives + false_positives) *
               (true_positives + false_negatives) *
               (true_negatives + false_positives) *

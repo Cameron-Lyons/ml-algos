@@ -139,7 +139,7 @@ public:
     }
 
     for (int epoch = 0; epoch < maxEpochs_; epoch++) {
-      double epochLearningRate = learningRate_ / (1.0 + 0.01 * epoch);
+      double epochLearningRate = learningRate_ / (1.0 + (0.01 * epoch));
       std::ranges::shuffle(indices, rng);
 
       for (size_t batchStart = 0; batchStart < n; batchStart += batchSize_) {
@@ -202,7 +202,7 @@ public:
             for (size_t j = 0; j < weights_[l][0].size(); j++) {
               double update =
                   epochLearningRate *
-                  (wGrad[l][i][j] * batchScale + l2Lambda_ * weights_[l][i][j]);
+                  ((wGrad[l][i][j] * batchScale) + (l2Lambda_ * weights_[l][i][j]));
               update = modern_mlp_detail::clipFinite(update, 1.0);
               weights_[l][i][j] = modern_mlp_detail::clipFinite(
                   weights_[l][i][j] - update, 1e6);
