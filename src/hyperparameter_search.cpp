@@ -53,10 +53,9 @@ gridSearchCV(Factory factory, const std::vector<ParamSet> &paramGrid,
   std::vector<PreparedFold> preparedFolds;
   preparedFolds.reserve(folds.size());
   for (const auto &[trainIdx, testIdx] : folds) {
-    preparedFolds.push_back({subsetByIndices(X, trainIdx),
-                             subsetByIndices(X, testIdx),
-                             subsetByIndices(y, trainIdx),
-                             subsetByIndices(y, testIdx)});
+    preparedFolds.push_back(
+        {subsetByIndices(X, trainIdx), subsetByIndices(X, testIdx),
+         subsetByIndices(y, trainIdx), subsetByIndices(y, testIdx)});
   }
 
   GridSearchResult result;

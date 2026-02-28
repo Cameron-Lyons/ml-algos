@@ -1,6 +1,6 @@
 #include "matrix.h"
-#include <random>
 #include <numeric>
+#include <random>
 #include <ranges>
 #include <vector>
 
