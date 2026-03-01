@@ -1,7 +1,7 @@
 #include "../matrix.h"
 #include <cmath>
 #include <functional>
-#include <map>
+#include <flat_map>
 #include <numbers>
 #include <ranges>
 #include <vector>
@@ -21,8 +21,8 @@ public:
 
 class GaussianNaiveBayes {
 private:
-  std::map<int, Gaussian> featureStatsClass0;
-  std::map<int, Gaussian> featureStatsClass1;
+  std::flat_map<int, Gaussian> featureStatsClass0;
+  std::flat_map<int, Gaussian> featureStatsClass1;
   double prior0, prior1;
 
   Gaussian computeStats(const std::vector<double> &features) {
@@ -101,9 +101,9 @@ public:
 
 class MultinomialNaiveBayes : public NaiveBayes {
 private:
-  std::map<int, std::map<int, double>> featureCounts;
-  std::map<int, double> classCounts;
-  std::map<int, double> classTotalFeatureCounts;
+  std::flat_map<int, std::flat_map<int, double>> featureCounts;
+  std::flat_map<int, double> classCounts;
+  std::flat_map<int, double> classTotalFeatureCounts;
   double totalSamples;
   double alpha;
 
@@ -156,9 +156,9 @@ public:
 
 class ComplementNaiveBayes : public NaiveBayes {
 private:
-  std::map<int, std::map<int, double>> featureCounts;
-  std::map<int, double> classCounts;
-  std::map<int, double> classTotalFeatureCounts;
+  std::flat_map<int, std::flat_map<int, double>> featureCounts;
+  std::flat_map<int, double> classCounts;
+  std::flat_map<int, double> classTotalFeatureCounts;
   double totalSamples;
   double alpha;
 
@@ -182,7 +182,7 @@ public:
     int bestClass = -1;
 
     double globalTotal = 0.0;
-    std::map<int, double> globalFeatureCounts;
+    std::flat_map<int, double> globalFeatureCounts;
     for (const auto &[cls, fmap] : featureCounts) {
       for (const auto &[feat, count] : fmap) {
         globalFeatureCounts[feat] += count;
@@ -225,8 +225,8 @@ public:
 
 class BernoulliNaiveBayes : public NaiveBayes {
 private:
-  std::map<int, std::map<int, double>> featureCounts;
-  std::map<int, double> classCounts;
+  std::flat_map<int, std::flat_map<int, double>> featureCounts;
+  std::flat_map<int, double> classCounts;
   double totalSamples;
   double alpha;
 
@@ -278,10 +278,11 @@ public:
 
 class CategoricalNaiveBayes : public NaiveBayes {
 private:
-  std::map<int, std::map<int, std::map<int, double>>> featureCategoryCounts;
-  std::map<int, std::map<int, double>> classFeatureTotalCounts;
-  std::map<int, std::map<int, size_t>> classFeatureNumCategories;
-  std::map<int, double> classCounts;
+  std::flat_map<int, std::flat_map<int, std::flat_map<int, double>>>
+      featureCategoryCounts;
+  std::flat_map<int, std::flat_map<int, double>> classFeatureTotalCounts;
+  std::flat_map<int, std::flat_map<int, size_t>> classFeatureNumCategories;
+  std::flat_map<int, double> classCounts;
   double totalSamples;
   double alpha;
 
@@ -301,8 +302,8 @@ public:
       }
     }
 
-    for (auto &[cls, fmap] : featureCategoryCounts) {
-      for (auto &[feat, cmap] : fmap) {
+    for (const auto &[cls, fmap] : featureCategoryCounts) {
+      for (const auto &[feat, cmap] : fmap) {
         classFeatureNumCategories[cls][feat] = cmap.size();
       }
     }

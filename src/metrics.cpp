@@ -5,9 +5,10 @@
 #include <map>
 #include <print>
 #include <ranges>
+#include <span>
 #include <set>
 
-double mse(const Vector &y_true, const Vector &y_pred) {
+double mse(std::span<const double> y_true, std::span<const double> y_pred) {
   if (y_true.size() != y_pred.size()) {
     std::println(stderr,
                  "Sizes of true values and predicted values do not match!");
@@ -15,16 +16,19 @@ double mse(const Vector &y_true, const Vector &y_pred) {
   }
 
   double sum_errors = 0.0;
-
-  for (size_t i = 0; i < y_true.size(); i++) {
-    double error = y_true[i] - y_pred[i];
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    double error = yt - yp;
     sum_errors += error * error;
   }
 
   return sum_errors / static_cast<double>(y_true.size());
 }
 
-double r2(const Vector &y_true, const Vector &y_pred) {
+double mse(const Vector &y_true, const Vector &y_pred) {
+  return mse(std::span<const double>(y_true), std::span<const double>(y_pred));
+}
+
+double r2(std::span<const double> y_true, std::span<const double> y_pred) {
   if (y_true.size() != y_pred.size()) {
     std::println(stderr,
                  "Sizes of true values and predicted values do not match!");
@@ -35,10 +39,10 @@ double r2(const Vector &y_true, const Vector &y_pred) {
   double sum_true = 0.0, sum_true_sq = 0.0;
   double ss_res = 0.0;
 
-  for (size_t i = 0; i < y_true.size(); i++) {
-    sum_true += y_true[i];
-    sum_true_sq += y_true[i] * y_true[i];
-    double residual = y_true[i] - y_pred[i];
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    sum_true += yt;
+    sum_true_sq += yt * yt;
+    double residual = yt - yp;
     ss_res += residual * residual;
   }
 
@@ -52,7 +56,11 @@ double r2(const Vector &y_true, const Vector &y_pred) {
   return 1.0 - (ss_res / ss_total);
 }
 
-double accuracy(const Vector &y_true, const Vector &y_pred) {
+double r2(const Vector &y_true, const Vector &y_pred) {
+  return r2(std::span<const double>(y_true), std::span<const double>(y_pred));
+}
+
+double accuracy(std::span<const double> y_true, std::span<const double> y_pred) {
   if (y_true.size() != y_pred.size()) {
     std::println(stderr,
                  "Sizes of true values and predicted values do not match!");
@@ -60,8 +68,8 @@ double accuracy(const Vector &y_true, const Vector &y_pred) {
   }
 
   int num_correct = 0;
-  for (size_t i = 0; i < y_true.size(); i++) {
-    if (y_true[i] == y_pred[i]) {
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    if (yt == yp) {
       num_correct++;
     }
   }
@@ -69,7 +77,11 @@ double accuracy(const Vector &y_true, const Vector &y_pred) {
   return static_cast<double>(num_correct) / static_cast<double>(y_true.size());
 }
 
-double f1_score(const Vector &y_true, const Vector &y_pred) {
+double accuracy(const Vector &y_true, const Vector &y_pred) {
+  return accuracy(std::span<const double>(y_true), std::span<const double>(y_pred));
+}
+
+double f1_score(std::span<const double> y_true, std::span<const double> y_pred) {
   if (y_true.size() != y_pred.size()) {
     std::println(stderr,
                  "Sizes of true values and predicted values do not match!");
@@ -80,12 +92,12 @@ double f1_score(const Vector &y_true, const Vector &y_pred) {
   int false_positives = 0;
   int false_negatives = 0;
 
-  for (size_t i = 0; i < y_true.size(); i++) {
-    if (y_true[i] == 1.0 && y_pred[i] == 1.0) {
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    if (yt == 1.0 && yp == 1.0) {
       true_positives++;
-    } else if (y_true[i] == 0.0 && y_pred[i] == 1.0) {
+    } else if (yt == 0.0 && yp == 1.0) {
       false_positives++;
-    } else if (y_true[i] == 1.0 && y_pred[i] == 0.0) {
+    } else if (yt == 1.0 && yp == 0.0) {
       false_negatives++;
     }
   }
@@ -104,8 +116,12 @@ double f1_score(const Vector &y_true, const Vector &y_pred) {
   return 2.0 * precision * recall / (precision + recall);
 }
 
-double matthews_correlation_coefficient(const Vector &y_true,
-                                        const Vector &y_pred) {
+double f1_score(const Vector &y_true, const Vector &y_pred) {
+  return f1_score(std::span<const double>(y_true), std::span<const double>(y_pred));
+}
+
+double matthews_correlation_coefficient(std::span<const double> y_true,
+                                        std::span<const double> y_pred) {
   if (y_true.size() != y_pred.size()) {
     std::println(stderr,
                  "Sizes of true values and predicted values do not match!");
@@ -117,14 +133,14 @@ double matthews_correlation_coefficient(const Vector &y_true,
   int false_negatives = 0;
   int true_negatives = 0;
 
-  for (size_t i = 0; i < y_true.size(); i++) {
-    if (y_true[i] == 1.0 && y_pred[i] == 1.0) {
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    if (yt == 1.0 && yp == 1.0) {
       true_positives++;
-    } else if (y_true[i] == 0.0 && y_pred[i] == 1.0) {
+    } else if (yt == 0.0 && yp == 1.0) {
       false_positives++;
-    } else if (y_true[i] == 1.0 && y_pred[i] == 0.0) {
+    } else if (yt == 1.0 && yp == 0.0) {
       false_negatives++;
-    } else if (y_true[i] == 0.0 && y_pred[i] == 0.0) {
+    } else if (yt == 0.0 && yp == 0.0) {
       true_negatives++;
     }
   }
@@ -145,11 +161,17 @@ double matthews_correlation_coefficient(const Vector &y_true,
               (true_negatives + false_negatives));
 }
 
-double precision(const Vector &y_true, const Vector &y_pred) {
+double matthews_correlation_coefficient(const Vector &y_true,
+                                        const Vector &y_pred) {
+  return matthews_correlation_coefficient(std::span<const double>(y_true),
+                                          std::span<const double>(y_pred));
+}
+
+double precision(std::span<const double> y_true, std::span<const double> y_pred) {
   int tp = 0, fp = 0;
-  for (size_t i = 0; i < y_true.size(); i++) {
-    if (y_pred[i] == 1.0) {
-      if (y_true[i] == 1.0) {
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    if (yp == 1.0) {
+      if (yt == 1.0) {
         tp++;
       } else {
         fp++;
@@ -162,11 +184,16 @@ double precision(const Vector &y_true, const Vector &y_pred) {
   return static_cast<double>(tp) / (tp + fp);
 }
 
-double recall(const Vector &y_true, const Vector &y_pred) {
+double precision(const Vector &y_true, const Vector &y_pred) {
+  return precision(std::span<const double>(y_true),
+                   std::span<const double>(y_pred));
+}
+
+double recall(std::span<const double> y_true, std::span<const double> y_pred) {
   int tp = 0, fn = 0;
-  for (size_t i = 0; i < y_true.size(); i++) {
-    if (y_true[i] == 1.0) {
-      if (y_pred[i] == 1.0) {
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    if (yt == 1.0) {
+      if (yp == 1.0) {
         tp++;
       } else {
         fn++;
@@ -179,12 +206,20 @@ double recall(const Vector &y_true, const Vector &y_pred) {
   return static_cast<double>(tp) / (tp + fn);
 }
 
-double mae(const Vector &y_true, const Vector &y_pred) {
+double recall(const Vector &y_true, const Vector &y_pred) {
+  return recall(std::span<const double>(y_true), std::span<const double>(y_pred));
+}
+
+double mae(std::span<const double> y_true, std::span<const double> y_pred) {
   double sum = 0.0;
-  for (size_t i = 0; i < y_true.size(); i++) {
-    sum += std::abs(y_true[i] - y_pred[i]);
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    sum += std::abs(yt - yp);
   }
   return sum / static_cast<double>(y_true.size());
+}
+
+double mae(const Vector &y_true, const Vector &y_pred) {
+  return mae(std::span<const double>(y_true), std::span<const double>(y_pred));
 }
 
 double silhouetteScore(const Points &data, const std::vector<int> &labels) {
@@ -251,13 +286,19 @@ double computeAUC(const std::vector<int> &trueLabels,
     return -1.0;
   }
 
-  std::vector<std::pair<double, int>> pairs;
-  for (size_t i = 0; i < trueLabels.size(); ++i) {
-    pairs.emplace_back(predictedScores[i], trueLabels[i]);
+  struct ScoredLabel {
+    double score;
+    int label;
+  };
+
+  std::vector<ScoredLabel> pairs;
+  pairs.reserve(trueLabels.size());
+  for (auto [label, score] : std::views::zip(trueLabels, predictedScores)) {
+    pairs.push_back({.score = score, .label = label});
   }
 
-  std::ranges::sort(
-      pairs, [](const auto &a, const auto &b) { return a.first > b.first; });
+  std::ranges::sort(pairs,
+                    [](const auto &a, const auto &b) { return a.score > b.score; });
 
   double auc = 0.0;
   double fprPrev = 0.0;
@@ -272,8 +313,8 @@ double computeAUC(const std::vector<int> &trueLabels,
 
   size_t tp = 0;
   size_t fp = 0;
-  for (const auto &entry : pairs) {
-    int label = entry.second;
+  for (const auto &[score, label] : pairs) {
+    (void)score;
     if (label == 1) {
       tp++;
     } else {

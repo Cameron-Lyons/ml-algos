@@ -6,6 +6,11 @@
 #include <utility>
 #include <vector>
 
+struct FoldIndices {
+  std::vector<size_t> trainIndices;
+  std::vector<size_t> testIndices;
+};
+
 template <typename C>
 concept Subsettable = requires(C c, const C &cc, size_t i) {
   c.push_back(cc[i]);
@@ -22,13 +27,12 @@ C subsetByIndices(const C &data, const std::vector<size_t> &indices) {
   return subset;
 }
 
-std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>>
-kFoldSplit(size_t n_samples, int k, unsigned int seed) {
+std::vector<FoldIndices> kFoldSplit(size_t n_samples, int k, unsigned int seed) {
   auto indices =
       std::views::iota(size_t{0}, n_samples) | std::ranges::to<std::vector>();
   std::ranges::shuffle(indices, std::default_random_engine(seed));
 
-  std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>> folds;
+  std::vector<FoldIndices> folds;
   folds.reserve(static_cast<size_t>(k));
   size_t fold_size = n_samples / static_cast<size_t>(k);
 
@@ -47,14 +51,15 @@ kFoldSplit(size_t n_samples, int k, unsigned int seed) {
                          indices.begin() + static_cast<ptrdiff_t>(end),
                          indices.end());
 
-    folds.emplace_back(train_indices, test_indices);
+    folds.push_back(
+        {.trainIndices = std::move(train_indices), .testIndices = std::move(test_indices)});
   }
 
   return folds;
 }
 
-std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>>
-stratifiedKFoldSplit(const Vector &y, int k, unsigned int seed) {
+std::vector<FoldIndices> stratifiedKFoldSplit(const Vector &y, int k,
+                                              unsigned int seed) {
   std::map<int, std::vector<size_t>> class_indices;
   for (size_t i = 0; i < y.size(); i++) {
     class_indices[static_cast<int>(y[i])].push_back(i);
@@ -79,7 +84,7 @@ stratifiedKFoldSplit(const Vector &y, int k, unsigned int seed) {
     }
   }
 
-  std::vector<std::pair<std::vector<size_t>, std::vector<size_t>>> folds;
+  std::vector<FoldIndices> folds;
   folds.reserve(static_cast<size_t>(k));
   for (int i = 0; i < k; i++) {
     std::vector<size_t> test_indices = fold_indices[static_cast<size_t>(i)];
@@ -92,7 +97,8 @@ stratifiedKFoldSplit(const Vector &y, int k, unsigned int seed) {
                              fold_indices[static_cast<size_t>(j)].end());
       }
     }
-    folds.emplace_back(train_indices, test_indices);
+    folds.push_back(
+        {.trainIndices = std::move(train_indices), .testIndices = std::move(test_indices)});
   }
 
   return folds;

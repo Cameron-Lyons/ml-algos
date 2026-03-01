@@ -91,9 +91,8 @@ public:
   }
 };
 
-std::pair<Matrix, Matrix> scaleData(const Matrix &X_train,
-                                    const Matrix &X_test) {
+ScaledData scaleData(const Matrix &X_train, const Matrix &X_test) {
   StandardScaler scaler;
   scaler.fit(X_train);
-  return {scaler.transform(X_train), scaler.transform(X_test)};
+  return {.train = scaler.transform(X_train), .test = scaler.transform(X_test)};
 }

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <concepts>
 #include <expected>
@@ -52,8 +53,13 @@ using AlgoFunc = std::function<AlgorithmResult(const Matrix &, const Matrix &,
 
 bool isFiniteScore(double score) { return std::isfinite(score); }
 
-bool isWhitespaceOnly(std::string_view text) {
-  return text.find_first_not_of(" \t\r\n") == std::string_view::npos;
+std::string_view trimWhitespace(std::string_view text) {
+  auto start = text.find_first_not_of(" \t\r\n");
+  if (start == std::string_view::npos) {
+    return {};
+  }
+  auto end = text.find_last_not_of(" \t\r\n");
+  return text.substr(start, (end - start) + 1);
 }
 
 bool isHelpFlag(std::string_view value) {
@@ -244,21 +250,23 @@ std::expected<void, std::string> readCSV(const std::string &filename,
     size_t col_number = 0;
     while (getline(ss, item, ',')) {
       col_number++;
-      try {
-        size_t parsed_chars = 0;
-        double value = std::stod(item, &parsed_chars);
-        if (parsed_chars != item.size() &&
-            !isWhitespaceOnly(std::string_view(item).substr(parsed_chars))) {
-          return std::unexpected(
-              std::format("Invalid numeric value at row {}, column {}: '{}'.",
-                          line_number, col_number, item));
-        }
-        currentRow.push_back(value);
-      } catch (const std::exception &) {
+      std::string_view trimmed = trimWhitespace(item);
+      if (trimmed.empty()) {
         return std::unexpected(
             std::format("Invalid numeric value at row {}, column {}: '{}'.",
                         line_number, col_number, item));
       }
+
+      double value = 0.0;
+      auto *begin = trimmed.data();
+      auto *end = trimmed.data() + trimmed.size();
+      auto [ptr, ec] = std::from_chars(begin, end, value);
+      if (ec != std::errc{} || ptr != end) {
+        return std::unexpected(
+            std::format("Invalid numeric value at row {}, column {}: '{}'.",
+                        line_number, col_number, item));
+      }
+      currentRow.push_back(value);
     }
     if (currentRow.empty()) {
       return std::unexpected(std::format("Empty row at line {}.", line_number));
@@ -278,21 +286,24 @@ void splitData(const Matrix &data, Matrix &X, Vector &y) {
   }
 }
 
-bool trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
-                    Matrix &X_test, Vector &y_train, Vector &y_test,
-                    double test_size) {
+struct LabeledSample {
+  Vector features;
+  double target;
+};
+
+Status trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
+                      Matrix &X_test, Vector &y_train, Vector &y_test,
+                      double test_size) {
   if (X.size() != y.size()) {
-    std::println(stderr, "Features and target sizes don't match!");
-    return false;
+    return std::unexpected("Features and target sizes don't match.");
   }
   if (X.size() < 2) {
-    std::println(stderr, "Need at least 2 rows for train/test split.");
-    return false;
+    return std::unexpected("Need at least 2 rows for train/test split.");
   }
-  std::vector<std::pair<Vector, double>> dataset;
+  std::vector<LabeledSample> dataset;
   dataset.reserve(X.size());
-  for (size_t i = 0; i < X.size(); i++) {
-    dataset.emplace_back(X[i], y[i]);
+  for (size_t i = 0; i < X.size(); ++i) {
+    dataset.push_back({X[i], y[i]});
   }
 
   const unsigned seed = 0;
@@ -301,28 +312,28 @@ bool trainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
   size_t test_count =
       static_cast<size_t>(test_size * static_cast<double>(dataset.size()));
   test_count = std::clamp(test_count, size_t{1}, dataset.size() - 1);
-  for (size_t i = 0; i < dataset.size(); i++) {
+  for (size_t i = 0; i < dataset.size(); ++i) {
+    const auto &[features, target] = dataset[i];
     if (i < test_count) {
-      X_test.push_back(dataset[i].first);
-      y_test.push_back(dataset[i].second);
+      X_test.push_back(features);
+      y_test.push_back(target);
     } else {
-      X_train.push_back(dataset[i].first);
-      y_train.push_back(dataset[i].second);
+      X_train.push_back(features);
+      y_train.push_back(target);
     }
   }
-  return true;
+  return {};
 }
 
-bool stratifiedTrainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
-                              Matrix &X_test, Vector &y_train, Vector &y_test,
-                              double test_size) {
+Status stratifiedTrainTestSplit(const Matrix &X, const Vector &y,
+                                Matrix &X_train, Matrix &X_test,
+                                Vector &y_train, Vector &y_test,
+                                double test_size) {
   if (X.size() != y.size()) {
-    std::println(stderr, "Features and target sizes don't match!");
-    return false;
+    return std::unexpected("Features and target sizes don't match.");
   }
   if (X.size() < 2) {
-    std::println(stderr, "Need at least 2 rows for train/test split.");
-    return false;
+    return std::unexpected("Need at least 2 rows for train/test split.");
   }
 
   std::map<int, std::vector<size_t>> class_indices;
@@ -356,8 +367,7 @@ bool stratifiedTrainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
   }
 
   if (train_indices.empty() || test_indices.empty()) {
-    std::println(stderr, "Stratified split produced empty train or test set.");
-    return false;
+    return std::unexpected("Stratified split produced empty train or test set.");
   }
 
   std::ranges::shuffle(train_indices, rng);
@@ -367,7 +377,15 @@ bool stratifiedTrainTestSplit(const Matrix &X, const Vector &y, Matrix &X_train,
   y_train = subsetByIndices(y, train_indices);
   X_test = subsetByIndices(X, test_indices);
   y_test = subsetByIndices(y, test_indices);
-  return true;
+  return {};
+}
+
+bool statusOkOrPrint(const Status &status) {
+  if (status.has_value()) {
+    return true;
+  }
+  std::println(stderr, "{}", status.error());
+  return false;
 }
 
 bool isIntegerLike(double value, double tolerance = 1e-9) {
@@ -415,11 +433,10 @@ LabelEncoding encodeClassLabels(const Vector &y) {
   return encoding;
 }
 
-const std::pair<Matrix, Matrix> &scaleDataCached(const Matrix &X_train,
-                                                 const Matrix &X_test) {
+const ScaledData &scaleDataCached(const Matrix &X_train, const Matrix &X_test) {
   static const Matrix *lastTrainPtr = nullptr;
   static const Matrix *lastTestPtr = nullptr;
-  static std::pair<Matrix, Matrix> cached;
+  static ScaledData cached;
 
   if (lastTrainPtr != &X_train || lastTestPtr != &X_test) {
     cached = scaleData(X_train, X_test);
@@ -449,12 +466,12 @@ double binaryF1(std::span<const double> y_true,
   double tp = 0.0;
   double fp = 0.0;
   double fn = 0.0;
-  for (size_t i = 0; i < y_true.size(); i++) {
-    if (y_true[i] == 1.0 && y_pred[i] == 1.0) {
+  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
+    if (yt == 1.0 && yp == 1.0) {
       tp += 1.0;
-    } else if (y_true[i] == 0.0 && y_pred[i] == 1.0) {
+    } else if (yt == 0.0 && yp == 1.0) {
       fp += 1.0;
-    } else if (y_true[i] == 1.0 && y_pred[i] == 0.0) {
+    } else if (yt == 1.0 && yp == 0.0) {
       fn += 1.0;
     }
   }
@@ -817,8 +834,8 @@ bool runAnomalyMode(const Matrix &X_train, const Matrix &X_test) {
   }
 
   auto scaled = scaleData(X_train, X_test);
-  const Matrix &Xs_train = scaled.first;
-  const Matrix &Xs_test = scaled.second;
+  const Matrix &Xs_train = scaled.train;
+  const Matrix &Xs_test = scaled.test;
 
   {
     OneClassSVM model(0.5, 0.1);
@@ -916,8 +933,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressor("svr", SVR(n_features), Xs_tr, Xs_te, y_tr, y_te);
   };
 
@@ -925,8 +942,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                      const Vector &y_tr,
                                      const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressorWithTargetNormalization(
         "kernel-svm", KernelSVM(n_features, 0.01, 1.0), Xs_tr, Xs_te, y_tr,
         y_te);
@@ -936,8 +953,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                      const Vector &y_tr,
                                      const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressorWithTargetNormalization(
         "linear-svm",
         KernelSVM(n_features, 0.001, 1.0, 0.2, 400, KernelType::Linear), Xs_tr,
@@ -948,8 +965,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                    const Vector &y_tr,
                                    const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressorWithTargetNormalization(
         "poly-svm",
         KernelSVM(n_features, 0.001, 1.0, 0.2, 500, KernelType::Polynomial, 1,
@@ -961,8 +978,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressor("knn-regressor", KNNRegressor(5), Xs_tr, Xs_te,
                              y_tr, y_te);
   };
@@ -970,8 +987,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   algos["gp"] = [](const Matrix &X_tr, const Matrix &X_te, const Vector &y_tr,
                    const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
 
     double y_mean = 0.0;
     for (double yi : y_tr) {
@@ -1014,8 +1031,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                               const Vector &y_tr,
                               const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
 
     double y_min = *std::ranges::min_element(y_tr);
     double y_max = *std::ranges::max_element(y_tr);
@@ -1046,8 +1063,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                            const Vector &y_tr,
                            const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressor(
         "modern-mlp",
         ModernMLP({64, 32}, Activation::ReLU, 0.005, 300, 0.001, 16), Xs_tr,
@@ -1058,8 +1075,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                const Vector &y_tr,
                                const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressor("cnn-regressor", CNNRegressor(8, 3), Xs_tr, Xs_te,
                              y_tr, y_te);
   };
@@ -1068,8 +1085,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                const Vector &y_tr,
                                const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressor("rnn-regressor", RNNRegressor(12), Xs_tr, Xs_te,
                              y_tr, y_te);
   };
@@ -1078,8 +1095,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                 const Vector &y_tr,
                                 const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressor("lstm-regressor", LSTMRegressor(10), Xs_tr, Xs_te,
                              y_tr, y_te);
   };
@@ -1088,8 +1105,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
                                        const Vector &y_tr,
                                        const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateRegressor("transformer-regressor",
                              TransformerRegressor(16), Xs_tr, Xs_te, y_tr,
                              y_te);
@@ -1142,8 +1159,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                            const Vector &y_tr,
                            const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
-      const Matrix &Xs_tr = scaled.first;
-      const Matrix &Xs_te = scaled.second;
+      const Matrix &Xs_tr = scaled.train;
+      const Matrix &Xs_te = scaled.test;
       LogisticRegression model(0.01, 1000);
       model.fit(Xs_tr, y_tr);
 
@@ -1170,8 +1187,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                      const Matrix &X_tr, const Matrix &X_te, const Vector &y_tr,
                      const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateClassifier("svc", SVC(n_features, n_classes), Xs_tr, Xs_te,
                               y_tr, y_te);
   };
@@ -1180,8 +1197,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                                const Vector &y_tr,
                                const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateClassifier("knn-classifier", KNNClassifier(5), Xs_tr, Xs_te,
                               y_tr, y_te);
   };
@@ -1292,8 +1309,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                         const Vector &y_tr,
                         const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     return evaluateClassifier("softmax", SoftmaxRegression(0.01, 1000), Xs_tr,
                               Xs_te, y_tr, y_te);
   };
@@ -1317,8 +1334,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                                  const Vector &y_tr,
                                  const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
-      const Matrix &Xs_tr = scaled.first;
-      const Matrix &Xs_te = scaled.second;
+      const Matrix &Xs_tr = scaled.train;
+      const Matrix &Xs_te = scaled.test;
       ModernMLP model({64, 32}, Activation::ReLU, 0.01, 200);
       model.fit(Xs_tr, y_tr);
 
@@ -1358,8 +1375,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                                   const Vector &y_tr,
                                   const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
-      const Matrix &Xs_tr = scaled.first;
-      const Matrix &Xs_te = scaled.second;
+      const Matrix &Xs_tr = scaled.train;
+      const Matrix &Xs_te = scaled.test;
       return evaluateClassifier("cnn-classifier", CNNClassifier(8, 3), Xs_tr,
                                 Xs_te, y_tr, y_te);
     };
@@ -1368,8 +1385,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                                   const Vector &y_tr,
                                   const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
-      const Matrix &Xs_tr = scaled.first;
-      const Matrix &Xs_te = scaled.second;
+      const Matrix &Xs_tr = scaled.train;
+      const Matrix &Xs_te = scaled.test;
       return evaluateClassifier("rnn-classifier", RNNClassifier(12), Xs_tr,
                                 Xs_te, y_tr, y_te);
     };
@@ -1378,8 +1395,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                                    const Vector &y_tr,
                                    const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
-      const Matrix &Xs_tr = scaled.first;
-      const Matrix &Xs_te = scaled.second;
+      const Matrix &Xs_tr = scaled.train;
+      const Matrix &Xs_te = scaled.test;
       return evaluateClassifier("lstm-classifier", LSTMClassifier(10), Xs_tr,
                                 Xs_te, y_tr, y_te);
     };
@@ -1388,8 +1405,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
         [](const Matrix &X_tr, const Matrix &X_te, const Vector &y_tr,
            const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
-      const Matrix &Xs_tr = scaled.first;
-      const Matrix &Xs_te = scaled.second;
+      const Matrix &Xs_tr = scaled.train;
+      const Matrix &Xs_te = scaled.test;
       return evaluateClassifier("transformer-classifier",
                                 TransformerClassifier(16), Xs_tr, Xs_te, y_tr,
                                 y_te);
@@ -1400,8 +1417,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                                   const Vector &y_tr,
                                   const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     VotingClassifier voter;
     voter.addModel(makeBaseModel(LogisticRegression(0.01, 1000)));
     voter.addModel(makeBaseModel(DecisionTree(5)));
@@ -1414,8 +1431,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
                                     const Vector &y_tr,
                                     const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
-    const Matrix &Xs_tr = scaled.first;
-    const Matrix &Xs_te = scaled.second;
+    const Matrix &Xs_tr = scaled.train;
+    const Matrix &Xs_te = scaled.test;
     StackingClassifier stacker;
     stacker.addModel(makeBaseModel(LogisticRegression(0.01, 1000)));
     stacker.addModel(makeBaseModel(DecisionTree(5)));
@@ -1676,82 +1693,123 @@ void runGridSearch(const Matrix &X, const Vector &y_regression,
 void runSave(const std::string &algorithm, const std::string &filepath,
              const Matrix &X, const Vector &y_regression,
              const Vector &y_classification) {
-  if (algorithm == "linear") {
-    LinearRegression model;
-    model.fit(X, y_regression);
-    saveLinearModel(filepath, "LinearRegression", model);
-  } else if (algorithm == "ridge") {
-    RidgeRegression model(1.0);
-    model.fit(X, y_regression);
-    saveLinearModel(filepath, "RidgeRegression", model);
-  } else if (algorithm == "lasso") {
-    LassoRegression model(0.1);
-    model.fit(X, y_regression);
-    saveLinearModel(filepath, "LassoRegression", model);
-  } else if (algorithm == "elasticnet") {
-    ElasticNet model(0.1, 0.5);
-    model.fit(X, y_regression);
-    saveLinearModel(filepath, "ElasticNet", model);
-  } else if (algorithm == "logistic") {
-    LogisticRegression model(0.01, 1000);
-    model.fit(X, y_classification);
-    saveLogisticRegression(filepath, model);
-  } else if (algorithm == "tree") {
-    DecisionTree model(5);
-    model.fit(X, y_regression);
-    saveDecisionTree(filepath, model);
-  } else if (algorithm == "knn-regressor") {
-    KNNRegressor model(5);
-    model.fit(X, y_regression);
-    saveKNNModel(filepath, "KNNRegressor", model);
-  } else if (algorithm == "knn-classifier") {
-    KNNClassifier model(5);
-    model.fit(X, y_classification);
-    saveKNNModel(filepath, "KNNClassifier", model);
-  } else if (algorithm == "arima") {
-    ARIMARegressor model(3, 1, 1);
-    model.fit(X, y_regression);
-    saveARIMARegressor(filepath, model);
-  } else if (algorithm == "sarima") {
-    SARIMARegressor model(2, 1, 1, 1, 1, 1, 4);
-    model.fit(X, y_regression);
-    saveSARIMARegressor(filepath, model);
-  } else if (algorithm == "cnn-regressor") {
-    CNNRegressor model(8, 3);
-    model.fit(X, y_regression);
-    saveCNNRegressor(filepath, model);
-  } else if (algorithm == "rnn-regressor") {
-    RNNRegressor model(12);
-    model.fit(X, y_regression);
-    saveRNNRegressor(filepath, model);
-  } else if (algorithm == "lstm-regressor") {
-    LSTMRegressor model(10);
-    model.fit(X, y_regression);
-    saveLSTMRegressor(filepath, model);
-  } else if (algorithm == "transformer-regressor") {
-    TransformerRegressor model(16);
-    model.fit(X, y_regression);
-    saveTransformerRegressor(filepath, model);
-  } else if (algorithm == "cnn-classifier") {
-    CNNClassifier model(8, 3);
-    model.fit(X, y_classification);
-    saveCNNClassifier(filepath, model);
-  } else if (algorithm == "rnn-classifier") {
-    RNNClassifier model(12);
-    model.fit(X, y_classification);
-    saveRNNClassifier(filepath, model);
-  } else if (algorithm == "lstm-classifier") {
-    LSTMClassifier model(10);
-    model.fit(X, y_classification);
-    saveLSTMClassifier(filepath, model);
-  } else if (algorithm == "transformer-classifier") {
-    TransformerClassifier model(16);
-    model.fit(X, y_classification);
-    saveTransformerClassifier(filepath, model);
-  } else {
+  const std::map<std::string, std::function<void()>, std::less<>> saveHandlers = {
+      {"linear",
+       [&] {
+         LinearRegression model;
+         model.fit(X, y_regression);
+         saveLinearModel(filepath, "LinearRegression", model);
+       }},
+      {"ridge",
+       [&] {
+         RidgeRegression model(1.0);
+         model.fit(X, y_regression);
+         saveLinearModel(filepath, "RidgeRegression", model);
+       }},
+      {"lasso",
+       [&] {
+         LassoRegression model(0.1);
+         model.fit(X, y_regression);
+         saveLinearModel(filepath, "LassoRegression", model);
+       }},
+      {"elasticnet",
+       [&] {
+         ElasticNet model(0.1, 0.5);
+         model.fit(X, y_regression);
+         saveLinearModel(filepath, "ElasticNet", model);
+       }},
+      {"logistic",
+       [&] {
+         LogisticRegression model(0.01, 1000);
+         model.fit(X, y_classification);
+         saveLogisticRegression(filepath, model);
+       }},
+      {"tree",
+       [&] {
+         DecisionTree model(5);
+         model.fit(X, y_regression);
+         saveDecisionTree(filepath, model);
+       }},
+      {"knn-regressor",
+       [&] {
+         KNNRegressor model(5);
+         model.fit(X, y_regression);
+         saveKNNModel(filepath, "KNNRegressor", model);
+       }},
+      {"knn-classifier",
+       [&] {
+         KNNClassifier model(5);
+         model.fit(X, y_classification);
+         saveKNNModel(filepath, "KNNClassifier", model);
+       }},
+      {"arima",
+       [&] {
+         ARIMARegressor model(3, 1, 1);
+         model.fit(X, y_regression);
+         saveARIMARegressor(filepath, model);
+       }},
+      {"sarima",
+       [&] {
+         SARIMARegressor model(2, 1, 1, 1, 1, 1, 4);
+         model.fit(X, y_regression);
+         saveSARIMARegressor(filepath, model);
+       }},
+      {"cnn-regressor",
+       [&] {
+         CNNRegressor model(8, 3);
+         model.fit(X, y_regression);
+         saveCNNRegressor(filepath, model);
+       }},
+      {"rnn-regressor",
+       [&] {
+         RNNRegressor model(12);
+         model.fit(X, y_regression);
+         saveRNNRegressor(filepath, model);
+       }},
+      {"lstm-regressor",
+       [&] {
+         LSTMRegressor model(10);
+         model.fit(X, y_regression);
+         saveLSTMRegressor(filepath, model);
+       }},
+      {"transformer-regressor",
+       [&] {
+         TransformerRegressor model(16);
+         model.fit(X, y_regression);
+         saveTransformerRegressor(filepath, model);
+       }},
+      {"cnn-classifier",
+       [&] {
+         CNNClassifier model(8, 3);
+         model.fit(X, y_classification);
+         saveCNNClassifier(filepath, model);
+       }},
+      {"rnn-classifier",
+       [&] {
+         RNNClassifier model(12);
+         model.fit(X, y_classification);
+         saveRNNClassifier(filepath, model);
+       }},
+      {"lstm-classifier",
+       [&] {
+         LSTMClassifier model(10);
+         model.fit(X, y_classification);
+         saveLSTMClassifier(filepath, model);
+       }},
+      {"transformer-classifier",
+       [&] {
+         TransformerClassifier model(16);
+         model.fit(X, y_classification);
+         saveTransformerClassifier(filepath, model);
+       }},
+  };
+
+  auto saveIt = saveHandlers.find(algorithm);
+  if (saveIt == saveHandlers.end()) {
     std::println(stderr, "Unsupported algorithm for save: {}", algorithm);
     return;
   }
+  saveIt->second();
   std::println("Model saved to {}", filepath);
 }
 
@@ -1762,123 +1820,127 @@ void runLoad(const std::string &filepath, const Matrix &X_test_regression,
   std::string modelType = detectModelType(filepath);
   std::println("Loading model type: {}", modelType);
 
-  if (modelType == "LinearRegression" || modelType == "RidgeRegression" ||
-      modelType == "LassoRegression" || modelType == "ElasticNet") {
-    LinearRegression model;
-    model.setCoefficients(loadLinearModelCoefs(filepath));
-    Vector preds = model.predict(X_test_regression);
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "LogisticRegression") {
-    auto model = loadLogisticRegression(filepath);
+  auto collectPointPredictions = [](auto &model, const Matrix &X_eval) {
     Vector preds;
-    for (const auto &x : X_test_classification) {
+    preds.reserve(X_eval.size());
+    for (const auto &x : X_eval) {
       preds.push_back(model.predict(x));
     }
+    return preds;
+  };
+
+  auto reportRegression = [&](auto &model) {
+    Vector preds = collectPointPredictions(model, X_test_regression);
+    std::println("R²: {:.4f}", r2(y_test_regression, preds));
+  };
+  auto reportClassification = [&](auto &model) {
+    Vector preds = collectPointPredictions(model, X_test_classification);
     std::println("Accuracy: {:.4f}", accuracy(y_test_classification, preds));
-  } else if (modelType == "DecisionTree") {
-    auto model = loadDecisionTree(filepath);
-    Vector preds;
-    for (const auto &x : X_test_regression) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "KNNRegressor") {
-    auto model = loadKNNModel<KNNRegressor>(filepath);
-    Vector preds;
-    for (const auto &x : X_test_regression) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "KNNClassifier") {
-    auto model = loadKNNModel<KNNClassifier>(filepath);
-    Vector preds;
-    for (const auto &x : X_test_classification) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("Accuracy: {:.4f}", accuracy(y_test_classification, preds));
-  } else if (modelType == "ARIMARegressor") {
-    auto model = loadARIMARegressor(filepath);
-    Vector preds;
-    preds.reserve(X_test_regression.size());
-    for (const auto &x : X_test_regression) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "SARIMARegressor") {
-    auto model = loadSARIMARegressor(filepath);
-    Vector preds;
-    preds.reserve(X_test_regression.size());
-    for (const auto &x : X_test_regression) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "CNNRegressor") {
-    auto model = loadCNNRegressor(filepath);
-    Vector preds;
-    preds.reserve(X_test_regression.size());
-    for (const auto &x : X_test_regression) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "RNNRegressor") {
-    auto model = loadRNNRegressor(filepath);
-    Vector preds;
-    preds.reserve(X_test_regression.size());
-    for (const auto &x : X_test_regression) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "LSTMRegressor") {
-    auto model = loadLSTMRegressor(filepath);
-    Vector preds;
-    preds.reserve(X_test_regression.size());
-    for (const auto &x : X_test_regression) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "TransformerRegressor") {
-    auto model = loadTransformerRegressor(filepath);
-    Vector preds;
-    preds.reserve(X_test_regression.size());
-    for (const auto &x : X_test_regression) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("R²: {:.4f}", r2(y_test_regression, preds));
-  } else if (modelType == "CNNClassifier") {
-    auto model = loadCNNClassifier(filepath);
-    Vector preds;
-    preds.reserve(X_test_classification.size());
-    for (const auto &x : X_test_classification) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("Accuracy: {:.4f}", accuracy(y_test_classification, preds));
-  } else if (modelType == "RNNClassifier") {
-    auto model = loadRNNClassifier(filepath);
-    Vector preds;
-    preds.reserve(X_test_classification.size());
-    for (const auto &x : X_test_classification) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("Accuracy: {:.4f}", accuracy(y_test_classification, preds));
-  } else if (modelType == "LSTMClassifier") {
-    auto model = loadLSTMClassifier(filepath);
-    Vector preds;
-    preds.reserve(X_test_classification.size());
-    for (const auto &x : X_test_classification) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("Accuracy: {:.4f}", accuracy(y_test_classification, preds));
-  } else if (modelType == "TransformerClassifier") {
-    auto model = loadTransformerClassifier(filepath);
-    Vector preds;
-    preds.reserve(X_test_classification.size());
-    for (const auto &x : X_test_classification) {
-      preds.push_back(model.predict(x));
-    }
-    std::println("Accuracy: {:.4f}", accuracy(y_test_classification, preds));
-  } else {
+  };
+
+  const std::map<std::string, std::function<void()>, std::less<>> loadHandlers = {
+      {"LinearRegression",
+       [&] {
+         LinearRegression model;
+         model.setCoefficients(loadLinearModelCoefs(filepath));
+         std::println("R²: {:.4f}", r2(y_test_regression, model.predict(X_test_regression)));
+       }},
+      {"RidgeRegression",
+       [&] {
+         LinearRegression model;
+         model.setCoefficients(loadLinearModelCoefs(filepath));
+         std::println("R²: {:.4f}", r2(y_test_regression, model.predict(X_test_regression)));
+       }},
+      {"LassoRegression",
+       [&] {
+         LinearRegression model;
+         model.setCoefficients(loadLinearModelCoefs(filepath));
+         std::println("R²: {:.4f}", r2(y_test_regression, model.predict(X_test_regression)));
+       }},
+      {"ElasticNet",
+       [&] {
+         LinearRegression model;
+         model.setCoefficients(loadLinearModelCoefs(filepath));
+         std::println("R²: {:.4f}", r2(y_test_regression, model.predict(X_test_regression)));
+       }},
+      {"LogisticRegression",
+       [&] {
+         auto model = loadLogisticRegression(filepath);
+         reportClassification(model);
+       }},
+      {"DecisionTree",
+       [&] {
+         auto model = loadDecisionTree(filepath);
+         reportRegression(model);
+       }},
+      {"KNNRegressor",
+       [&] {
+         auto model = loadKNNModel<KNNRegressor>(filepath);
+         reportRegression(model);
+       }},
+      {"KNNClassifier",
+       [&] {
+         auto model = loadKNNModel<KNNClassifier>(filepath);
+         reportClassification(model);
+       }},
+      {"ARIMARegressor",
+       [&] {
+         auto model = loadARIMARegressor(filepath);
+         reportRegression(model);
+       }},
+      {"SARIMARegressor",
+       [&] {
+         auto model = loadSARIMARegressor(filepath);
+         reportRegression(model);
+       }},
+      {"CNNRegressor",
+       [&] {
+         auto model = loadCNNRegressor(filepath);
+         reportRegression(model);
+       }},
+      {"RNNRegressor",
+       [&] {
+         auto model = loadRNNRegressor(filepath);
+         reportRegression(model);
+       }},
+      {"LSTMRegressor",
+       [&] {
+         auto model = loadLSTMRegressor(filepath);
+         reportRegression(model);
+       }},
+      {"TransformerRegressor",
+       [&] {
+         auto model = loadTransformerRegressor(filepath);
+         reportRegression(model);
+       }},
+      {"CNNClassifier",
+       [&] {
+         auto model = loadCNNClassifier(filepath);
+         reportClassification(model);
+       }},
+      {"RNNClassifier",
+       [&] {
+         auto model = loadRNNClassifier(filepath);
+         reportClassification(model);
+       }},
+      {"LSTMClassifier",
+       [&] {
+         auto model = loadLSTMClassifier(filepath);
+         reportClassification(model);
+       }},
+      {"TransformerClassifier",
+       [&] {
+         auto model = loadTransformerClassifier(filepath);
+         reportClassification(model);
+       }},
+  };
+
+  auto loadIt = loadHandlers.find(modelType);
+  if (loadIt == loadHandlers.end()) {
     std::println(stderr, "Unknown model type: {}", modelType);
+    return;
   }
+  loadIt->second();
 }
 
 void printHelp(const char *program_name,
@@ -1983,7 +2045,8 @@ int main(int argc, char *argv[]) {
   if (argc == 2) {
     Matrix X_train, X_test;
     Vector y_train, y_test;
-    if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2)) {
+    if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+        !statusOkOrPrint(split)) {
       return 1;
     }
 
@@ -1994,8 +2057,10 @@ int main(int argc, char *argv[]) {
     if (run_classification) {
       Matrix X_train_cls, X_test_cls;
       Vector y_train_cls, y_test_cls;
-      if (!stratifiedTrainTestSplit(X, y_classification, X_train_cls,
-                                    X_test_cls, y_train_cls, y_test_cls, 0.2)) {
+      if (auto split = stratifiedTrainTestSplit(X, y_classification, X_train_cls,
+                                                X_test_cls, y_train_cls,
+                                                y_test_cls, 0.2);
+          !statusOkOrPrint(split)) {
         return 1;
       }
       for (const auto &[name, func] : classification_algos) {
@@ -2099,7 +2164,8 @@ int main(int argc, char *argv[]) {
     } else if (mode == "anomaly") {
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2)) {
+      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+          !statusOkOrPrint(split)) {
         return 1;
       }
       if (!runAnomalyMode(X_train, X_test)) {
@@ -2140,7 +2206,8 @@ int main(int argc, char *argv[]) {
       }
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2)) {
+      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+          !statusOkOrPrint(split)) {
         return 1;
       }
       Matrix X_test_cls = X_test;
@@ -2148,9 +2215,10 @@ int main(int argc, char *argv[]) {
       if (run_classification) {
         Matrix X_train_cls;
         Vector y_train_cls;
-        if (!stratifiedTrainTestSplit(X, y_classification, X_train_cls,
-                                      X_test_cls, y_train_cls, y_test_cls,
-                                      0.2)) {
+        if (auto split =
+                stratifiedTrainTestSplit(X, y_classification, X_train_cls,
+                                         X_test_cls, y_train_cls, y_test_cls, 0.2);
+            !statusOkOrPrint(split)) {
           return 1;
         }
       }
@@ -2158,7 +2226,8 @@ int main(int argc, char *argv[]) {
     } else if (mode == "importance") {
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2)) {
+      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+          !statusOkOrPrint(split)) {
         return 1;
       }
 
@@ -2178,7 +2247,8 @@ int main(int argc, char *argv[]) {
     } else {
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      if (!trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2)) {
+      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+          !statusOkOrPrint(split)) {
         return 1;
       }
 
@@ -2200,9 +2270,10 @@ int main(int argc, char *argv[]) {
         }
         Matrix X_train_cls, X_test_cls;
         Vector y_train_cls, y_test_cls;
-        if (!stratifiedTrainTestSplit(X, y_classification, X_train_cls,
-                                      X_test_cls, y_train_cls, y_test_cls,
-                                      0.2)) {
+        if (auto split = stratifiedTrainTestSplit(X, y_classification, X_train_cls,
+                                                  X_test_cls, y_train_cls,
+                                                  y_test_cls, 0.2);
+            !statusOkOrPrint(split)) {
           return 1;
         }
         auto result = classification_algos[mode](X_train_cls, X_test_cls,

@@ -1,17 +1,24 @@
 #include "matrix.h"
-#include <map>
+#include <flat_map>
 #include <print>
 #include <string>
 #include <vector>
 
+using ParamValues = std::flat_map<std::string, double>;
+using ParamGrid = std::flat_map<std::string, std::vector<double>>;
+
 struct ParamSet {
-  std::map<std::string, double> params;
+  ParamValues params;
 };
 
 struct GridSearchResult {
   ParamSet bestParams;
   double bestScore;
-  std::vector<std::pair<ParamSet, double>> allResults;
+  struct ParamScore {
+    ParamSet params;
+    double score;
+  };
+  std::vector<ParamScore> allResults;
 };
 
 struct PreparedFold {
@@ -22,7 +29,7 @@ struct PreparedFold {
 };
 
 std::vector<ParamSet>
-buildParamGrid(const std::map<std::string, std::vector<double>> &grid) {
+buildParamGrid(const ParamGrid &grid) {
   std::vector<ParamSet> result;
   result.emplace_back();
 
@@ -83,7 +90,7 @@ gridSearchCV(Factory factory, const std::vector<ParamSet> &paramGrid,
     }
 
     double avgScore = totalScore / k;
-    result.allResults.emplace_back(ps, avgScore);
+    result.allResults.push_back({.params = ps, .score = avgScore});
 
     bool isBetter = higherIsBetter ? (avgScore > result.bestScore)
                                    : (avgScore < result.bestScore);
@@ -100,9 +107,9 @@ void printGridSearchResult(const GridSearchResult &result,
                            const std::string &name) {
   std::println("Grid Search: {}", name);
   std::println("{}", std::string(50, '-'));
-  for (const auto &[ps, score] : result.allResults) {
+  for (const auto &[params, score] : result.allResults) {
     std::string paramStr;
-    for (const auto &[k, v] : ps.params) {
+    for (const auto &[k, v] : params.params) {
       if (!paramStr.empty()) {
         paramStr += ", ";
       }

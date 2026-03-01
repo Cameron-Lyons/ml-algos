@@ -1,45 +1,108 @@
 #include "matrix.h"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <mdspan>
 #include <vector>
 
-Matrix multiply(const Matrix &A, const Matrix &B) {
-  size_t rowsA = A.size();
-  size_t colsA = A[0].size();
-  [[maybe_unused]] size_t rowsB = B.size();
-  size_t colsB = B[0].size();
-  assert(colsA == rowsB);
+namespace {
+using MatrixExtents = std::dextents<size_t, 2>;
+using ConstMatrixView = std::mdspan<const double, MatrixExtents>;
+using MatrixView = std::mdspan<double, MatrixExtents>;
 
-  Matrix C(rowsA, Vector(colsB, 0.0));
+void assertRectangular(const Matrix &matrix) {
+  if (matrix.empty()) {
+    return;
+  }
+  const size_t expectedCols = matrix.front().size();
+  for (const auto &row : matrix) {
+    assert(row.size() == expectedCols);
+  }
+}
 
-  for (size_t i = 0; i < rowsA; i++) {
-    for (size_t k = 0; k < colsA; k++) {
-      double a_ik = A[i][k];
-      for (size_t j = 0; j < colsB; j++) {
-        C[i][j] += a_ik * B[k][j];
+struct DenseMatrixBuffer {
+  size_t rows = 0;
+  size_t cols = 0;
+  std::vector<double> data;
+
+  DenseMatrixBuffer(size_t rowCount, size_t colCount)
+      : rows(rowCount), cols(colCount), data(rows * cols, 0.0) {}
+
+  explicit DenseMatrixBuffer(const Matrix &matrix)
+      : rows(matrix.size()), cols(matrix.empty() ? 0 : matrix.front().size()),
+        data(rows * cols, 0.0) {
+    assertRectangular(matrix);
+    for (size_t i = 0; i < rows; ++i) {
+      for (size_t j = 0; j < cols; ++j) {
+        data[(i * cols) + j] = matrix[i][j];
       }
     }
   }
 
-  return C;
-}
+  [[nodiscard]] ConstMatrixView view() const {
+    return ConstMatrixView(data.data(), rows, cols);
+  }
 
-Matrix transpose(const Matrix &A) {
-  size_t rows = A.size();
-  size_t cols = A[0].size();
+  [[nodiscard]] MatrixView view() { return MatrixView(data.data(), rows, cols); }
 
-  Matrix B(cols, Vector(rows));
+  [[nodiscard]] Matrix toNested() const {
+    Matrix matrix(rows, Vector(cols, 0.0));
+    for (size_t i = 0; i < rows; ++i) {
+      for (size_t j = 0; j < cols; ++j) {
+        matrix[i][j] = data[(i * cols) + j];
+      }
+    }
+    return matrix;
+  }
+};
+} // namespace
 
-  for (size_t i = 0; i < rows; i++) {
-    for (size_t j = 0; j < cols; j++) {
-      B[j][i] = A[i][j];
+Matrix multiply(const Matrix &A, const Matrix &B) {
+  assert(!A.empty() && !B.empty());
+  assertRectangular(A);
+  assertRectangular(B);
+
+  const DenseMatrixBuffer aDense(A);
+  const DenseMatrixBuffer bDense(B);
+  assert(aDense.cols == bDense.rows);
+
+  DenseMatrixBuffer cDense(aDense.rows, bDense.cols);
+  auto a = aDense.view();
+  auto b = bDense.view();
+  auto c = cDense.view();
+
+  for (size_t i = 0; i < aDense.rows; ++i) {
+    for (size_t k = 0; k < aDense.cols; ++k) {
+      const double a_ik = a[i, k];
+      for (size_t j = 0; j < bDense.cols; ++j) {
+        c[i, j] += a_ik * b[k, j];
+      }
     }
   }
 
-  return B;
+  return cDense.toNested();
+}
+
+Matrix transpose(const Matrix &A) {
+  assert(!A.empty());
+  assertRectangular(A);
+
+  const DenseMatrixBuffer aDense(A);
+  DenseMatrixBuffer bDense(aDense.cols, aDense.rows);
+  auto a = aDense.view();
+  auto b = bDense.view();
+
+  for (size_t i = 0; i < aDense.rows; ++i) {
+    for (size_t j = 0; j < aDense.cols; ++j) {
+      b[j, i] = a[i, j];
+    }
+  }
+
+  return bDense.toNested();
 }
 
 Matrix inverse(const Matrix &A) {
+  assertRectangular(A);
   assert(A.size() == 2 && A[0].size() == 2);
 
   double det = (A[0][0] * A[1][1]) - (A[0][1] * A[1][0]);
@@ -56,55 +119,70 @@ Matrix inverse(const Matrix &A) {
 }
 
 Matrix add(const Matrix &A, const Matrix &B) {
-  assert(A.size() == B.size() && A[0].size() == B[0].size());
+  assert(!A.empty() && !B.empty());
+  assertRectangular(A);
+  assertRectangular(B);
 
-  size_t rows = A.size();
-  size_t cols = A[0].size();
-  Matrix C(rows, Vector(cols, 0.0));
+  const DenseMatrixBuffer aDense(A);
+  const DenseMatrixBuffer bDense(B);
+  assert(aDense.rows == bDense.rows && aDense.cols == bDense.cols);
 
-  for (size_t i = 0; i < rows; i++) {
-    for (size_t j = 0; j < cols; j++) {
-      C[i][j] = A[i][j] + B[i][j];
+  DenseMatrixBuffer cDense(aDense.rows, aDense.cols);
+  auto a = aDense.view();
+  auto b = bDense.view();
+  auto c = cDense.view();
+
+  for (size_t i = 0; i < aDense.rows; ++i) {
+    for (size_t j = 0; j < aDense.cols; ++j) {
+      c[i, j] = a[i, j] + b[i, j];
     }
   }
 
-  return C;
+  return cDense.toNested();
 }
 
 Matrix subtractMean(const Matrix &data) {
-  size_t rows = data.size();
-  size_t cols = data[0].size();
+  assert(!data.empty());
+  assertRectangular(data);
 
-  Vector mean(cols, 0.0);
-  for (size_t j = 0; j < cols; j++) {
-    for (size_t i = 0; i < rows; i++) {
-      mean[j] += data[i][j];
+  DenseMatrixBuffer dense(data);
+  auto values = dense.view();
+
+  Vector mean(dense.cols, 0.0);
+  for (size_t j = 0; j < dense.cols; ++j) {
+    for (size_t i = 0; i < dense.rows; ++i) {
+      mean[j] += values[i, j];
     }
   }
   for (double &m : mean) {
-    m /= static_cast<double>(rows);
+    m /= static_cast<double>(dense.rows);
   }
 
-  Matrix centeredData = data;
-  for (size_t i = 0; i < rows; i++) {
-    for (size_t j = 0; j < cols; j++) {
-      centeredData[i][j] -= mean[j];
+  for (size_t i = 0; i < dense.rows; ++i) {
+    for (size_t j = 0; j < dense.cols; ++j) {
+      values[i, j] -= mean[j];
     }
   }
 
-  return centeredData;
+  return dense.toNested();
 }
 
 Vector meanMatrix(const Matrix &X) {
-  Vector meanVector(X[0].size(), 0.0);
-  for (const auto &row : X) {
-    for (size_t j = 0; j < row.size(); ++j) {
-      meanVector[j] += row[j];
+  assert(!X.empty());
+  assertRectangular(X);
+
+  const DenseMatrixBuffer dense(X);
+  auto values = dense.view();
+
+  Vector meanVector(dense.cols, 0.0);
+  for (size_t i = 0; i < dense.rows; ++i) {
+    for (size_t j = 0; j < dense.cols; ++j) {
+      meanVector[j] += values[i, j];
     }
   }
 
   for (double &value : meanVector) {
-    value /= static_cast<double>(X.size());
+    value /= static_cast<double>(dense.rows);
   }
 
   return meanVector;
@@ -124,51 +202,58 @@ double euclideanDistance(const Point &a, const Point &b) {
 }
 
 Matrix invert_matrix(const Matrix &matrix) {
-  size_t n = matrix.size();
-  assert(n > 0 && matrix[0].size() == n);
+  assertRectangular(matrix);
+  const size_t n = matrix.size();
+  assert(n > 0 && matrix.front().size() == n);
 
-  Matrix inv(n, Vector(n, 0.0));
-  Matrix augmentedMatrix(n, Vector(2 * n, 0.0));
+  const DenseMatrixBuffer sourceDense(matrix);
+  auto source = sourceDense.view();
 
-  for (size_t i = 0; i < n; i++) {
-    for (size_t j = 0; j < n; j++) {
-      augmentedMatrix[i][j] = matrix[i][j];
+  DenseMatrixBuffer invDense(n, n);
+  DenseMatrixBuffer augmentedDense(n, 2 * n);
+  auto inv = invDense.view();
+  auto augmented = augmentedDense.view();
+
+  for (size_t i = 0; i < n; ++i) {
+    for (size_t j = 0; j < n; ++j) {
+      augmented[i, j] = source[i, j];
       if (i == j) {
-        augmentedMatrix[i][j + n] = 1.0;
+        augmented[i, j + n] = 1.0;
       }
     }
   }
 
-  for (size_t i = 0; i < n; i++) {
+  for (size_t i = 0; i < n; ++i) {
     size_t pivot = i;
-    for (size_t j = i + 1; j < n; j++) {
-      if (std::abs(augmentedMatrix[j][i]) >
-          std::abs(augmentedMatrix[pivot][i])) {
+    for (size_t j = i + 1; j < n; ++j) {
+      if (std::abs(augmented[j, i]) > std::abs(augmented[pivot, i])) {
         pivot = j;
       }
     }
     if (pivot != i) {
-      std::swap(augmentedMatrix[i], augmentedMatrix[pivot]);
+      for (size_t col = 0; col < (2 * n); ++col) {
+        std::swap(augmented[i, col], augmented[pivot, col]);
+      }
     }
 
-    assert(augmentedMatrix[i][i] != 0);
+    assert((augmented[i, i] != 0.0));
 
-    for (size_t j = 0; j < n; j++) {
+    for (size_t j = 0; j < n; ++j) {
       if (i != j) {
-        double ratio = augmentedMatrix[j][i] / augmentedMatrix[i][i];
-        for (size_t k = 0; k < 2 * n; k++) {
-          augmentedMatrix[j][k] -= ratio * augmentedMatrix[i][k];
+        const double ratio = augmented[j, i] / augmented[i, i];
+        for (size_t k = 0; k < (2 * n); ++k) {
+          augmented[j, k] -= ratio * augmented[i, k];
         }
       }
     }
   }
 
-  for (size_t i = 0; i < n; i++) {
-    double divisor = augmentedMatrix[i][i];
-    for (size_t j = n; j < 2 * n; j++) {
-      inv[i][j - n] = augmentedMatrix[i][j] / divisor;
+  for (size_t i = 0; i < n; ++i) {
+    const double divisor = augmented[i, i];
+    for (size_t j = n; j < (2 * n); ++j) {
+      inv[i, j - n] = augmented[i, j] / divisor;
     }
   }
 
-  return inv;
+  return invDense.toNested();
 }
