@@ -61,7 +61,7 @@ Points tSNE(const Points &X, size_t no_dims, int max_iterations,
   Matrix p = computeSymmetricHighDimAffinities(X, sigma);
   Points Y(n, Point(no_dims, 0.0));
 
-  std::mt19937 gen(42);
+  std::mt19937 gen(kDefaultSeed);
   std::normal_distribution<double> dist(0, 1e-4);
   for (size_t i = 0; i < n; i++) {
     for (size_t d = 0; d < no_dims; d++) {

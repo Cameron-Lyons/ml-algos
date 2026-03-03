@@ -8,7 +8,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(ml-algos src/main.cpp)
+add_executable(ml-algos
+  src/main.cpp
+  src/matrix.cpp
+  src/metrics.cpp
+  src/preprocessing.cpp
+)
 target_compile_options(ml-algos PRIVATE
   -Wall -Wextra -Wpedantic -Wsign-conversion -Wconversion -Werror
 )

@@ -1,243 +1,554 @@
 #include "matrix.h"
+#include <exception>
+#include <expected>
+#include <format>
 #include <fstream>
-#include <print>
+#include <memory>
 #include <string>
+#include <string_view>
 
-static void writeVector(std::ofstream &out, const Vector &values) {
+namespace {
+
+Status checkOutputOpen(const std::ofstream &out, std::string_view path) {
+  if (!out.is_open()) {
+    return std::unexpected(
+        std::format("Unable to open model file for writing: {}", path));
+  }
+  return {};
+}
+
+Status checkInputOpen(const std::ifstream &in, std::string_view path) {
+  if (!in.is_open()) {
+    return std::unexpected(
+        std::format("Unable to open model file for reading: {}", path));
+  }
+  return {};
+}
+
+Status checkWriteState(const std::ofstream &out, std::string_view path) {
+  if (!out) {
+    return std::unexpected(
+        std::format("Failed while writing model file: {}", path));
+  }
+  return {};
+}
+
+Status readHeader(std::ifstream &in, std::string &modelType,
+                  std::string &version, std::string_view path) {
+  if (!std::getline(in, modelType) || !std::getline(in, version)) {
+    return std::unexpected(
+        std::format("Invalid model header in file: {}", path));
+  }
+  return {};
+}
+
+template <typename T>
+Status readScalar(std::ifstream &in, T &value, std::string_view field,
+                  std::string_view path) {
+  if (!(in >> value)) {
+    return std::unexpected(
+        std::format("Failed to read {} from model file: {}", field, path));
+  }
+  return {};
+}
+
+Status writeVector(std::ofstream &out, const Vector &values,
+                   std::string_view path) {
   out << values.size() << "\n";
   for (double v : values) {
     out << v << "\n";
   }
+  return checkWriteState(out, path);
 }
 
-static Vector readVector(std::ifstream &in) {
+std::expected<Vector, std::string> readVector(std::ifstream &in,
+                                              std::string_view path) {
   size_t n = 0;
-  in >> n;
+  if (auto status = readScalar(in, n, "vector length", path); !status) {
+    return std::unexpected(status.error());
+  }
+
   Vector values(n, 0.0);
   for (size_t i = 0; i < n; i++) {
-    in >> values[i];
+    if (auto status = readScalar(in, values[i], "vector value", path);
+        !status) {
+      return std::unexpected(status.error());
+    }
   }
+
   return values;
 }
 
-template <typename M>
-void saveLinearModel(const std::string &path, const std::string &modelType,
-                     const M &model) {
-  std::ofstream out(path);
+Status writeHeader(std::ofstream &out, std::string_view modelType,
+                   std::string_view path) {
   out << modelType << "\n";
   out << "v1\n";
+  return checkWriteState(out, path);
+}
+
+Status serializeTreeNode(std::ofstream &out, const TreeNode *node,
+                         std::string_view path) {
+  if (!node) {
+    out << "null\n";
+    return checkWriteState(out, path);
+  }
+
+  bool isLeaf = (!node->left && !node->right);
+  out << (isLeaf ? "leaf" : "split") << "\n";
+  if (isLeaf) {
+    out << node->output << "\n";
+    return checkWriteState(out, path);
+  }
+
+  out << node->splitFeature << "\n";
+  out << node->splitValue << "\n";
+  out << node->output << "\n";
+  if (auto status = serializeTreeNode(out, node->left.get(), path); !status) {
+    return status;
+  }
+  if (auto status = serializeTreeNode(out, node->right.get(), path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
+}
+
+std::expected<std::unique_ptr<TreeNode>, std::string>
+deserializeTreeNode(std::ifstream &in, std::string_view path) {
+  std::string tag;
+  if (!std::getline(in, tag)) {
+    return std::unexpected(
+        std::format("Failed to read tree node tag from {}", path));
+  }
+  if (tag == "null") {
+    return nullptr;
+  }
+
+  auto node = std::make_unique<TreeNode>();
+  try {
+    if (tag == "leaf") {
+      std::string val;
+      if (!std::getline(in, val)) {
+        return std::unexpected(
+            std::format("Failed to read leaf value from {}", path));
+      }
+      node->output = std::stod(val);
+      return node;
+    }
+
+    std::string line;
+    if (!std::getline(in, line)) {
+      return std::unexpected(
+          std::format("Failed to read split feature from {}", path));
+    }
+    node->splitFeature = std::stoull(line);
+
+    if (!std::getline(in, line)) {
+      return std::unexpected(
+          std::format("Failed to read split value from {}", path));
+    }
+    node->splitValue = std::stod(line);
+
+    if (!std::getline(in, line)) {
+      return std::unexpected(
+          std::format("Failed to read split output from {}", path));
+    }
+    node->output = std::stod(line);
+
+    auto left = deserializeTreeNode(in, path);
+    if (!left) {
+      return std::unexpected(left.error());
+    }
+    node->left = std::move(left.value());
+
+    auto right = deserializeTreeNode(in, path);
+    if (!right) {
+      return std::unexpected(right.error());
+    }
+    node->right = std::move(right.value());
+  } catch (const std::exception &ex) {
+    return std::unexpected(
+        std::format("Tree parse error in {}: {}", path, ex.what()));
+  }
+
+  return node;
+}
+
+template <typename M>
+Status writeDeepReadoutState(std::ofstream &out, const M &model,
+                             std::string_view path) {
+  if (auto status = writeVector(out, model.getHeadWeights(), path); !status) {
+    return status;
+  }
+  out << model.getHeadBias() << "\n";
+  if (auto status = writeVector(out, model.getAdapterScale(), path); !status) {
+    return status;
+  }
+  if (auto status = writeVector(out, model.getAdapterShift(), path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
+}
+
+template <typename M>
+Status readDeepReadoutState(std::ifstream &in, M &model,
+                            std::string_view path) {
+  auto weights = readVector(in, path);
+  if (!weights) {
+    return std::unexpected(weights.error());
+  }
+
+  double bias = 0.0;
+  if (auto status = readScalar(in, bias, "head bias", path); !status) {
+    return status;
+  }
+
+  auto adapterScale = readVector(in, path);
+  if (!adapterScale) {
+    return std::unexpected(adapterScale.error());
+  }
+
+  auto adapterShift = readVector(in, path);
+  if (!adapterShift) {
+    return std::unexpected(adapterShift.error());
+  }
+
+  model.setReadoutState(*weights, bias, *adapterScale, *adapterShift);
+  return {};
+}
+
+template <typename T>
+std::expected<T, std::string> unexpectedFromStatus(const Status &status) {
+  return std::unexpected(status.error());
+}
+
+} // namespace
+
+template <typename M>
+Status saveLinearModel(std::string_view path, std::string_view modelType,
+                       const M &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, modelType, path); !status) {
+    return status;
+  }
+
   const auto &coefs = model.getRawCoefficients();
   out << coefs.size() << "\n";
   for (double c : coefs) {
     out << c << "\n";
   }
+
+  return checkWriteState(out, path);
 }
 
-Vector loadLinearModelCoefs(const std::string &path) {
-  std::ifstream in(path);
-  std::string modelType, version;
-  std::getline(in, modelType);
-  std::getline(in, version);
-  size_t n;
-  in >> n;
-  Vector coefs(n);
+std::expected<Vector, std::string> loadLinearModelCoefs(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<Vector>(status);
+  }
+
+  std::string modelType;
+  std::string version;
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<Vector>(status);
+  }
+
+  size_t n = 0;
+  if (auto status = readScalar(in, n, "coefficient count", path); !status) {
+    return unexpectedFromStatus<Vector>(status);
+  }
+
+  Vector coefs(n, 0.0);
   for (size_t i = 0; i < n; ++i) {
-    in >> coefs[i];
+    if (auto status = readScalar(in, coefs[i], "coefficient", path); !status) {
+      return unexpectedFromStatus<Vector>(status);
+    }
   }
   return coefs;
 }
 
-void saveLogisticRegression(const std::string &path,
-                            const LogisticRegression &model) {
-  std::ofstream out(path);
-  out << "LogisticRegression\n";
-  out << "v1\n";
+Status saveLogisticRegression(std::string_view path,
+                              const LogisticRegression &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "LogisticRegression", path); !status) {
+    return status;
+  }
+
   Vector w = model.getWeights();
   out << w.size() << "\n";
   for (double v : w) {
     out << v << "\n";
   }
   out << model.getBias() << "\n";
+  return checkWriteState(out, path);
 }
 
-LogisticRegression loadLogisticRegression(const std::string &path) {
-  std::ifstream in(path);
-  std::string modelType, version;
-  std::getline(in, modelType);
-  std::getline(in, version);
-  size_t n;
-  in >> n;
-  Vector w(n);
-  for (size_t i = 0; i < n; ++i) {
-    in >> w[i];
+std::expected<LogisticRegression, std::string>
+loadLogisticRegression(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<LogisticRegression>(status);
   }
-  double bias;
-  in >> bias;
+
+  std::string modelType;
+  std::string version;
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<LogisticRegression>(status);
+  }
+
+  size_t n = 0;
+  if (auto status = readScalar(in, n, "weight count", path); !status) {
+    return unexpectedFromStatus<LogisticRegression>(status);
+  }
+
+  Vector w(n, 0.0);
+  for (size_t i = 0; i < n; ++i) {
+    if (auto status = readScalar(in, w[i], "weight", path); !status) {
+      return unexpectedFromStatus<LogisticRegression>(status);
+    }
+  }
+
+  double bias = 0.0;
+  if (auto status = readScalar(in, bias, "bias", path); !status) {
+    return unexpectedFromStatus<LogisticRegression>(status);
+  }
+
   LogisticRegression model;
   model.setWeights(w);
   model.setBias(bias);
   return model;
 }
 
-static void serializeTreeNode(std::ofstream &out, const TreeNode *node) {
-  if (!node) {
-    out << "null\n";
-    return;
+Status saveDecisionTree(std::string_view path, const DecisionTree &tree) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
   }
-  bool isLeaf = (!node->left && !node->right);
-  out << (isLeaf ? "leaf" : "split") << "\n";
-  if (isLeaf) {
-    out << node->output << "\n";
-  } else {
-    out << node->splitFeature << "\n";
-    out << node->splitValue << "\n";
-    out << node->output << "\n";
-    serializeTreeNode(out, node->left.get());
-    serializeTreeNode(out, node->right.get());
+  if (auto status = writeHeader(out, "DecisionTree", path); !status) {
+    return status;
   }
-}
-
-static std::unique_ptr<TreeNode> deserializeTreeNode(std::ifstream &in) {
-  std::string tag;
-  std::getline(in, tag);
-  if (tag == "null") {
-    return nullptr;
-  }
-
-  auto node = std::make_unique<TreeNode>();
-  if (tag == "leaf") {
-    std::string val;
-    std::getline(in, val);
-    node->output = std::stod(val);
-  } else {
-    std::string line;
-    std::getline(in, line);
-    node->splitFeature = std::stoull(line);
-    std::getline(in, line);
-    node->splitValue = std::stod(line);
-    std::getline(in, line);
-    node->output = std::stod(line);
-    node->left = deserializeTreeNode(in);
-    node->right = deserializeTreeNode(in);
-  }
-  return node;
-}
-
-void saveDecisionTree(const std::string &path, const DecisionTree &tree) {
-  std::ofstream out(path);
-  out << "DecisionTree\n";
-  out << "v1\n";
   out << tree.getMaxDepth() << "\n";
-  serializeTreeNode(out, tree.getRoot());
+  if (auto status = serializeTreeNode(out, tree.getRoot(), path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-DecisionTree loadDecisionTree(const std::string &path) {
-  std::ifstream in(path);
-  std::string modelType, version, line;
-  std::getline(in, modelType);
-  std::getline(in, version);
-  std::getline(in, line);
-  int maxDepth = std::stoi(line);
+std::expected<DecisionTree, std::string>
+loadDecisionTree(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<DecisionTree>(status);
+  }
+
+  std::string modelType;
+  std::string version;
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<DecisionTree>(status);
+  }
+
+  std::string line;
+  if (!std::getline(in, line)) {
+    return std::unexpected(
+        std::format("Failed to read max depth from model file: {}", path));
+  }
+
+  int maxDepth = 0;
+  try {
+    maxDepth = std::stoi(line);
+  } catch (const std::exception &ex) {
+    return std::unexpected(
+        std::format("Invalid max depth in {}: {}", path, ex.what()));
+  }
+
   DecisionTree tree(maxDepth);
-  tree.setRoot(deserializeTreeNode(in));
+  auto root = deserializeTreeNode(in, path);
+  if (!root) {
+    return std::unexpected(root.error());
+  }
+  tree.setRoot(std::move(root.value()));
   return tree;
 }
 
 template <typename M>
-void saveKNNModel(const std::string &path, const std::string &modelType,
-                  const M &model) {
-  std::ofstream out(path);
-  out << modelType << "\n";
-  out << "v1\n";
+Status saveKNNModel(std::string_view path, std::string_view modelType,
+                    const M &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, modelType, path); !status) {
+    return status;
+  }
+
   out << model.getK() << "\n";
   const Matrix &X = model.getXTrain();
   const Vector &y = model.getYTrain();
   out << X.size() << "\n";
-  if (!X.empty()) {
-    out << X[0].size() << "\n";
-  } else {
-    out << "0\n";
-  }
-  for (size_t i = 0; i < X.size(); ++i) {
-    for (size_t j = 0; j < X[i].size(); ++j) {
+  out << (X.empty() ? size_t{0} : X.front().size()) << "\n";
+  for (const auto &row : X) {
+    for (size_t j = 0; j < row.size(); ++j) {
       if (j > 0) {
         out << " ";
       }
-      out << X[i][j];
+      out << row[j];
     }
     out << "\n";
   }
-  for (size_t i = 0; i < y.size(); ++i) {
-    out << y[i] << "\n";
+  for (double value : y) {
+    out << value << "\n";
   }
+  return checkWriteState(out, path);
 }
 
-template <typename M> M loadKNNModel(const std::string &path) {
-  std::ifstream in(path);
-  std::string modelType, version;
-  std::getline(in, modelType);
-  std::getline(in, version);
-  int k;
-  in >> k;
-  size_t nSamples, nFeatures;
-  in >> nSamples >> nFeatures;
-  Matrix X(nSamples, Vector(nFeatures));
+template <typename M>
+std::expected<M, std::string> loadKNNModel(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<M>(status);
+  }
+
+  std::string modelType;
+  std::string version;
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<M>(status);
+  }
+
+  int k = 0;
+  if (auto status = readScalar(in, k, "k", path); !status) {
+    return unexpectedFromStatus<M>(status);
+  }
+
+  size_t nSamples = 0;
+  size_t nFeatures = 0;
+  if (auto status = readScalar(in, nSamples, "sample count", path); !status) {
+    return unexpectedFromStatus<M>(status);
+  }
+  if (auto status = readScalar(in, nFeatures, "feature count", path); !status) {
+    return unexpectedFromStatus<M>(status);
+  }
+
+  Matrix X(nSamples, Vector(nFeatures, 0.0));
   for (size_t i = 0; i < nSamples; ++i) {
     for (size_t j = 0; j < nFeatures; ++j) {
-      in >> X[i][j];
+      if (auto status = readScalar(in, X[i][j], "feature value", path);
+          !status) {
+        return unexpectedFromStatus<M>(status);
+      }
     }
   }
-  Vector y(nSamples);
+
+  Vector y(nSamples, 0.0);
   for (size_t i = 0; i < nSamples; ++i) {
-    in >> y[i];
+    if (auto status = readScalar(in, y[i], "target value", path); !status) {
+      return unexpectedFromStatus<M>(status);
+    }
   }
+
   M model(k);
   model.setTrainingData(X, y);
   return model;
 }
 
-void saveARIMARegressor(const std::string &path, const ARIMARegressor &model) {
-  std::ofstream out(path);
-  out << "ARIMARegressor\n";
-  out << "v1\n";
+Status saveARIMARegressor(std::string_view path, const ARIMARegressor &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "ARIMARegressor", path); !status) {
+    return status;
+  }
+
   out << model.getP() << "\n";
   out << model.getD() << "\n";
   out << model.getQ() << "\n";
   out << model.getFallbackMean() << "\n";
-  writeVector(out, model.getCoefficients());
-  writeVector(out, model.getTransformedHistory());
-  writeVector(out, model.getResidualHistory());
-  writeVector(out, model.getRawHistory());
+  if (auto status = writeVector(out, model.getCoefficients(), path); !status) {
+    return status;
+  }
+  if (auto status = writeVector(out, model.getTransformedHistory(), path);
+      !status) {
+    return status;
+  }
+  if (auto status = writeVector(out, model.getResidualHistory(), path);
+      !status) {
+    return status;
+  }
+  if (auto status = writeVector(out, model.getRawHistory(), path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-ARIMARegressor loadARIMARegressor(const std::string &path) {
-  std::ifstream in(path);
+std::expected<ARIMARegressor, std::string>
+loadARIMARegressor(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<ARIMARegressor>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<ARIMARegressor>(status);
+  }
 
   int p = 1;
   int d = 0;
   int q = 0;
   double fallbackMean = 0.0;
-  in >> p >> d >> q;
-  in >> fallbackMean;
-  Vector coeffs = readVector(in);
-  Vector transformed = readVector(in);
-  Vector residuals = readVector(in);
-  Vector raw = readVector(in);
+  if (auto status = readScalar(in, p, "p", path); !status) {
+    return unexpectedFromStatus<ARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, d, "d", path); !status) {
+    return unexpectedFromStatus<ARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, q, "q", path); !status) {
+    return unexpectedFromStatus<ARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, fallbackMean, "fallback mean", path);
+      !status) {
+    return unexpectedFromStatus<ARIMARegressor>(status);
+  }
+
+  auto coeffs = readVector(in, path);
+  if (!coeffs) {
+    return std::unexpected(coeffs.error());
+  }
+  auto transformed = readVector(in, path);
+  if (!transformed) {
+    return std::unexpected(transformed.error());
+  }
+  auto residuals = readVector(in, path);
+  if (!residuals) {
+    return std::unexpected(residuals.error());
+  }
+  auto raw = readVector(in, path);
+  if (!raw) {
+    return std::unexpected(raw.error());
+  }
 
   ARIMARegressor model(p, d, q);
-  model.setState(p, d, q, coeffs, transformed, residuals, raw, fallbackMean);
+  model.setState(p, d, q, *coeffs, *transformed, *residuals, *raw,
+                 fallbackMean);
   return model;
 }
 
-void saveSARIMARegressor(const std::string &path,
-                         const SARIMARegressor &model) {
-  std::ofstream out(path);
-  out << "SARIMARegressor\n";
-  out << "v1\n";
+Status saveSARIMARegressor(std::string_view path,
+                           const SARIMARegressor &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "SARIMARegressor", path); !status) {
+    return status;
+  }
+
   out << model.getP() << "\n";
   out << model.getD() << "\n";
   out << model.getQ() << "\n";
@@ -246,18 +557,35 @@ void saveSARIMARegressor(const std::string &path,
   out << model.getSeasonalQ() << "\n";
   out << model.getSeasonalPeriod() << "\n";
   out << model.getFallbackMean() << "\n";
-  writeVector(out, model.getCoefficients());
-  writeVector(out, model.getTransformedHistory());
-  writeVector(out, model.getResidualHistory());
-  writeVector(out, model.getRawHistory());
+  if (auto status = writeVector(out, model.getCoefficients(), path); !status) {
+    return status;
+  }
+  if (auto status = writeVector(out, model.getTransformedHistory(), path);
+      !status) {
+    return status;
+  }
+  if (auto status = writeVector(out, model.getResidualHistory(), path);
+      !status) {
+    return status;
+  }
+  if (auto status = writeVector(out, model.getRawHistory(), path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-SARIMARegressor loadSARIMARegressor(const std::string &path) {
-  std::ifstream in(path);
+std::expected<SARIMARegressor, std::string>
+loadSARIMARegressor(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
 
   int p = 1;
   int d = 0;
@@ -268,215 +596,399 @@ SARIMARegressor loadSARIMARegressor(const std::string &path) {
   int seasonalPeriod = 1;
   double fallbackMean = 0.0;
 
-  in >> p >> d >> q;
-  in >> seasonalP >> seasonalD >> seasonalQ >> seasonalPeriod;
-  in >> fallbackMean;
-  Vector coeffs = readVector(in);
-  Vector transformed = readVector(in);
-  Vector residuals = readVector(in);
-  Vector raw = readVector(in);
+  if (auto status = readScalar(in, p, "p", path); !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, d, "d", path); !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, q, "q", path); !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, seasonalP, "seasonal p", path); !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, seasonalD, "seasonal d", path); !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, seasonalQ, "seasonal q", path); !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, seasonalPeriod, "seasonal period", path);
+      !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+  if (auto status = readScalar(in, fallbackMean, "fallback mean", path);
+      !status) {
+    return unexpectedFromStatus<SARIMARegressor>(status);
+  }
+
+  auto coeffs = readVector(in, path);
+  if (!coeffs) {
+    return std::unexpected(coeffs.error());
+  }
+  auto transformed = readVector(in, path);
+  if (!transformed) {
+    return std::unexpected(transformed.error());
+  }
+  auto residuals = readVector(in, path);
+  if (!residuals) {
+    return std::unexpected(residuals.error());
+  }
+  auto raw = readVector(in, path);
+  if (!raw) {
+    return std::unexpected(raw.error());
+  }
 
   SARIMARegressor model(p, d, q, seasonalP, seasonalD, seasonalQ,
                         seasonalPeriod);
   model.setState(p, d, q, seasonalP, seasonalD, seasonalQ, seasonalPeriod,
-                 coeffs, transformed, residuals, raw, fallbackMean);
+                 *coeffs, *transformed, *residuals, *raw, fallbackMean);
   return model;
 }
 
-template <typename M>
-void writeDeepReadoutState(std::ofstream &out, const M &model) {
-  writeVector(out, model.getHeadWeights());
-  out << model.getHeadBias() << "\n";
-  writeVector(out, model.getAdapterScale());
-  writeVector(out, model.getAdapterShift());
-}
-
-template <typename M> void readDeepReadoutState(std::ifstream &in, M &model) {
-  Vector weights = readVector(in);
-  double bias = 0.0;
-  in >> bias;
-  Vector adapterScale = readVector(in);
-  Vector adapterShift = readVector(in);
-  model.setReadoutState(weights, bias, adapterScale, adapterShift);
-}
-
-void saveCNNRegressor(const std::string &path, const CNNRegressor &model) {
-  std::ofstream out(path);
-  out << "CNNRegressor\n";
-  out << "v1\n";
+Status saveCNNRegressor(std::string_view path, const CNNRegressor &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "CNNRegressor", path); !status) {
+    return status;
+  }
   out << model.getFilters() << "\n";
   out << model.getKernelSize() << "\n";
-  writeDeepReadoutState(out, model);
+  if (auto status = writeDeepReadoutState(out, model, path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-CNNRegressor loadCNNRegressor(const std::string &path) {
-  std::ifstream in(path);
+std::expected<CNNRegressor, std::string>
+loadCNNRegressor(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<CNNRegressor>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<CNNRegressor>(status);
+  }
+
   int filters = 8;
   int kernel = 3;
-  in >> filters >> kernel;
+  if (auto status = readScalar(in, filters, "filters", path); !status) {
+    return unexpectedFromStatus<CNNRegressor>(status);
+  }
+  if (auto status = readScalar(in, kernel, "kernel size", path); !status) {
+    return unexpectedFromStatus<CNNRegressor>(status);
+  }
+
   CNNRegressor model(filters, kernel);
-  readDeepReadoutState(in, model);
+  if (auto status = readDeepReadoutState(in, model, path); !status) {
+    return unexpectedFromStatus<CNNRegressor>(status);
+  }
   return model;
 }
 
-void saveCNNClassifier(const std::string &path, const CNNClassifier &model) {
-  std::ofstream out(path);
-  out << "CNNClassifier\n";
-  out << "v1\n";
+Status saveCNNClassifier(std::string_view path, const CNNClassifier &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "CNNClassifier", path); !status) {
+    return status;
+  }
   out << model.getFilters() << "\n";
   out << model.getKernelSize() << "\n";
-  writeDeepReadoutState(out, model);
+  if (auto status = writeDeepReadoutState(out, model, path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-CNNClassifier loadCNNClassifier(const std::string &path) {
-  std::ifstream in(path);
+std::expected<CNNClassifier, std::string>
+loadCNNClassifier(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<CNNClassifier>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<CNNClassifier>(status);
+  }
+
   int filters = 8;
   int kernel = 3;
-  in >> filters >> kernel;
+  if (auto status = readScalar(in, filters, "filters", path); !status) {
+    return unexpectedFromStatus<CNNClassifier>(status);
+  }
+  if (auto status = readScalar(in, kernel, "kernel size", path); !status) {
+    return unexpectedFromStatus<CNNClassifier>(status);
+  }
+
   CNNClassifier model(filters, kernel);
-  readDeepReadoutState(in, model);
+  if (auto status = readDeepReadoutState(in, model, path); !status) {
+    return unexpectedFromStatus<CNNClassifier>(status);
+  }
   return model;
 }
 
-void saveRNNRegressor(const std::string &path, const RNNRegressor &model) {
-  std::ofstream out(path);
-  out << "RNNRegressor\n";
-  out << "v1\n";
+Status saveRNNRegressor(std::string_view path, const RNNRegressor &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "RNNRegressor", path); !status) {
+    return status;
+  }
   out << model.getHidden() << "\n";
-  writeDeepReadoutState(out, model);
+  if (auto status = writeDeepReadoutState(out, model, path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-RNNRegressor loadRNNRegressor(const std::string &path) {
-  std::ifstream in(path);
+std::expected<RNNRegressor, std::string>
+loadRNNRegressor(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<RNNRegressor>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<RNNRegressor>(status);
+  }
+
   int hidden = 12;
-  in >> hidden;
+  if (auto status = readScalar(in, hidden, "hidden size", path); !status) {
+    return unexpectedFromStatus<RNNRegressor>(status);
+  }
+
   RNNRegressor model(hidden);
-  readDeepReadoutState(in, model);
+  if (auto status = readDeepReadoutState(in, model, path); !status) {
+    return unexpectedFromStatus<RNNRegressor>(status);
+  }
   return model;
 }
 
-void saveRNNClassifier(const std::string &path, const RNNClassifier &model) {
-  std::ofstream out(path);
-  out << "RNNClassifier\n";
-  out << "v1\n";
+Status saveRNNClassifier(std::string_view path, const RNNClassifier &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "RNNClassifier", path); !status) {
+    return status;
+  }
   out << model.getHidden() << "\n";
-  writeDeepReadoutState(out, model);
+  if (auto status = writeDeepReadoutState(out, model, path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-RNNClassifier loadRNNClassifier(const std::string &path) {
-  std::ifstream in(path);
+std::expected<RNNClassifier, std::string>
+loadRNNClassifier(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<RNNClassifier>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<RNNClassifier>(status);
+  }
+
   int hidden = 12;
-  in >> hidden;
+  if (auto status = readScalar(in, hidden, "hidden size", path); !status) {
+    return unexpectedFromStatus<RNNClassifier>(status);
+  }
+
   RNNClassifier model(hidden);
-  readDeepReadoutState(in, model);
+  if (auto status = readDeepReadoutState(in, model, path); !status) {
+    return unexpectedFromStatus<RNNClassifier>(status);
+  }
   return model;
 }
 
-void saveLSTMRegressor(const std::string &path, const LSTMRegressor &model) {
-  std::ofstream out(path);
-  out << "LSTMRegressor\n";
-  out << "v1\n";
+Status saveLSTMRegressor(std::string_view path, const LSTMRegressor &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "LSTMRegressor", path); !status) {
+    return status;
+  }
   out << model.getHidden() << "\n";
-  writeDeepReadoutState(out, model);
+  if (auto status = writeDeepReadoutState(out, model, path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-LSTMRegressor loadLSTMRegressor(const std::string &path) {
-  std::ifstream in(path);
+std::expected<LSTMRegressor, std::string>
+loadLSTMRegressor(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<LSTMRegressor>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<LSTMRegressor>(status);
+  }
+
   int hidden = 10;
-  in >> hidden;
+  if (auto status = readScalar(in, hidden, "hidden size", path); !status) {
+    return unexpectedFromStatus<LSTMRegressor>(status);
+  }
+
   LSTMRegressor model(hidden);
-  readDeepReadoutState(in, model);
+  if (auto status = readDeepReadoutState(in, model, path); !status) {
+    return unexpectedFromStatus<LSTMRegressor>(status);
+  }
   return model;
 }
 
-void saveLSTMClassifier(const std::string &path, const LSTMClassifier &model) {
-  std::ofstream out(path);
-  out << "LSTMClassifier\n";
-  out << "v1\n";
+Status saveLSTMClassifier(std::string_view path, const LSTMClassifier &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "LSTMClassifier", path); !status) {
+    return status;
+  }
   out << model.getHidden() << "\n";
-  writeDeepReadoutState(out, model);
+  if (auto status = writeDeepReadoutState(out, model, path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-LSTMClassifier loadLSTMClassifier(const std::string &path) {
-  std::ifstream in(path);
+std::expected<LSTMClassifier, std::string>
+loadLSTMClassifier(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<LSTMClassifier>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<LSTMClassifier>(status);
+  }
+
   int hidden = 10;
-  in >> hidden;
+  if (auto status = readScalar(in, hidden, "hidden size", path); !status) {
+    return unexpectedFromStatus<LSTMClassifier>(status);
+  }
+
   LSTMClassifier model(hidden);
-  readDeepReadoutState(in, model);
+  if (auto status = readDeepReadoutState(in, model, path); !status) {
+    return unexpectedFromStatus<LSTMClassifier>(status);
+  }
   return model;
 }
 
-void saveTransformerRegressor(const std::string &path,
-                              const TransformerRegressor &model) {
-  std::ofstream out(path);
-  out << "TransformerRegressor\n";
-  out << "v1\n";
+Status saveTransformerRegressor(std::string_view path,
+                                const TransformerRegressor &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "TransformerRegressor", path); !status) {
+    return status;
+  }
   out << model.getHidden() << "\n";
-  writeDeepReadoutState(out, model);
+  if (auto status = writeDeepReadoutState(out, model, path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-TransformerRegressor loadTransformerRegressor(const std::string &path) {
-  std::ifstream in(path);
+std::expected<TransformerRegressor, std::string>
+loadTransformerRegressor(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<TransformerRegressor>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<TransformerRegressor>(status);
+  }
+
   int hidden = 16;
-  in >> hidden;
+  if (auto status = readScalar(in, hidden, "hidden size", path); !status) {
+    return unexpectedFromStatus<TransformerRegressor>(status);
+  }
+
   TransformerRegressor model(hidden);
-  readDeepReadoutState(in, model);
+  if (auto status = readDeepReadoutState(in, model, path); !status) {
+    return unexpectedFromStatus<TransformerRegressor>(status);
+  }
   return model;
 }
 
-void saveTransformerClassifier(const std::string &path,
-                               const TransformerClassifier &model) {
-  std::ofstream out(path);
-  out << "TransformerClassifier\n";
-  out << "v1\n";
+Status saveTransformerClassifier(std::string_view path,
+                                 const TransformerClassifier &model) {
+  std::ofstream out{std::string(path)};
+  if (auto status = checkOutputOpen(out, path); !status) {
+    return status;
+  }
+  if (auto status = writeHeader(out, "TransformerClassifier", path); !status) {
+    return status;
+  }
   out << model.getHidden() << "\n";
-  writeDeepReadoutState(out, model);
+  if (auto status = writeDeepReadoutState(out, model, path); !status) {
+    return status;
+  }
+  return checkWriteState(out, path);
 }
 
-TransformerClassifier loadTransformerClassifier(const std::string &path) {
-  std::ifstream in(path);
+std::expected<TransformerClassifier, std::string>
+loadTransformerClassifier(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return unexpectedFromStatus<TransformerClassifier>(status);
+  }
+
   std::string modelType;
   std::string version;
-  std::getline(in, modelType);
-  std::getline(in, version);
+  if (auto status = readHeader(in, modelType, version, path); !status) {
+    return unexpectedFromStatus<TransformerClassifier>(status);
+  }
+
   int hidden = 16;
-  in >> hidden;
+  if (auto status = readScalar(in, hidden, "hidden size", path); !status) {
+    return unexpectedFromStatus<TransformerClassifier>(status);
+  }
+
   TransformerClassifier model(hidden);
-  readDeepReadoutState(in, model);
+  if (auto status = readDeepReadoutState(in, model, path); !status) {
+    return unexpectedFromStatus<TransformerClassifier>(status);
+  }
   return model;
 }
 
-std::string detectModelType(const std::string &path) {
-  std::ifstream in(path);
+std::expected<std::string, std::string> detectModelType(std::string_view path) {
+  std::ifstream in{std::string(path)};
+  if (auto status = checkInputOpen(in, path); !status) {
+    return std::unexpected(status.error());
+  }
+
   std::string modelType;
-  std::getline(in, modelType);
+  if (!std::getline(in, modelType)) {
+    return std::unexpected(
+        std::format("Failed to read model type from file: {}", path));
+  }
   return modelType;
 }

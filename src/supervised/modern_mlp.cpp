@@ -21,7 +21,7 @@ double activate(double x, Activation act) {
   case Activation::ReLU:
     return x > 0.0 ? x : 0.0;
   case Activation::Sigmoid:
-    x = std::clamp(x, -60.0, 60.0);
+    x = std::clamp(x, -kSigmoidClampAbs, kSigmoidClampAbs);
     return 1.0 / (1.0 + std::exp(-x));
   case Activation::Tanh:
     return std::tanh(x);
@@ -129,7 +129,7 @@ public:
     }
 
     inputSize_ = X[0].size();
-    std::mt19937 rng(42);
+    std::mt19937 rng(kDefaultSeed);
     initWeights(rng);
 
     size_t n = X.size();
@@ -201,8 +201,8 @@ public:
           for (size_t i = 0; i < weights_[l].size(); i++) {
             for (size_t j = 0; j < weights_[l][0].size(); j++) {
               double update =
-                  epochLearningRate *
-                  ((wGrad[l][i][j] * batchScale) + (l2Lambda_ * weights_[l][i][j]));
+                  epochLearningRate * ((wGrad[l][i][j] * batchScale) +
+                                       (l2Lambda_ * weights_[l][i][j]));
               update = modern_mlp_detail::clipFinite(update, 1.0);
               weights_[l][i][j] = modern_mlp_detail::clipFinite(
                   weights_[l][i][j] - update, 1e6);

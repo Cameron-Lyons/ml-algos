@@ -15,7 +15,7 @@ private:
   double threshold_;
 
   std::vector<std::pair<double, size_t>> nearestNeighbors(const Vector &x,
-                                                           size_t k) const {
+                                                          size_t k) const {
     std::vector<std::pair<double, size_t>> distances;
     distances.reserve(train_.size());
     for (size_t i = 0; i < train_.size(); i++) {

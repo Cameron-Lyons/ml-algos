@@ -75,7 +75,8 @@ Vector seasonalDifference(const Vector &series, int seasonalOrder,
     }
     Vector next;
     next.reserve(current.size() - static_cast<size_t>(seasonalPeriod));
-    for (size_t i = static_cast<size_t>(seasonalPeriod); i < current.size(); i++) {
+    for (size_t i = static_cast<size_t>(seasonalPeriod); i < current.size();
+         i++) {
       next.push_back(current[i] -
                      current[i - static_cast<size_t>(seasonalPeriod)]);
     }
@@ -190,7 +191,8 @@ private:
     }
 
     const size_t t = transformedHistory_.size();
-    Vector row = buildFeatureRow(transformedHistory_, residualHistory_, t, p_, q_);
+    Vector row =
+        buildFeatureRow(transformedHistory_, residualHistory_, t, p_, q_);
 
     double next = coeffs_.back();
     for (size_t j = 0; j < row.size(); j++) {
@@ -218,8 +220,8 @@ public:
       return;
     }
 
-    fallbackMean_ =
-        std::accumulate(y.begin(), y.end(), 0.0) / static_cast<double>(y.size());
+    fallbackMean_ = std::accumulate(y.begin(), y.end(), 0.0) /
+                    static_cast<double>(y.size());
 
     rawHistory_ = y;
     transformedHistory_ = difference(y, d_);
@@ -370,8 +372,8 @@ private:
     }
 
     const size_t t = transformedHistory_.size();
-    Vector row =
-        buildFeatureRow(transformedHistory_, residualHistory_, t, arLags_, maLags_);
+    Vector row = buildFeatureRow(transformedHistory_, residualHistory_, t,
+                                 arLags_, maLags_);
 
     double next = coeffs_.back();
     for (size_t j = 0; j < row.size(); j++) {
@@ -388,7 +390,8 @@ public:
                   int seasonalD = 1, int seasonalQ = 1, int seasonalPeriod = 4)
       : p_(std::max(1, p)), d_(std::clamp(d, 0, 1)), q_(std::max(0, q)),
         seasonalP_(std::max(0, seasonalP)),
-        seasonalD_(std::clamp(seasonalD, 0, 1)), seasonalQ_(std::max(0, seasonalQ)),
+        seasonalD_(std::clamp(seasonalD, 0, 1)),
+        seasonalQ_(std::max(0, seasonalQ)),
         seasonalPeriod_(std::max(1, seasonalPeriod)), arLags_(), maLags_(),
         maxLag_(1), coeffs_() {
     buildLags();
@@ -405,8 +408,8 @@ public:
       return;
     }
 
-    fallbackMean_ =
-        std::accumulate(y.begin(), y.end(), 0.0) / static_cast<double>(y.size());
+    fallbackMean_ = std::accumulate(y.begin(), y.end(), 0.0) /
+                    static_cast<double>(y.size());
     rawHistory_ = y;
 
     transformedHistory_ = difference(y, d_);
@@ -437,8 +440,8 @@ public:
 
     if (seasonalD_ == 1 &&
         rawHistory_.size() >= static_cast<size_t>(seasonalPeriod_)) {
-      nextY +=
-          rawHistory_[rawHistory_.size() - static_cast<size_t>(seasonalPeriod_)];
+      nextY += rawHistory_[rawHistory_.size() -
+                           static_cast<size_t>(seasonalPeriod_)];
       if (d_ == 1 &&
           rawHistory_.size() > static_cast<size_t>(seasonalPeriod_)) {
         nextY -= rawHistory_[rawHistory_.size() -

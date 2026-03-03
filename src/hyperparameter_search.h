@@ -1,7 +1,12 @@
-#include "matrix.h"
+#ifndef HYPERPARAMETER_SEARCH_H
+#define HYPERPARAMETER_SEARCH_H
+
+#include "cross_validation.h"
+#include "metrics.h"
 #include <flat_map>
 #include <print>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using ParamValues = std::flat_map<std::string, double>;
@@ -28,8 +33,7 @@ struct PreparedFold {
   Vector y_te;
 };
 
-std::vector<ParamSet>
-buildParamGrid(const ParamGrid &grid) {
+inline std::vector<ParamSet> buildParamGrid(const ParamGrid &grid) {
   std::vector<ParamSet> result;
   result.emplace_back();
 
@@ -40,7 +44,7 @@ buildParamGrid(const ParamGrid &grid) {
       for (double v : values) {
         ParamSet newPs = ps;
         newPs.params[name] = v;
-        expanded.push_back(newPs);
+        expanded.push_back(std::move(newPs));
       }
     }
     result = std::move(expanded);
@@ -56,7 +60,7 @@ GridSearchResult
 gridSearchCV(Factory factory, const std::vector<ParamSet> &paramGrid,
              const Matrix &X, const Vector &y, int k, bool higherIsBetter,
              bool isClassification = false) {
-  auto folds = kFoldSplit(X.size(), k, 42);
+  auto folds = kFoldSplit(X.size(), k, kDefaultSeed);
   std::vector<PreparedFold> preparedFolds;
   preparedFolds.reserve(folds.size());
   for (const auto &[trainIdx, testIdx] : folds) {
@@ -89,7 +93,7 @@ gridSearchCV(Factory factory, const std::vector<ParamSet> &paramGrid,
           isClassification ? accuracy(fold.y_te, preds) : r2(fold.y_te, preds);
     }
 
-    double avgScore = totalScore / k;
+    double avgScore = totalScore / static_cast<double>(k);
     result.allResults.push_back({.params = ps, .score = avgScore});
 
     bool isBetter = higherIsBetter ? (avgScore > result.bestScore)
@@ -103,8 +107,8 @@ gridSearchCV(Factory factory, const std::vector<ParamSet> &paramGrid,
   return result;
 }
 
-void printGridSearchResult(const GridSearchResult &result,
-                           const std::string &name) {
+inline void printGridSearchResult(const GridSearchResult &result,
+                                  std::string_view name) {
   std::println("Grid Search: {}", name);
   std::println("{}", std::string(50, '-'));
   for (const auto &[params, score] : result.allResults) {
@@ -128,3 +132,5 @@ void printGridSearchResult(const GridSearchResult &result,
   std::println("Best params: {}", bestStr);
   std::println("");
 }
+
+#endif // HYPERPARAMETER_SEARCH_H

@@ -18,12 +18,12 @@
 #include <string_view>
 #include <utility>
 
-// clang-format off
-#include "matrix.cpp"
-#include "metrics.cpp"
-#include "cross_validation.cpp"
-#include "preprocessing.cpp"
-// clang-format on
+#include "cross_validation.h"
+#include "feature_importance.h"
+#include "hyperparameter_search.h"
+#include "matrix.h"
+#include "metrics.h"
+#include "preprocessing.h"
 
 template <typename M>
 concept Fittable =
@@ -66,9 +66,23 @@ bool isHelpFlag(std::string_view value) {
   return value == "-h" || value == "--help" || value == "help";
 }
 
+namespace {
+
+inline constexpr int kDividerWidth = 42;
+inline constexpr int kMinBinaryThresholdPercent = 5;
+inline constexpr int kMaxBinaryThresholdPercent = 95;
+inline constexpr double kThresholdPercentScale = 100.0;
+inline constexpr int kMaxDiscreteClasses = 20;
+inline constexpr double kMaxDiscreteClassRatio = 0.5;
+inline constexpr size_t kPermutationRepeats = 5;
+inline constexpr int kMinCvFolds = 2;
+inline constexpr int kDefaultCvFolds = 5;
+
+} // namespace
+
 void printTable(const std::vector<AlgorithmResult> &results) {
   std::println("{:<20} {:<10} {}", "Algorithm", "Metric", "Score");
-  std::println("{}", std::string(42, '-'));
+  std::println("{}", std::string(kDividerWidth, '-'));
   for (const auto &r : results) {
     if (!isFiniteScore(r.score)) {
       std::println(stderr, "Skipping non-finite score for {} ({})", r.name,
@@ -81,17 +95,17 @@ void printTable(const std::vector<AlgorithmResult> &results) {
 
 template <Fittable M>
   requires BatchPredictor<M>
-AlgorithmResult evaluateRegressor(const std::string &name, M model,
+AlgorithmResult evaluateRegressor(std::string_view name, M model,
                                   const Matrix &X_tr, const Matrix &X_te,
                                   const Vector &y_tr, const Vector &y_te) {
   model.fit(X_tr, y_tr);
   Vector preds = model.predict(X_te);
-  return {name, "R²", r2(y_te, preds), y_te, preds};
+  return {std::string(name), "R²", r2(y_te, preds), y_te, preds};
 }
 
 template <Fittable M>
   requires PointPredictor<M> && (!BatchPredictor<M>)
-AlgorithmResult evaluateRegressor(const std::string &name, M model,
+AlgorithmResult evaluateRegressor(std::string_view name, M model,
                                   const Matrix &X_tr, const Matrix &X_te,
                                   const Vector &y_tr, const Vector &y_te) {
   model.fit(X_tr, y_tr);
@@ -100,13 +114,13 @@ AlgorithmResult evaluateRegressor(const std::string &name, M model,
   for (const auto &x : X_te) {
     preds.push_back(model.predict(x));
   }
-  return {name, "R²", r2(y_te, preds), y_te, preds};
+  return {std::string(name), "R²", r2(y_te, preds), y_te, preds};
 }
 
 template <Fittable M>
   requires PointPredictor<M>
 AlgorithmResult evaluateRegressorWithTargetNormalization(
-    const std::string &name, M model, const Matrix &X_tr, const Matrix &X_te,
+    std::string_view name, M model, const Matrix &X_tr, const Matrix &X_te,
     const Vector &y_tr, const Vector &y_te) {
   double y_mean = 0.0;
   for (double yi : y_tr) {
@@ -120,7 +134,7 @@ AlgorithmResult evaluateRegressorWithTargetNormalization(
     variance += diff * diff;
   }
   variance /= static_cast<double>(y_tr.size());
-  double y_std = std::sqrt(std::max(variance, 1e-12));
+  double y_std = std::sqrt(std::max(variance, kTinyEpsilon));
 
   Vector y_normalized(y_tr.size());
   for (size_t i = 0; i < y_tr.size(); i++) {
@@ -137,22 +151,22 @@ AlgorithmResult evaluateRegressorWithTargetNormalization(
     preds.push_back(y_mean + (y_std * pred));
   }
 
-  return {name, "R²", r2(y_te, preds), y_te, preds};
+  return {std::string(name), "R²", r2(y_te, preds), y_te, preds};
 }
 
 template <Fittable M>
   requires BatchPredictor<M>
-AlgorithmResult evaluateClassifier(const std::string &name, M model,
+AlgorithmResult evaluateClassifier(std::string_view name, M model,
                                    const Matrix &X_tr, const Matrix &X_te,
                                    const Vector &y_tr, const Vector &y_te) {
   model.fit(X_tr, y_tr);
   Vector preds = model.predict(X_te);
-  return {name, "Accuracy", accuracy(y_te, preds), y_te, preds};
+  return {std::string(name), "Accuracy", accuracy(y_te, preds), y_te, preds};
 }
 
 template <Fittable M>
   requires PointPredictor<M> && (!BatchPredictor<M>)
-AlgorithmResult evaluateClassifier(const std::string &name, M model,
+AlgorithmResult evaluateClassifier(std::string_view name, M model,
                                    const Matrix &X_tr, const Matrix &X_te,
                                    const Vector &y_tr, const Vector &y_te) {
   model.fit(X_tr, y_tr);
@@ -161,7 +175,7 @@ AlgorithmResult evaluateClassifier(const std::string &name, M model,
   for (const auto &x : X_te) {
     preds.push_back(model.predict(x));
   }
-  return {name, "Accuracy", accuracy(y_te, preds), y_te, preds};
+  return {std::string(name), "Accuracy", accuracy(y_te, preds), y_te, preds};
 }
 
 // clang-format off
@@ -194,9 +208,7 @@ AlgorithmResult evaluateClassifier(const std::string &name, M model,
 #include "unsupervised/pca.cpp"
 #include "unsupervised/tsne.cpp"
 #include "unsupervised/umap.cpp"
-#include "hyperparameter_search.cpp"
 #include "serialization.cpp"
-#include "feature_importance.cpp"
 // clang-format on
 
 std::expected<void, std::string> validateCSVData(const Matrix &data) {
@@ -228,9 +240,9 @@ std::expected<void, std::string> validateCSVData(const Matrix &data) {
   return {};
 }
 
-std::expected<void, std::string> readCSV(const std::string &filename,
+std::expected<void, std::string> readCSV(std::string_view filename,
                                          Matrix &data) {
-  std::ifstream file(filename);
+  std::ifstream file{std::string(filename)};
   if (!file.is_open()) {
     return std::unexpected(
         std::format("Unable to open CSV file: {}", filename));
@@ -367,7 +379,8 @@ Status stratifiedTrainTestSplit(const Matrix &X, const Vector &y,
   }
 
   if (train_indices.empty() || test_indices.empty()) {
-    return std::unexpected("Stratified split produced empty train or test set.");
+    return std::unexpected(
+        "Stratified split produced empty train or test set.");
   }
 
   std::ranges::shuffle(train_indices, rng);
@@ -388,7 +401,7 @@ bool statusOkOrPrint(const Status &status) {
   return false;
 }
 
-bool isIntegerLike(double value, double tolerance = 1e-9) {
+bool isIntegerLike(double value, double tolerance = kIntegerTolerance) {
   return std::abs(value - std::round(value)) <= tolerance;
 }
 
@@ -396,19 +409,18 @@ bool shouldRunClassification(const Vector &y, size_t n_unique_classes) {
   if (y.empty()) {
     return false;
   }
-  if (n_unique_classes < 2 || n_unique_classes > 20) {
+  if (n_unique_classes < 2 || n_unique_classes > kMaxDiscreteClasses) {
     return false;
   }
 
-  for (double value : y) {
-    if (!isIntegerLike(value)) {
-      return false;
-    }
+  if (!std::ranges::all_of(y,
+                           [](double value) { return isIntegerLike(value); })) {
+    return false;
   }
 
   const double unique_ratio =
       static_cast<double>(n_unique_classes) / static_cast<double>(y.size());
-  return unique_ratio <= 0.5;
+  return unique_ratio <= kMaxDiscreteClassRatio;
 }
 
 struct LabelEncoding {
@@ -447,61 +459,56 @@ const ScaledData &scaleDataCached(const Matrix &X_train, const Matrix &X_test) {
 }
 
 double scoreToProbability(double score) {
-  score = std::clamp(score, -60.0, 60.0);
+  score = std::clamp(score, -kSigmoidClampAbs, kSigmoidClampAbs);
   return 1.0 / (1.0 + std::exp(-score));
 }
 
 Vector predictionsFromThreshold(std::span<const double> probabilities,
                                 double threshold) {
-  Vector preds;
-  preds.reserve(probabilities.size());
-  for (double p : probabilities) {
-    preds.push_back(p >= threshold ? 1.0 : 0.0);
-  }
+  Vector preds(probabilities.size(), 0.0);
+  std::ranges::transform(probabilities, preds.begin(), [threshold](double p) {
+    return p >= threshold ? 1.0 : 0.0;
+  });
   return preds;
-}
-
-double binaryF1(std::span<const double> y_true,
-                std::span<const double> y_pred) {
-  double tp = 0.0;
-  double fp = 0.0;
-  double fn = 0.0;
-  for (auto [yt, yp] : std::views::zip(y_true, y_pred)) {
-    if (yt == 1.0 && yp == 1.0) {
-      tp += 1.0;
-    } else if (yt == 0.0 && yp == 1.0) {
-      fp += 1.0;
-    } else if (yt == 1.0 && yp == 0.0) {
-      fn += 1.0;
-    }
-  }
-  double precision_denom = tp + fp;
-  double recall_denom = tp + fn;
-  if (precision_denom == 0.0 || recall_denom == 0.0) {
-    return 0.0;
-  }
-  double prec = tp / precision_denom;
-  double rec = tp / recall_denom;
-  if (prec + rec == 0.0) {
-    return 0.0;
-  }
-  return 2.0 * prec * rec / (prec + rec);
 }
 
 double tuneBinaryThreshold(std::span<const double> y_true,
                            std::span<const double> probabilities) {
   double best_threshold = 0.5;
   double best_f1 = -1.0;
-  for (int i = 5; i <= 95; i++) {
-    double threshold = static_cast<double>(i) / 100.0;
+  for (int i = kMinBinaryThresholdPercent; i <= kMaxBinaryThresholdPercent;
+       i++) {
+    double threshold = static_cast<double>(i) / kThresholdPercentScale;
     Vector preds = predictionsFromThreshold(probabilities, threshold);
-    double f1 = binaryF1(y_true, preds);
+    double f1 = f1_score(y_true, std::span<const double>(preds));
     if (f1 > best_f1) {
       best_f1 = f1;
       best_threshold = threshold;
     }
   }
   return best_threshold;
+}
+
+template <typename ProbabilityFn>
+Vector collectProbabilities(const Matrix &X, ProbabilityFn probabilityFn) {
+  Vector probabilities;
+  probabilities.reserve(X.size());
+  for (const auto &x : X) {
+    probabilities.push_back(probabilityFn(x));
+  }
+  return probabilities;
+}
+
+template <typename ProbabilityFn>
+AlgorithmResult evaluateBinaryClassifierWithThreshold(
+    std::string_view name, const Matrix &X_tr, const Matrix &X_te,
+    const Vector &y_tr, const Vector &y_te, ProbabilityFn probabilityFn) {
+  Vector train_probs = collectProbabilities(X_tr, probabilityFn);
+  double threshold = tuneBinaryThreshold(y_tr, train_probs);
+  Vector test_probs = collectProbabilities(X_te, probabilityFn);
+  Vector preds = predictionsFromThreshold(test_probs, threshold);
+  return {std::string(name), "Accuracy", accuracy(y_te, preds), y_te, preds,
+          threshold};
 }
 
 std::vector<std::vector<int>>
@@ -588,7 +595,7 @@ void printClassificationReport(const AlgorithmResult &result) {
   double micro_f1 = microF1FromConfusion(cm);
 
   std::println("\nClassification Report");
-  std::println("{}", std::string(42, '-'));
+  std::println("{}", std::string(kDividerWidth, '-'));
   std::println("Accuracy: {:.4f}", result.score);
   std::println("Macro-F1: {:.4f}", macro_f1);
   std::println("Micro-F1: {:.4f}", micro_f1);
@@ -611,9 +618,9 @@ void printClassificationReport(const AlgorithmResult &result) {
 
 std::vector<int> toIntegerLabels(const Vector &y) {
   std::vector<int> labels(y.size(), 0);
-  for (size_t i = 0; i < y.size(); i++) {
-    labels[i] = static_cast<int>(std::llround(y[i]));
-  }
+  std::ranges::transform(y, labels.begin(), [](double value) {
+    return static_cast<int>(std::llround(value));
+  });
   return labels;
 }
 
@@ -742,11 +749,7 @@ bool runTsneMode(const Matrix &X, int iterations = 120) {
     return false;
   }
 
-  Points points;
-  points.reserve(X.size());
-  for (const auto &row : X) {
-    points.push_back(row);
-  }
+  Points points = X;
 
   Points embedding = tSNE(points, 2, iterations, 0.1, 1.0);
   std::println("t-SNE embedding (first 10 points)");
@@ -754,7 +757,8 @@ bool runTsneMode(const Matrix &X, int iterations = 120) {
   std::println("{}", std::string(32, '-'));
   size_t shown = std::min<size_t>(embedding.size(), 10);
   for (size_t i = 0; i < shown; i++) {
-    std::println("{:<10} ({:.6f}, {:.6f})", i, embedding[i][0], embedding[i][1]);
+    std::println("{:<10} ({:.6f}, {:.6f})", i, embedding[i][0],
+                 embedding[i][1]);
   }
   if (shown < embedding.size()) {
     std::println("... {} more points omitted", embedding.size() - shown);
@@ -769,20 +773,17 @@ bool runUmapMode(const Matrix &X, int epochs = 180) {
     return false;
   }
 
-  Points points;
-  points.reserve(X.size());
-  for (const auto &row : X) {
-    points.push_back(row);
-  }
+  Points points = X;
 
-  Points embedding = umap(points, 2, std::min<size_t>(10, points.size() - 1),
-                          epochs, 0.08);
+  Points embedding =
+      umap(points, 2, std::min<size_t>(10, points.size() - 1), epochs, 0.08);
   std::println("UMAP embedding (first 10 points)");
   std::println("{:<10} {}", "Point", "(x, y)");
   std::println("{}", std::string(32, '-'));
   size_t shown = std::min<size_t>(embedding.size(), 10);
   for (size_t i = 0; i < shown; i++) {
-    std::println("{:<10} ({:.6f}, {:.6f})", i, embedding[i][0], embedding[i][1]);
+    std::println("{:<10} ({:.6f}, {:.6f})", i, embedding[i][0],
+                 embedding[i][1]);
   }
   if (shown < embedding.size()) {
     std::println("... {} more points omitted", embedding.size() - shown);
@@ -791,7 +792,8 @@ bool runUmapMode(const Matrix &X, int epochs = 180) {
   return true;
 }
 
-bool runDimensionalityReductionMode(const Matrix &X, const Vector &y_classification,
+bool runDimensionalityReductionMode(const Matrix &X,
+                                    const Vector &y_classification,
                                     bool run_classification, int n_classes) {
   bool ok = runPcaMode(X);
   std::println("");
@@ -812,14 +814,15 @@ bool runDimensionalityReductionMode(const Matrix &X, const Vector &y_classificat
 
 bool runAnomalyMode(const Matrix &X_train, const Matrix &X_test) {
   if (X_train.empty() || X_test.empty()) {
-    std::println(stderr, "Anomaly detection requires non-empty train/test data.");
+    std::println(stderr,
+                 "Anomaly detection requires non-empty train/test data.");
     return false;
   }
 
   std::println("\n{}", "Anomaly Detection");
-  std::println("{}", std::string(42, '-'));
+  std::println("{}", std::string(kDividerWidth, '-'));
   std::println("{:<20} {:<10} {}", "Algorithm", "Metric", "Score");
-  std::println("{}", std::string(42, '-'));
+  std::println("{}", std::string(kDividerWidth, '-'));
 
   {
     IsolationForest iforest(100, std::min(size_t{256}, X_train.size()));
@@ -830,7 +833,8 @@ bool runAnomalyMode(const Matrix &X_train, const Matrix &X_test) {
         anomalies++;
       }
     }
-    std::println("{:<20} {:<10} {}", "isolation-forest", "Anomalies", anomalies);
+    std::println("{:<20} {:<10} {}", "isolation-forest", "Anomalies",
+                 anomalies);
   }
 
   auto scaled = scaleData(X_train, X_test);
@@ -909,21 +913,21 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   };
 
   algos["extra-trees-regressor"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                       auto &y_te) {
+                                      auto &y_te) {
     return evaluateRegressor("extra-trees-regressor",
                              ExtraTreesRegressor(120, 8, -1, 10), X_tr, X_te,
                              y_tr, y_te);
   };
 
   algos["lightgbm-regressor"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                    auto &y_te) {
+                                   auto &y_te) {
     return evaluateRegressor("lightgbm-regressor",
                              LightGBMRegressor(120, 0.08, 5, 32), X_tr, X_te,
                              y_tr, y_te);
   };
 
   algos["catboost-regressor"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                    auto &y_te) {
+                                   auto &y_te) {
     return evaluateRegressor("catboost-regressor",
                              CatBoostRegressor(150, 0.05, 4), X_tr, X_te, y_tr,
                              y_te);
@@ -1036,7 +1040,7 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
 
     double y_min = *std::ranges::min_element(y_tr);
     double y_max = *std::ranges::max_element(y_tr);
-    double y_range = std::max(1e-12, y_max - y_min);
+    double y_range = std::max(kTinyEpsilon, y_max - y_min);
 
     Vector y_scaled(y_tr.size(), 0.0);
     for (size_t i = 0; i < y_tr.size(); i++) {
@@ -1072,8 +1076,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   };
 
   algos["cnn-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
-                               const Vector &y_tr,
-                               const Vector &y_te) -> AlgorithmResult {
+                              const Vector &y_tr,
+                              const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
     const Matrix &Xs_tr = scaled.train;
     const Matrix &Xs_te = scaled.test;
@@ -1082,8 +1086,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   };
 
   algos["rnn-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
-                               const Vector &y_tr,
-                               const Vector &y_te) -> AlgorithmResult {
+                              const Vector &y_tr,
+                              const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
     const Matrix &Xs_tr = scaled.train;
     const Matrix &Xs_te = scaled.test;
@@ -1092,8 +1096,8 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   };
 
   algos["lstm-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
-                                const Vector &y_tr,
-                                const Vector &y_te) -> AlgorithmResult {
+                               const Vector &y_tr,
+                               const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
     const Matrix &Xs_tr = scaled.train;
     const Matrix &Xs_te = scaled.test;
@@ -1102,17 +1106,17 @@ std::map<std::string, AlgoFunc> buildRegressionAlgorithms(size_t n_features) {
   };
 
   algos["transformer-regressor"] = [](const Matrix &X_tr, const Matrix &X_te,
-                                       const Vector &y_tr,
-                                       const Vector &y_te) -> AlgorithmResult {
+                                      const Vector &y_tr,
+                                      const Vector &y_te) -> AlgorithmResult {
     const auto &scaled = scaleDataCached(X_tr, X_te);
     const Matrix &Xs_tr = scaled.train;
     const Matrix &Xs_te = scaled.test;
-    return evaluateRegressor("transformer-regressor",
-                             TransformerRegressor(16), Xs_tr, Xs_te, y_tr,
-                             y_te);
+    return evaluateRegressor("transformer-regressor", TransformerRegressor(16),
+                             Xs_tr, Xs_te, y_tr, y_te);
   };
 
-  algos["arima"] = [](const Matrix &X_tr, const Matrix &X_te, const Vector &y_tr,
+  algos["arima"] = [](const Matrix &X_tr, const Matrix &X_te,
+                      const Vector &y_tr,
                       const Vector &y_te) -> AlgorithmResult {
     return evaluateRegressor("arima", ARIMARegressor(3, 1, 0), X_tr, X_te, y_tr,
                              y_te);
@@ -1163,23 +1167,9 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
       const Matrix &Xs_te = scaled.test;
       LogisticRegression model(0.01, 1000);
       model.fit(Xs_tr, y_tr);
-
-      Vector train_probs;
-      train_probs.reserve(Xs_tr.size());
-      for (const auto &x : Xs_tr) {
-        train_probs.push_back(model.predictProbability(x));
-      }
-      double threshold = tuneBinaryThreshold(y_tr, train_probs);
-
-      Vector test_probs;
-      test_probs.reserve(Xs_te.size());
-      for (const auto &x : Xs_te) {
-        test_probs.push_back(model.predictProbability(x));
-      }
-      Vector preds = predictionsFromThreshold(test_probs, threshold);
-
-      return {"logistic", "Accuracy", accuracy(y_te, preds),
-              y_te,       preds,      threshold};
+      return evaluateBinaryClassifierWithThreshold(
+          "logistic", Xs_tr, Xs_te, y_tr, y_te,
+          [&](const Vector &x) { return model.predictProbability(x); });
     };
   }
 
@@ -1209,7 +1199,7 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
   };
 
   algos["extra-trees-classifier"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                        auto &y_te) {
+                                       auto &y_te) {
     return evaluateClassifier("extra-trees-classifier",
                               ExtraTreesClassifier(120, 8, -1, 10), X_tr, X_te,
                               y_tr, y_te);
@@ -1338,42 +1328,29 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
       const Matrix &Xs_te = scaled.test;
       ModernMLP model({64, 32}, Activation::ReLU, 0.01, 200);
       model.fit(Xs_tr, y_tr);
-
-      Vector train_probs;
-      train_probs.reserve(Xs_tr.size());
-      for (const auto &x : Xs_tr) {
-        train_probs.push_back(scoreToProbability(model.predict(x)));
-      }
-      double threshold = tuneBinaryThreshold(y_tr, train_probs);
-
-      Vector test_probs;
-      test_probs.reserve(Xs_te.size());
-      for (const auto &x : Xs_te) {
-        test_probs.push_back(scoreToProbability(model.predict(x)));
-      }
-      Vector preds = predictionsFromThreshold(test_probs, threshold);
-
-      return {"modern-mlp-cls", "Accuracy", accuracy(y_te, preds), y_te, preds,
-              threshold};
+      return evaluateBinaryClassifierWithThreshold(
+          "modern-mlp-cls", Xs_tr, Xs_te, y_tr, y_te, [&](const Vector &x) {
+            return scoreToProbability(model.predict(x));
+          });
     };
 
     algos["lightgbm-classifier"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                       auto &y_te) {
+                                      auto &y_te) {
       return evaluateClassifier("lightgbm-classifier",
-                                LightGBMClassifier(120, 0.08, 5, 32), X_tr, X_te,
-                                y_tr, y_te);
+                                LightGBMClassifier(120, 0.08, 5, 32), X_tr,
+                                X_te, y_tr, y_te);
     };
 
     algos["catboost-classifier"] = [](auto &X_tr, auto &X_te, auto &y_tr,
-                                       auto &y_te) {
+                                      auto &y_te) {
       return evaluateClassifier("catboost-classifier",
                                 CatBoostClassifier(200, 0.05, 4), X_tr, X_te,
                                 y_tr, y_te);
     };
 
     algos["cnn-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
-                                  const Vector &y_tr,
-                                  const Vector &y_te) -> AlgorithmResult {
+                                 const Vector &y_tr,
+                                 const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
       const Matrix &Xs_tr = scaled.train;
       const Matrix &Xs_te = scaled.test;
@@ -1382,8 +1359,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
     };
 
     algos["rnn-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
-                                  const Vector &y_tr,
-                                  const Vector &y_te) -> AlgorithmResult {
+                                 const Vector &y_tr,
+                                 const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
       const Matrix &Xs_tr = scaled.train;
       const Matrix &Xs_te = scaled.test;
@@ -1392,8 +1369,8 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
     };
 
     algos["lstm-classifier"] = [](const Matrix &X_tr, const Matrix &X_te,
-                                   const Vector &y_tr,
-                                   const Vector &y_te) -> AlgorithmResult {
+                                  const Vector &y_tr,
+                                  const Vector &y_te) -> AlgorithmResult {
       const auto &scaled = scaleDataCached(X_tr, X_te);
       const Matrix &Xs_tr = scaled.train;
       const Matrix &Xs_te = scaled.test;
@@ -1445,10 +1422,10 @@ std::map<std::string, AlgoFunc> buildClassificationAlgorithms(size_t n_features,
 }
 
 void runCrossValidation(const Matrix &X, const Vector &y,
-                        const std::map<std::string, AlgoFunc> &algos, int k = 5,
-                        bool stratified = false) {
-  auto folds =
-      stratified ? stratifiedKFoldSplit(y, k, 42) : kFoldSplit(X.size(), k, 42);
+                        const std::map<std::string, AlgoFunc> &algos,
+                        int k = kDefaultCvFolds, bool stratified = false) {
+  auto folds = stratified ? stratifiedKFoldSplit(y, k, kDefaultSeed)
+                          : kFoldSplit(X.size(), k, kDefaultSeed);
 
   std::vector<AlgorithmResult> results;
   for (const auto &[name, func] : algos) {
@@ -1488,7 +1465,8 @@ void runCrossValidation(const Matrix &X, const Vector &y,
 void runGridSearch(const Matrix &X, const Vector &y_regression,
                    const Vector &y_classification, bool run_classification,
                    int n_classes) {
-  int folds = std::min(5, std::max(2, static_cast<int>(X.size()) / 2));
+  int folds = std::min(kDefaultCvFolds,
+                       std::max(kMinCvFolds, static_cast<int>(X.size()) / 2));
 
   if (!run_classification) {
     {
@@ -1544,17 +1522,18 @@ void runGridSearch(const Matrix &X, const Vector &y_regression,
           {{"learning_rate", {0.01, 0.1, 0.3}}, {"max_depth", {2, 3, 5}}});
       auto xgbResult = gridSearchCV(
           [](const ParamSet &ps) {
-            return XGBoostRegressor(50, ps.params.at("learning_rate"),
-                                    static_cast<int>(ps.params.at("max_depth")));
+            return XGBoostRegressor(
+                50, ps.params.at("learning_rate"),
+                static_cast<int>(ps.params.at("max_depth")));
           },
           xgbGrid, X, y_regression, folds, true);
       printGridSearchResult(xgbResult, "XGBoost Regressor");
     }
 
     {
-      auto extraTreesGrid = buildParamGrid(
-          {{"n_trees", {50, 100, 150}}, {"max_depth", {4, 6, 8}},
-           {"random_splits", {4, 8, 12}}});
+      auto extraTreesGrid = buildParamGrid({{"n_trees", {50, 100, 150}},
+                                            {"max_depth", {4, 6, 8}},
+                                            {"random_splits", {4, 8, 12}}});
       auto extraTreesResult = gridSearchCV(
           [](const ParamSet &ps) {
             return ExtraTreesRegressor(
@@ -1567,10 +1546,9 @@ void runGridSearch(const Matrix &X, const Vector &y_regression,
     }
 
     {
-      auto lightgbmGrid =
-          buildParamGrid({{"learning_rate", {0.03, 0.08, 0.15}},
-                          {"max_depth", {3, 5, 7}},
-                          {"n_bins", {16, 32, 64}}});
+      auto lightgbmGrid = buildParamGrid({{"learning_rate", {0.03, 0.08, 0.15}},
+                                          {"max_depth", {3, 5, 7}},
+                                          {"n_bins", {16, 32, 64}}});
       auto lightgbmResult = gridSearchCV(
           [](const ParamSet &ps) {
             return LightGBMRegressor(
@@ -1583,10 +1561,9 @@ void runGridSearch(const Matrix &X, const Vector &y_regression,
     }
 
     {
-      auto catboostGrid = buildParamGrid(
-          {{"learning_rate", {0.03, 0.05, 0.1}},
-           {"depth", {3, 4, 5}},
-           {"n_estimators", {80, 120, 180}}});
+      auto catboostGrid = buildParamGrid({{"learning_rate", {0.03, 0.05, 0.1}},
+                                          {"depth", {3, 4, 5}},
+                                          {"n_estimators", {80, 120, 180}}});
       auto catboostResult = gridSearchCV(
           [](const ParamSet &ps) {
             return CatBoostRegressor(
@@ -1621,14 +1598,13 @@ void runGridSearch(const Matrix &X, const Vector &y_regression,
                                         {"period", {3, 4, 6}}});
       auto sarimaResult = gridSearchCV(
           [](const ParamSet &ps) {
-            return SARIMARegressor(
-                static_cast<int>(ps.params.at("p")),
-                static_cast<int>(ps.params.at("d")),
-                static_cast<int>(ps.params.at("q")),
-                static_cast<int>(ps.params.at("seasonal_p")),
-                static_cast<int>(ps.params.at("seasonal_d")),
-                static_cast<int>(ps.params.at("seasonal_q")),
-                static_cast<int>(ps.params.at("period")));
+            return SARIMARegressor(static_cast<int>(ps.params.at("p")),
+                                   static_cast<int>(ps.params.at("d")),
+                                   static_cast<int>(ps.params.at("q")),
+                                   static_cast<int>(ps.params.at("seasonal_p")),
+                                   static_cast<int>(ps.params.at("seasonal_d")),
+                                   static_cast<int>(ps.params.at("seasonal_q")),
+                                   static_cast<int>(ps.params.at("period")));
           },
           sarimaGrid, X, y_regression, folds, true);
       printGridSearchResult(sarimaResult, "SARIMA Regressor");
@@ -1646,9 +1622,9 @@ void runGridSearch(const Matrix &X, const Vector &y_regression,
         lrGrid, X, y_classification, folds, true, true);
     printGridSearchResult(lrResult, "Logistic Regression");
 
-    auto extraTreesClsGrid = buildParamGrid(
-        {{"n_trees", {50, 100, 150}}, {"max_depth", {4, 6, 8}},
-         {"random_splits", {4, 8, 12}}});
+    auto extraTreesClsGrid = buildParamGrid({{"n_trees", {50, 100, 150}},
+                                             {"max_depth", {4, 6, 8}},
+                                             {"random_splits", {4, 8, 12}}});
     auto extraTreesClsResult = gridSearchCV(
         [](const ParamSet &ps) {
           return ExtraTreesClassifier(
@@ -1659,22 +1635,22 @@ void runGridSearch(const Matrix &X, const Vector &y_regression,
         extraTreesClsGrid, X, y_classification, folds, true, true);
     printGridSearchResult(extraTreesClsResult, "Extra Trees Classifier");
 
-    auto lightgbmClsGrid = buildParamGrid({{"learning_rate", {0.03, 0.08, 0.15}},
-                                           {"max_depth", {3, 5, 7}},
-                                           {"n_bins", {16, 32, 64}}});
+    auto lightgbmClsGrid =
+        buildParamGrid({{"learning_rate", {0.03, 0.08, 0.15}},
+                        {"max_depth", {3, 5, 7}},
+                        {"n_bins", {16, 32, 64}}});
     auto lightgbmClsResult = gridSearchCV(
         [](const ParamSet &ps) {
-          return LightGBMClassifier(
-              120, ps.params.at("learning_rate"),
-              static_cast<int>(ps.params.at("max_depth")),
-              static_cast<int>(ps.params.at("n_bins")));
+          return LightGBMClassifier(120, ps.params.at("learning_rate"),
+                                    static_cast<int>(ps.params.at("max_depth")),
+                                    static_cast<int>(ps.params.at("n_bins")));
         },
         lightgbmClsGrid, X, y_classification, folds, true, true);
     printGridSearchResult(lightgbmClsResult, "LightGBM Classifier");
 
-    auto catboostClsGrid =
-        buildParamGrid({{"learning_rate", {0.03, 0.05, 0.1}},
-                        {"depth", {3, 4, 5}}, {"n_estimators", {80, 120, 180}}});
+    auto catboostClsGrid = buildParamGrid({{"learning_rate", {0.03, 0.05, 0.1}},
+                                           {"depth", {3, 4, 5}},
+                                           {"n_estimators", {80, 120, 180}}});
     auto catboostClsResult = gridSearchCV(
         [](const ParamSet &ps) {
           return CatBoostClassifier(
@@ -1690,134 +1666,143 @@ void runGridSearch(const Matrix &X, const Vector &y_regression,
   }
 }
 
-void runSave(const std::string &algorithm, const std::string &filepath,
+void runSave(std::string_view algorithm, std::string_view filepath,
              const Matrix &X, const Vector &y_regression,
              const Vector &y_classification) {
-  const std::map<std::string, std::function<void()>, std::less<>> saveHandlers = {
-      {"linear",
-       [&] {
-         LinearRegression model;
-         model.fit(X, y_regression);
-         saveLinearModel(filepath, "LinearRegression", model);
-       }},
-      {"ridge",
-       [&] {
-         RidgeRegression model(1.0);
-         model.fit(X, y_regression);
-         saveLinearModel(filepath, "RidgeRegression", model);
-       }},
-      {"lasso",
-       [&] {
-         LassoRegression model(0.1);
-         model.fit(X, y_regression);
-         saveLinearModel(filepath, "LassoRegression", model);
-       }},
-      {"elasticnet",
-       [&] {
-         ElasticNet model(0.1, 0.5);
-         model.fit(X, y_regression);
-         saveLinearModel(filepath, "ElasticNet", model);
-       }},
-      {"logistic",
-       [&] {
-         LogisticRegression model(0.01, 1000);
-         model.fit(X, y_classification);
-         saveLogisticRegression(filepath, model);
-       }},
-      {"tree",
-       [&] {
-         DecisionTree model(5);
-         model.fit(X, y_regression);
-         saveDecisionTree(filepath, model);
-       }},
-      {"knn-regressor",
-       [&] {
-         KNNRegressor model(5);
-         model.fit(X, y_regression);
-         saveKNNModel(filepath, "KNNRegressor", model);
-       }},
-      {"knn-classifier",
-       [&] {
-         KNNClassifier model(5);
-         model.fit(X, y_classification);
-         saveKNNModel(filepath, "KNNClassifier", model);
-       }},
-      {"arima",
-       [&] {
-         ARIMARegressor model(3, 1, 1);
-         model.fit(X, y_regression);
-         saveARIMARegressor(filepath, model);
-       }},
-      {"sarima",
-       [&] {
-         SARIMARegressor model(2, 1, 1, 1, 1, 1, 4);
-         model.fit(X, y_regression);
-         saveSARIMARegressor(filepath, model);
-       }},
-      {"cnn-regressor",
-       [&] {
-         CNNRegressor model(8, 3);
-         model.fit(X, y_regression);
-         saveCNNRegressor(filepath, model);
-       }},
-      {"rnn-regressor",
-       [&] {
-         RNNRegressor model(12);
-         model.fit(X, y_regression);
-         saveRNNRegressor(filepath, model);
-       }},
-      {"lstm-regressor",
-       [&] {
-         LSTMRegressor model(10);
-         model.fit(X, y_regression);
-         saveLSTMRegressor(filepath, model);
-       }},
-      {"transformer-regressor",
-       [&] {
-         TransformerRegressor model(16);
-         model.fit(X, y_regression);
-         saveTransformerRegressor(filepath, model);
-       }},
-      {"cnn-classifier",
-       [&] {
-         CNNClassifier model(8, 3);
-         model.fit(X, y_classification);
-         saveCNNClassifier(filepath, model);
-       }},
-      {"rnn-classifier",
-       [&] {
-         RNNClassifier model(12);
-         model.fit(X, y_classification);
-         saveRNNClassifier(filepath, model);
-       }},
-      {"lstm-classifier",
-       [&] {
-         LSTMClassifier model(10);
-         model.fit(X, y_classification);
-         saveLSTMClassifier(filepath, model);
-       }},
-      {"transformer-classifier",
-       [&] {
-         TransformerClassifier model(16);
-         model.fit(X, y_classification);
-         saveTransformerClassifier(filepath, model);
-       }},
-  };
+  const std::map<std::string, std::function<Status()>, std::less<>>
+      saveHandlers = {
+          {"linear",
+           [&] {
+             LinearRegression model;
+             model.fit(X, y_regression);
+             return saveLinearModel(filepath, "LinearRegression", model);
+           }},
+          {"ridge",
+           [&] {
+             RidgeRegression model(1.0);
+             model.fit(X, y_regression);
+             return saveLinearModel(filepath, "RidgeRegression", model);
+           }},
+          {"lasso",
+           [&] {
+             LassoRegression model(0.1);
+             model.fit(X, y_regression);
+             return saveLinearModel(filepath, "LassoRegression", model);
+           }},
+          {"elasticnet",
+           [&] {
+             ElasticNet model(0.1, 0.5);
+             model.fit(X, y_regression);
+             return saveLinearModel(filepath, "ElasticNet", model);
+           }},
+          {"logistic",
+           [&] {
+             LogisticRegression model(0.01, 1000);
+             model.fit(X, y_classification);
+             return saveLogisticRegression(filepath, model);
+           }},
+          {"tree",
+           [&] {
+             DecisionTree model(5);
+             model.fit(X, y_regression);
+             return saveDecisionTree(filepath, model);
+           }},
+          {"knn-regressor",
+           [&] {
+             KNNRegressor model(5);
+             model.fit(X, y_regression);
+             return saveKNNModel(filepath, "KNNRegressor", model);
+           }},
+          {"knn-classifier",
+           [&] {
+             KNNClassifier model(5);
+             model.fit(X, y_classification);
+             return saveKNNModel(filepath, "KNNClassifier", model);
+           }},
+          {"arima",
+           [&] {
+             ARIMARegressor model(3, 1, 1);
+             model.fit(X, y_regression);
+             return saveARIMARegressor(filepath, model);
+           }},
+          {"sarima",
+           [&] {
+             SARIMARegressor model(2, 1, 1, 1, 1, 1, 4);
+             model.fit(X, y_regression);
+             return saveSARIMARegressor(filepath, model);
+           }},
+          {"cnn-regressor",
+           [&] {
+             CNNRegressor model(8, 3);
+             model.fit(X, y_regression);
+             return saveCNNRegressor(filepath, model);
+           }},
+          {"rnn-regressor",
+           [&] {
+             RNNRegressor model(12);
+             model.fit(X, y_regression);
+             return saveRNNRegressor(filepath, model);
+           }},
+          {"lstm-regressor",
+           [&] {
+             LSTMRegressor model(10);
+             model.fit(X, y_regression);
+             return saveLSTMRegressor(filepath, model);
+           }},
+          {"transformer-regressor",
+           [&] {
+             TransformerRegressor model(16);
+             model.fit(X, y_regression);
+             return saveTransformerRegressor(filepath, model);
+           }},
+          {"cnn-classifier",
+           [&] {
+             CNNClassifier model(8, 3);
+             model.fit(X, y_classification);
+             return saveCNNClassifier(filepath, model);
+           }},
+          {"rnn-classifier",
+           [&] {
+             RNNClassifier model(12);
+             model.fit(X, y_classification);
+             return saveRNNClassifier(filepath, model);
+           }},
+          {"lstm-classifier",
+           [&] {
+             LSTMClassifier model(10);
+             model.fit(X, y_classification);
+             return saveLSTMClassifier(filepath, model);
+           }},
+          {"transformer-classifier",
+           [&] {
+             TransformerClassifier model(16);
+             model.fit(X, y_classification);
+             return saveTransformerClassifier(filepath, model);
+           }},
+      };
 
   auto saveIt = saveHandlers.find(algorithm);
   if (saveIt == saveHandlers.end()) {
     std::println(stderr, "Unsupported algorithm for save: {}", algorithm);
     return;
   }
-  saveIt->second();
+  if (auto status = saveIt->second(); !status) {
+    std::println(stderr, "{}", status.error());
+    return;
+  }
   std::println("Model saved to {}", filepath);
 }
 
-void runLoad(const std::string &filepath, const Matrix &X_test_regression,
+void runLoad(std::string_view filepath, const Matrix &X_test_regression,
              const Vector &y_test_regression,
              const Matrix &X_test_classification,
              const Vector &y_test_classification) {
-  std::string modelType = detectModelType(filepath);
+  auto detected = detectModelType(filepath);
+  if (!detected) {
+    std::println(stderr, "{}", detected.error());
+    return;
+  }
+  const std::string &modelType = detected.value();
   std::println("Loading model type: {}", modelType);
 
   auto collectPointPredictions = [](auto &model, const Matrix &X_eval) {
@@ -1838,109 +1823,122 @@ void runLoad(const std::string &filepath, const Matrix &X_test_regression,
     std::println("Accuracy: {:.4f}", accuracy(y_test_classification, preds));
   };
 
-  const std::map<std::string, std::function<void()>, std::less<>> loadHandlers = {
-      {"LinearRegression",
-       [&] {
-         LinearRegression model;
-         model.setCoefficients(loadLinearModelCoefs(filepath));
-         std::println("R²: {:.4f}", r2(y_test_regression, model.predict(X_test_regression)));
-       }},
-      {"RidgeRegression",
-       [&] {
-         LinearRegression model;
-         model.setCoefficients(loadLinearModelCoefs(filepath));
-         std::println("R²: {:.4f}", r2(y_test_regression, model.predict(X_test_regression)));
-       }},
-      {"LassoRegression",
-       [&] {
-         LinearRegression model;
-         model.setCoefficients(loadLinearModelCoefs(filepath));
-         std::println("R²: {:.4f}", r2(y_test_regression, model.predict(X_test_regression)));
-       }},
-      {"ElasticNet",
-       [&] {
-         LinearRegression model;
-         model.setCoefficients(loadLinearModelCoefs(filepath));
-         std::println("R²: {:.4f}", r2(y_test_regression, model.predict(X_test_regression)));
-       }},
-      {"LogisticRegression",
-       [&] {
-         auto model = loadLogisticRegression(filepath);
-         reportClassification(model);
-       }},
-      {"DecisionTree",
-       [&] {
-         auto model = loadDecisionTree(filepath);
-         reportRegression(model);
-       }},
-      {"KNNRegressor",
-       [&] {
-         auto model = loadKNNModel<KNNRegressor>(filepath);
-         reportRegression(model);
-       }},
-      {"KNNClassifier",
-       [&] {
-         auto model = loadKNNModel<KNNClassifier>(filepath);
-         reportClassification(model);
-       }},
-      {"ARIMARegressor",
-       [&] {
-         auto model = loadARIMARegressor(filepath);
-         reportRegression(model);
-       }},
-      {"SARIMARegressor",
-       [&] {
-         auto model = loadSARIMARegressor(filepath);
-         reportRegression(model);
-       }},
-      {"CNNRegressor",
-       [&] {
-         auto model = loadCNNRegressor(filepath);
-         reportRegression(model);
-       }},
-      {"RNNRegressor",
-       [&] {
-         auto model = loadRNNRegressor(filepath);
-         reportRegression(model);
-       }},
-      {"LSTMRegressor",
-       [&] {
-         auto model = loadLSTMRegressor(filepath);
-         reportRegression(model);
-       }},
-      {"TransformerRegressor",
-       [&] {
-         auto model = loadTransformerRegressor(filepath);
-         reportRegression(model);
-       }},
-      {"CNNClassifier",
-       [&] {
-         auto model = loadCNNClassifier(filepath);
-         reportClassification(model);
-       }},
-      {"RNNClassifier",
-       [&] {
-         auto model = loadRNNClassifier(filepath);
-         reportClassification(model);
-       }},
-      {"LSTMClassifier",
-       [&] {
-         auto model = loadLSTMClassifier(filepath);
-         reportClassification(model);
-       }},
-      {"TransformerClassifier",
-       [&] {
-         auto model = loadTransformerClassifier(filepath);
-         reportClassification(model);
-       }},
+  auto loadAndReportRegression = [&](auto loadFn) -> Status {
+    auto loaded = loadFn();
+    if (!loaded) {
+      return std::unexpected(loaded.error());
+    }
+    reportRegression(*loaded);
+    return {};
   };
+
+  auto loadAndReportClassification = [&](auto loadFn) -> Status {
+    auto loaded = loadFn();
+    if (!loaded) {
+      return std::unexpected(loaded.error());
+    }
+    reportClassification(*loaded);
+    return {};
+  };
+
+  auto loadLinearModelAndReport = [&]() -> Status {
+    auto coefs = loadLinearModelCoefs(filepath);
+    if (!coefs) {
+      return std::unexpected(coefs.error());
+    }
+    LinearRegression model;
+    model.setCoefficients(*coefs);
+    std::println("R²: {:.4f}",
+                 r2(y_test_regression, model.predict(X_test_regression)));
+    return {};
+  };
+
+  const std::map<std::string, std::function<Status()>, std::less<>>
+      loadHandlers = {
+          {"LinearRegression", loadLinearModelAndReport},
+          {"RidgeRegression", loadLinearModelAndReport},
+          {"LassoRegression", loadLinearModelAndReport},
+          {"ElasticNet", loadLinearModelAndReport},
+          {"LogisticRegression",
+           [&] {
+             return loadAndReportClassification(
+                 [&] { return loadLogisticRegression(filepath); });
+           }},
+          {"DecisionTree",
+           [&] {
+             return loadAndReportRegression(
+                 [&] { return loadDecisionTree(filepath); });
+           }},
+          {"KNNRegressor",
+           [&] {
+             return loadAndReportRegression(
+                 [&] { return loadKNNModel<KNNRegressor>(filepath); });
+           }},
+          {"KNNClassifier",
+           [&] {
+             return loadAndReportClassification(
+                 [&] { return loadKNNModel<KNNClassifier>(filepath); });
+           }},
+          {"ARIMARegressor",
+           [&] {
+             return loadAndReportRegression(
+                 [&] { return loadARIMARegressor(filepath); });
+           }},
+          {"SARIMARegressor",
+           [&] {
+             return loadAndReportRegression(
+                 [&] { return loadSARIMARegressor(filepath); });
+           }},
+          {"CNNRegressor",
+           [&] {
+             return loadAndReportRegression(
+                 [&] { return loadCNNRegressor(filepath); });
+           }},
+          {"RNNRegressor",
+           [&] {
+             return loadAndReportRegression(
+                 [&] { return loadRNNRegressor(filepath); });
+           }},
+          {"LSTMRegressor",
+           [&] {
+             return loadAndReportRegression(
+                 [&] { return loadLSTMRegressor(filepath); });
+           }},
+          {"TransformerRegressor",
+           [&] {
+             return loadAndReportRegression(
+                 [&] { return loadTransformerRegressor(filepath); });
+           }},
+          {"CNNClassifier",
+           [&] {
+             return loadAndReportClassification(
+                 [&] { return loadCNNClassifier(filepath); });
+           }},
+          {"RNNClassifier",
+           [&] {
+             return loadAndReportClassification(
+                 [&] { return loadRNNClassifier(filepath); });
+           }},
+          {"LSTMClassifier",
+           [&] {
+             return loadAndReportClassification(
+                 [&] { return loadLSTMClassifier(filepath); });
+           }},
+          {"TransformerClassifier",
+           [&] {
+             return loadAndReportClassification(
+                 [&] { return loadTransformerClassifier(filepath); });
+           }},
+      };
 
   auto loadIt = loadHandlers.find(modelType);
   if (loadIt == loadHandlers.end()) {
     std::println(stderr, "Unknown model type: {}", modelType);
     return;
   }
-  loadIt->second();
+  if (auto status = loadIt->second(); !status) {
+    std::println(stderr, "{}", status.error());
+  }
 }
 
 void printHelp(const char *program_name,
@@ -1961,9 +1959,10 @@ void printHelp(const char *program_name,
       }};
 
   std::println("Usage:");
-  std::println(
-      "  {} <csv_file> [algorithm|cv|gridsearch|cluster|anomaly|reduce|pca|lda|umap|tsne|importance|save|load]",
-      program_name);
+  std::println("  {} <csv_file> "
+               "[algorithm|cv|gridsearch|cluster|anomaly|reduce|pca|lda|umap|"
+               "tsne|importance|save|load]",
+               program_name);
   std::println("  {} [--help|-h|help]", program_name);
 
   std::println("\nModes:");
@@ -2045,7 +2044,8 @@ int main(int argc, char *argv[]) {
   if (argc == 2) {
     Matrix X_train, X_test;
     Vector y_train, y_test;
-    if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+    if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test,
+                                    kTrainTestSplit);
         !statusOkOrPrint(split)) {
       return 1;
     }
@@ -2057,9 +2057,9 @@ int main(int argc, char *argv[]) {
     if (run_classification) {
       Matrix X_train_cls, X_test_cls;
       Vector y_train_cls, y_test_cls;
-      if (auto split = stratifiedTrainTestSplit(X, y_classification, X_train_cls,
-                                                X_test_cls, y_train_cls,
-                                                y_test_cls, 0.2);
+      if (auto split = stratifiedTrainTestSplit(
+              X, y_classification, X_train_cls, X_test_cls, y_train_cls,
+              y_test_cls, kTrainTestSplit);
           !statusOkOrPrint(split)) {
         return 1;
       }
@@ -2075,7 +2075,8 @@ int main(int argc, char *argv[]) {
   } else {
     std::string mode = argv[2];
     if (mode == "cv") {
-      int k = std::min(5, std::max(2, static_cast<int>(X.size()) / 2));
+      int k = std::min(kDefaultCvFolds,
+                       std::max(kMinCvFolds, static_cast<int>(X.size()) / 2));
       runCrossValidation(X, y, regression_algos, k);
       if (run_classification) {
         bool use_stratified = std::cmp_less_equal(unique_classes.size(), k);
@@ -2087,10 +2088,7 @@ int main(int argc, char *argv[]) {
     } else if (mode == "gridsearch") {
       runGridSearch(X, y, y_classification, run_classification, n_classes);
     } else if (mode == "cluster") {
-      Points points;
-      for (const auto &row : X) {
-        points.push_back(row);
-      }
+      Points points = X;
 
       int n_unique = static_cast<int>(unique_classes.size());
       int k = (n_unique >= 2 && n_unique <= static_cast<int>(X.size()) / 2)
@@ -2164,7 +2162,8 @@ int main(int argc, char *argv[]) {
     } else if (mode == "anomaly") {
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test,
+                                      kTrainTestSplit);
           !statusOkOrPrint(split)) {
         return 1;
       }
@@ -2206,7 +2205,8 @@ int main(int argc, char *argv[]) {
       }
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test,
+                                      kTrainTestSplit);
           !statusOkOrPrint(split)) {
         return 1;
       }
@@ -2215,9 +2215,9 @@ int main(int argc, char *argv[]) {
       if (run_classification) {
         Matrix X_train_cls;
         Vector y_train_cls;
-        if (auto split =
-                stratifiedTrainTestSplit(X, y_classification, X_train_cls,
-                                         X_test_cls, y_train_cls, y_test_cls, 0.2);
+        if (auto split = stratifiedTrainTestSplit(
+                X, y_classification, X_train_cls, X_test_cls, y_train_cls,
+                y_test_cls, kTrainTestSplit);
             !statusOkOrPrint(split)) {
           return 1;
         }
@@ -2226,7 +2226,8 @@ int main(int argc, char *argv[]) {
     } else if (mode == "importance") {
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test,
+                                      kTrainTestSplit);
           !statusOkOrPrint(split)) {
         return 1;
       }
@@ -2234,8 +2235,8 @@ int main(int argc, char *argv[]) {
       DecisionTree model(5);
       model.fit(X_train, y_train);
 
-      Vector importances =
-          permutationImportance(model, X_test, y_test, 5, 42, false);
+      Vector importances = permutationImportance(
+          model, X_test, y_test, kPermutationRepeats, kDefaultSeed, false);
 
       std::println("Permutation Feature Importance (Decision Tree)");
       std::println("{:<15} {}", "Feature", "Importance");
@@ -2247,7 +2248,8 @@ int main(int argc, char *argv[]) {
     } else {
       Matrix X_train, X_test;
       Vector y_train, y_test;
-      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test, 0.2);
+      if (auto split = trainTestSplit(X, y, X_train, X_test, y_train, y_test,
+                                      kTrainTestSplit);
           !statusOkOrPrint(split)) {
         return 1;
       }
@@ -2270,9 +2272,9 @@ int main(int argc, char *argv[]) {
         }
         Matrix X_train_cls, X_test_cls;
         Vector y_train_cls, y_test_cls;
-        if (auto split = stratifiedTrainTestSplit(X, y_classification, X_train_cls,
-                                                  X_test_cls, y_train_cls,
-                                                  y_test_cls, 0.2);
+        if (auto split = stratifiedTrainTestSplit(
+                X, y_classification, X_train_cls, X_test_cls, y_train_cls,
+                y_test_cls, kTrainTestSplit);
             !statusOkOrPrint(split)) {
           return 1;
         }

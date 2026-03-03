@@ -97,7 +97,7 @@ public:
     Matrix metaFeatures(n, Vector(nModels, 0.0));
 
     int k = std::min(nFolds_, std::max(2, static_cast<int>(n) / 2));
-    auto folds = kFoldSplit(n, k, 42);
+    auto folds = kFoldSplit(n, k, kDefaultSeed);
 
     for (const auto &[trainIdx, testIdx] : folds) {
       Matrix Xtr = subsetByIndices(X, trainIdx);
@@ -144,7 +144,7 @@ public:
     Matrix metaFeatures(n, Vector(nModels, 0.0));
 
     int k = std::min(nFolds_, std::max(2, static_cast<int>(n) / 2));
-    auto folds = kFoldSplit(n, k, 42);
+    auto folds = kFoldSplit(n, k, kDefaultSeed);
 
     for (const auto &[trainIdx, testIdx] : folds) {
       Matrix Xtr = subsetByIndices(X, trainIdx);

@@ -5,7 +5,7 @@
 
 Points initializeCentroids(const Points &data, size_t k) {
   Points centroids(k);
-  std::mt19937 rng(42);
+  std::mt19937 rng(kDefaultSeed);
   std::uniform_int_distribution<size_t> dist(0, data.size() - 1);
   for (size_t i = 0; i < k; i++) {
     centroids[i] = data[dist(rng)];

@@ -1,5 +1,6 @@
-#include "matrix.h"
+#include "preprocessing.h"
 #include <cmath>
+#include <ranges>
 
 class StandardScaler {
   Vector mean_, std_;
@@ -33,53 +34,8 @@ public:
   Matrix transform(const Matrix &X) const {
     Matrix result = X;
     for (auto &row : result) {
-      for (size_t j = 0; j < row.size(); j++) {
-        row[j] = (row[j] - mean_[j]) / std_[j];
-      }
-    }
-    return result;
-  }
-
-  Matrix fit_transform(const Matrix &X) {
-    fit(X);
-    return transform(X);
-  }
-};
-
-class MinMaxScaler {
-  Vector min_, range_;
-
-public:
-  void fit(const Matrix &X) {
-    size_t d = X[0].size();
-    min_.assign(d, std::numeric_limits<double>::max());
-    Vector max(d, std::numeric_limits<double>::lowest());
-
-    for (const auto &row : X) {
-      for (size_t j = 0; j < d; j++) {
-        if (row[j] < min_[j]) {
-          min_[j] = row[j];
-        }
-        if (row[j] > max[j]) {
-          max[j] = row[j];
-        }
-      }
-    }
-
-    range_.resize(d);
-    for (size_t j = 0; j < d; j++) {
-      range_[j] = max[j] - min_[j];
-      if (range_[j] == 0.0) {
-        range_[j] = 1.0;
-      }
-    }
-  }
-
-  Matrix transform(const Matrix &X) const {
-    Matrix result = X;
-    for (auto &row : result) {
-      for (size_t j = 0; j < row.size(); j++) {
-        row[j] = (row[j] - min_[j]) / range_[j];
+      for (auto [value, mean, stddev] : std::views::zip(row, mean_, std_)) {
+        value = (value - mean) / stddev;
       }
     }
     return result;

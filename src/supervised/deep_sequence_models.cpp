@@ -12,7 +12,7 @@
 namespace {
 
 double sigmoidSafe(double v) {
-  const double clamped = std::clamp(v, -60.0, 60.0);
+  const double clamped = std::clamp(v, -kSigmoidClampAbs, kSigmoidClampAbs);
   return 1.0 / (1.0 + std::exp(-clamped));
 }
 
@@ -58,8 +58,7 @@ private:
 
 public:
   void fit(const Matrix &rawFeatures, const Vector &y, bool classification,
-           int epochs = 260, double learningRate = 0.015,
-           double l2 = 5e-4) {
+           int epochs = 260, double learningRate = 0.015, double l2 = 5e-4) {
     if (rawFeatures.empty() || y.empty()) {
       initialized_ = false;
       adapterScale_.clear();
@@ -74,13 +73,13 @@ public:
 
     std::vector<size_t> order(rawFeatures.size());
     std::iota(order.begin(), order.end(), size_t{0});
-    std::mt19937 rng(42);
+    std::mt19937 rng(kDefaultSeed);
 
     for (int epoch = 0; epoch < epochs; epoch++) {
       std::shuffle(order.begin(), order.end(), rng);
       const double lr =
           learningRate * (1.0 - (0.75 * static_cast<double>(epoch) /
-                                   static_cast<double>(std::max(1, epochs))));
+                                 static_cast<double>(std::max(1, epochs))));
 
       for (size_t idx : order) {
         const Vector &raw = rawFeatures[idx];
@@ -111,9 +110,7 @@ public:
     }
   }
 
-  double predictRegression(const Vector &raw) const {
-    return linear(raw);
-  }
+  double predictRegression(const Vector &raw) const { return linear(raw); }
 
   double predictClassification(const Vector &raw) const {
     const double p = sigmoidSafe(linear(raw));
@@ -131,7 +128,8 @@ public:
     bias_ = bias;
     adapterScale_ = adapterScale;
     adapterShift_ = adapterShift;
-    initialized_ = !weights_.empty() && (weights_.size() == adapterScale_.size()) &&
+    initialized_ = !weights_.empty() &&
+                   (weights_.size() == adapterScale_.size()) &&
                    (weights_.size() == adapterShift_.size());
   }
 };
@@ -146,7 +144,8 @@ private:
 
 public:
   TinyCNNEncoder(int nFilters = 8, int kernelSize = 3)
-      : nFilters_(std::max(1, nFilters)), kernelSize_(std::max(1, kernelSize)) {}
+      : nFilters_(std::max(1, nFilters)), kernelSize_(std::max(1, kernelSize)) {
+  }
 
   void ensureInitialized(size_t inputSize) {
     if (initialized_) {
@@ -156,7 +155,7 @@ public:
     const int effectiveKernel =
         std::max(1, std::min(kernelSize_, static_cast<int>(inputSize)));
 
-    std::mt19937 rng(42);
+    std::mt19937 rng(kDefaultSeed);
     std::normal_distribution<double> dist(0.0, 0.15);
 
     filters_.assign(static_cast<size_t>(nFilters_),
@@ -211,7 +210,8 @@ private:
 public:
   explicit TinyRNNEncoder(int hidden = 12)
       : hidden_(std::max(2, hidden)),
-        wH_(static_cast<size_t>(hidden_), Vector(static_cast<size_t>(hidden_), 0.0)),
+        wH_(static_cast<size_t>(hidden_),
+            Vector(static_cast<size_t>(hidden_), 0.0)),
         wX_(static_cast<size_t>(hidden_), 0.0),
         b_(static_cast<size_t>(hidden_), 0.0) {
     std::mt19937 rng(123);
@@ -235,8 +235,8 @@ public:
 
     for (double value : x) {
       for (int j = 0; j < hidden_; j++) {
-        double pre = b_[static_cast<size_t>(j)] +
-                     (wX_[static_cast<size_t>(j)] * value);
+        double pre =
+            b_[static_cast<size_t>(j)] + (wX_[static_cast<size_t>(j)] * value);
         for (int k = 0; k < hidden_; k++) {
           pre += wH_[static_cast<size_t>(j)][static_cast<size_t>(k)] *
                  h[static_cast<size_t>(k)];
@@ -274,10 +274,14 @@ public:
         wfX_(static_cast<size_t>(hidden_), 0.0),
         woX_(static_cast<size_t>(hidden_), 0.0),
         wgX_(static_cast<size_t>(hidden_), 0.0),
-        wiH_(static_cast<size_t>(hidden_), Vector(static_cast<size_t>(hidden_), 0.0)),
-        wfH_(static_cast<size_t>(hidden_), Vector(static_cast<size_t>(hidden_), 0.0)),
-        woH_(static_cast<size_t>(hidden_), Vector(static_cast<size_t>(hidden_), 0.0)),
-        wgH_(static_cast<size_t>(hidden_), Vector(static_cast<size_t>(hidden_), 0.0)),
+        wiH_(static_cast<size_t>(hidden_),
+             Vector(static_cast<size_t>(hidden_), 0.0)),
+        wfH_(static_cast<size_t>(hidden_),
+             Vector(static_cast<size_t>(hidden_), 0.0)),
+        woH_(static_cast<size_t>(hidden_),
+             Vector(static_cast<size_t>(hidden_), 0.0)),
+        wgH_(static_cast<size_t>(hidden_),
+             Vector(static_cast<size_t>(hidden_), 0.0)),
         bi_(static_cast<size_t>(hidden_), 0.0),
         bf_(static_cast<size_t>(hidden_), 0.0),
         bo_(static_cast<size_t>(hidden_), 0.0),
@@ -381,9 +385,8 @@ public:
   Vector embedToken(double x) const {
     Vector e(static_cast<size_t>(hidden_), 0.0);
     for (int i = 0; i < hidden_; i++) {
-      e[static_cast<size_t>(i)] =
-          std::sin((freq_[static_cast<size_t>(i)] * x) +
-                   phase_[static_cast<size_t>(i)]);
+      e[static_cast<size_t>(i)] = std::sin((freq_[static_cast<size_t>(i)] * x) +
+                                           phase_[static_cast<size_t>(i)]);
     }
     return e;
   }
@@ -439,8 +442,7 @@ public:
     Vector pooled(static_cast<size_t>(hidden_), 0.0);
     for (size_t i = 0; i < n; i++) {
       for (int d = 0; d < hidden_; d++) {
-        pooled[static_cast<size_t>(d)] +=
-            contexts[i][static_cast<size_t>(d)];
+        pooled[static_cast<size_t>(d)] += contexts[i][static_cast<size_t>(d)];
       }
     }
 
@@ -497,8 +499,7 @@ public:
   int getKernelSize() const { return encoder_.kernelSize(); }
 
   void setReadoutState(const Vector &weights, double bias,
-                       const Vector &adapterScale,
-                       const Vector &adapterShift) {
+                       const Vector &adapterScale, const Vector &adapterShift) {
     head_.setState(weights, bias, adapterScale, adapterShift);
   }
 };
@@ -529,8 +530,7 @@ public:
   int getKernelSize() const { return encoder_.kernelSize(); }
 
   void setReadoutState(const Vector &weights, double bias,
-                       const Vector &adapterScale,
-                       const Vector &adapterShift) {
+                       const Vector &adapterScale, const Vector &adapterShift) {
     head_.setState(weights, bias, adapterScale, adapterShift);
   }
 };
@@ -559,8 +559,7 @@ public:
   int getHidden() const { return encoder_.hidden(); }
 
   void setReadoutState(const Vector &weights, double bias,
-                       const Vector &adapterScale,
-                       const Vector &adapterShift) {
+                       const Vector &adapterScale, const Vector &adapterShift) {
     head_.setState(weights, bias, adapterScale, adapterShift);
   }
 };
@@ -589,8 +588,7 @@ public:
   int getHidden() const { return encoder_.hidden(); }
 
   void setReadoutState(const Vector &weights, double bias,
-                       const Vector &adapterScale,
-                       const Vector &adapterShift) {
+                       const Vector &adapterScale, const Vector &adapterShift) {
     head_.setState(weights, bias, adapterScale, adapterShift);
   }
 };
@@ -619,8 +617,7 @@ public:
   int getHidden() const { return encoder_.hidden(); }
 
   void setReadoutState(const Vector &weights, double bias,
-                       const Vector &adapterScale,
-                       const Vector &adapterShift) {
+                       const Vector &adapterScale, const Vector &adapterShift) {
     head_.setState(weights, bias, adapterScale, adapterShift);
   }
 };
@@ -649,8 +646,7 @@ public:
   int getHidden() const { return encoder_.hidden(); }
 
   void setReadoutState(const Vector &weights, double bias,
-                       const Vector &adapterScale,
-                       const Vector &adapterShift) {
+                       const Vector &adapterScale, const Vector &adapterShift) {
     head_.setState(weights, bias, adapterScale, adapterShift);
   }
 };
@@ -661,8 +657,7 @@ private:
   TrainableAdapterHead head_;
 
 public:
-  explicit TransformerRegressor(int hidden = 16)
-      : encoder_(hidden), head_() {}
+  explicit TransformerRegressor(int hidden = 16) : encoder_(hidden), head_() {}
 
   void fit(const Matrix &X, const Vector &y) {
     Matrix H = encodeMatrix(encoder_, X);
@@ -680,8 +675,7 @@ public:
   int getHidden() const { return encoder_.hidden(); }
 
   void setReadoutState(const Vector &weights, double bias,
-                       const Vector &adapterScale,
-                       const Vector &adapterShift) {
+                       const Vector &adapterScale, const Vector &adapterShift) {
     head_.setState(weights, bias, adapterScale, adapterShift);
   }
 };
@@ -692,8 +686,7 @@ private:
   TrainableAdapterHead head_;
 
 public:
-  explicit TransformerClassifier(int hidden = 16)
-      : encoder_(hidden), head_() {}
+  explicit TransformerClassifier(int hidden = 16) : encoder_(hidden), head_() {}
 
   void fit(const Matrix &X, const Vector &y) {
     Matrix H = encodeMatrix(encoder_, X);
@@ -711,8 +704,7 @@ public:
   int getHidden() const { return encoder_.hidden(); }
 
   void setReadoutState(const Vector &weights, double bias,
-                       const Vector &adapterScale,
-                       const Vector &adapterShift) {
+                       const Vector &adapterScale, const Vector &adapterShift) {
     head_.setState(weights, bias, adapterScale, adapterShift);
   }
 };

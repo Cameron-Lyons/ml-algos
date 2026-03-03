@@ -1,20 +1,34 @@
-#include "matrix.h"
+#ifndef FEATURE_IMPORTANCE_H
+#define FEATURE_IMPORTANCE_H
+
+#include "metrics.h"
+#include <concepts>
 #include <numeric>
 #include <random>
 #include <ranges>
 #include <vector>
 
+template <typename M>
+concept ModelBatchPredictor = requires(const M m, const Matrix &X) {
+  { m.predict(X) } -> std::convertible_to<Vector>;
+};
+
+template <typename M>
+concept ModelPointPredictor = requires(const M m, const Vector &x) {
+  { m.predict(x) } -> std::convertible_to<double>;
+};
+
 template <typename Model>
-  requires(PointPredictor<Model> || BatchPredictor<Model>)
+  requires(ModelPointPredictor<Model> || ModelBatchPredictor<Model>)
 Vector permutationImportance(const Model &model, const Matrix &X,
                              const Vector &y, size_t nRepeats = 5,
-                             unsigned int seed = 42,
+                             unsigned int seed = kDefaultSeed,
                              bool isClassification = false) {
   size_t n = X.size();
   size_t nFeatures = X[0].size();
 
   auto collectPredictions = [&](const Matrix &data) -> Vector {
-    if constexpr (BatchPredictor<Model>) {
+    if constexpr (ModelBatchPredictor<Model>) {
       return model.predict(data);
     } else {
       Vector preds;
@@ -27,12 +41,8 @@ Vector permutationImportance(const Model &model, const Matrix &X,
   };
 
   Vector baselinePreds = collectPredictions(X);
-  double baselineScore;
-  if (isClassification) {
-    baselineScore = accuracy(y, baselinePreds);
-  } else {
-    baselineScore = r2(y, baselinePreds);
-  }
+  double baselineScore =
+      isClassification ? accuracy(y, baselinePreds) : r2(y, baselinePreds);
 
   Vector importances(nFeatures, 0.0);
 
@@ -42,7 +52,7 @@ Vector permutationImportance(const Model &model, const Matrix &X,
     std::vector<size_t> indices(n);
 
     for (size_t rep = 0; rep < nRepeats; rep++) {
-      auto permSeed = (seed + static_cast<unsigned int>((f * nRepeats) + rep));
+      auto permSeed = seed + static_cast<unsigned int>((f * nRepeats) + rep);
       std::mt19937 rng(permSeed);
       std::iota(indices.begin(), indices.end(), size_t{0});
       std::ranges::shuffle(indices, rng);
@@ -52,13 +62,8 @@ Vector permutationImportance(const Model &model, const Matrix &X,
       }
 
       Vector permPreds = collectPredictions(Xperm);
-      double permScore;
-      if (isClassification) {
-        permScore = accuracy(y, permPreds);
-      } else {
-        permScore = r2(y, permPreds);
-      }
-
+      double permScore =
+          isClassification ? accuracy(y, permPreds) : r2(y, permPreds);
       totalDrop += baselineScore - permScore;
     }
 
@@ -67,3 +72,5 @@ Vector permutationImportance(const Model &model, const Matrix &X,
 
   return importances;
 }
+
+#endif // FEATURE_IMPORTANCE_H

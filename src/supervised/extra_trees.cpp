@@ -60,7 +60,8 @@ private:
     return static_cast<double>(bestClass);
   }
 
-  static double regressionScore(const Vector &y, const std::vector<size_t> &left,
+  static double regressionScore(const Vector &y,
+                                const std::vector<size_t> &left,
                                 const std::vector<size_t> &right) {
     if (left.empty() || right.empty()) {
       return std::numeric_limits<double>::infinity();
@@ -108,9 +109,9 @@ private:
     return ((nLeft / n) * gini(left)) + ((nRight / n) * gini(right));
   }
 
-  std::unique_ptr<ExtraTreeNode>
-  build(const Matrix &X, const Vector &y, const std::vector<size_t> &idx,
-        int depth) {
+  std::unique_ptr<ExtraTreeNode> build(const Matrix &X, const Vector &y,
+                                       const std::vector<size_t> &idx,
+                                       int depth) {
     auto node = std::make_unique<ExtraTreeNode>();
     if (idx.empty()) {
       return node;
@@ -123,8 +124,8 @@ private:
     }
 
     const size_t nFeatures = X[idx.front()].size();
-    const size_t featureBudget =
-        static_cast<size_t>(std::clamp(maxFeatures_, 1, static_cast<int>(nFeatures)));
+    const size_t featureBudget = static_cast<size_t>(
+        std::clamp(maxFeatures_, 1, static_cast<int>(nFeatures)));
 
     std::vector<size_t> candidates(nFeatures);
     std::iota(candidates.begin(), candidates.end(), size_t{0});
@@ -206,10 +207,11 @@ private:
   }
 
 public:
-  ExtraTree(int maxDepth, int maxFeatures, int randomSplits, bool classification)
+  ExtraTree(int maxDepth, int maxFeatures, int randomSplits,
+            bool classification)
       : root_(nullptr), maxDepth_(maxDepth), maxFeatures_(maxFeatures),
         randomSplits_(std::max(1, randomSplits)),
-        classification_(classification), rng_(42) {}
+        classification_(classification), rng_(kDefaultSeed) {}
 
   void fit(const Matrix &X, const Vector &y) {
     std::vector<size_t> indices(X.size());
@@ -252,10 +254,10 @@ private:
   }
 
 public:
-  ExtraTreesRegressor(size_t nTrees = 100, int maxDepth = 8, int maxFeatures = -1,
-                      int randomSplits = 8)
+  ExtraTreesRegressor(size_t nTrees = 100, int maxDepth = 8,
+                      int maxFeatures = -1, int randomSplits = 8)
       : nTrees_(nTrees), maxDepth_(maxDepth), maxFeatures_(maxFeatures),
-        randomSplits_(randomSplits), rng_(42) {}
+        randomSplits_(randomSplits), rng_(kDefaultSeed) {}
 
   void fit(const Matrix &X, const Vector &y) {
     if (X.empty()) {
@@ -265,9 +267,8 @@ public:
 
     const size_t nFeatures = X.front().size();
     const int featureBudget =
-        maxFeatures_ > 0
-            ? std::min(maxFeatures_, static_cast<int>(nFeatures))
-            : static_cast<int>(defaultMaxFeatures(nFeatures));
+        maxFeatures_ > 0 ? std::min(maxFeatures_, static_cast<int>(nFeatures))
+                         : static_cast<int>(defaultMaxFeatures(nFeatures));
 
     trees_.clear();
     trees_.reserve(nTrees_);
@@ -321,7 +322,7 @@ public:
   ExtraTreesClassifier(size_t nTrees = 100, int maxDepth = 8,
                        int maxFeatures = -1, int randomSplits = 8)
       : nTrees_(nTrees), maxDepth_(maxDepth), maxFeatures_(maxFeatures),
-        randomSplits_(randomSplits), rng_(42) {}
+        randomSplits_(randomSplits), rng_(kDefaultSeed) {}
 
   void fit(const Matrix &X, const Vector &y) {
     if (X.empty()) {
@@ -331,9 +332,8 @@ public:
 
     const size_t nFeatures = X.front().size();
     const int featureBudget =
-        maxFeatures_ > 0
-            ? std::min(maxFeatures_, static_cast<int>(nFeatures))
-            : static_cast<int>(defaultMaxFeatures(nFeatures));
+        maxFeatures_ > 0 ? std::min(maxFeatures_, static_cast<int>(nFeatures))
+                         : static_cast<int>(defaultMaxFeatures(nFeatures));
 
     trees_.clear();
     trees_.reserve(nTrees_);

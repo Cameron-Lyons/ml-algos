@@ -85,13 +85,14 @@ Points initializeEmbedding(const Points &data, size_t outDims) {
     s = std::max(s, 1e-6);
   }
 
-  std::mt19937 rng(42);
+  std::mt19937 rng(kDefaultSeed);
   std::normal_distribution<double> jitter(0.0, 0.01);
 
   for (size_t i = 0; i < n; i++) {
     for (size_t d = 0; d < outDims; d++) {
       const size_t src = d % inDims;
-      embedding[i][d] = ((data[i][src] - means[src]) / stddev[src]) + jitter(rng);
+      embedding[i][d] =
+          ((data[i][src] - means[src]) / stddev[src]) + jitter(rng);
     }
   }
   return embedding;
@@ -219,12 +220,13 @@ Points umap(const Points &data, size_t nComponents = 2, size_t nNeighbors = 10,
         (static_cast<unsigned long long>(j) << 32U) |
         static_cast<unsigned long long>(i);
     const auto reverseIt = directedWeights.find(reverseKey);
-    const double w_ji = reverseIt == directedWeights.end() ? 0.0 : reverseIt->second;
+    const double w_ji =
+        reverseIt == directedWeights.end() ? 0.0 : reverseIt->second;
     const double sym = w_ij + w_ji - (w_ij * w_ji);
     edges.push_back({a, b, std::clamp(sym, 1e-6, 1.0)});
   }
 
-  std::mt19937 rng(42);
+  std::mt19937 rng(kDefaultSeed);
   std::uniform_real_distribution<double> edgePick(0.0, 1.0);
   std::uniform_int_distribution<size_t> nodeDist(0, n - 1);
   const int negativeSamples = 5;
@@ -272,8 +274,7 @@ Points umap(const Points &data, size_t nComponents = 2, size_t nNeighbors = 10,
         }
         negDistSq = std::max(negDistSq, 1e-8);
 
-        const double repulsive =
-            lr * repulsiveStrength / (0.001 + negDistSq);
+        const double repulsive = lr * repulsiveStrength / (0.001 + negDistSq);
         for (size_t d = 0; d < outDims; d++) {
           const double grad = repulsive * negDiff[d];
           embedding[edge.i][d] += grad;

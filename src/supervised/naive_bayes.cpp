@@ -1,7 +1,7 @@
 #include "../matrix.h"
 #include <cmath>
-#include <functional>
 #include <flat_map>
+#include <functional>
 #include <numbers>
 #include <ranges>
 #include <vector>
@@ -139,9 +139,9 @@ public:
             featureCounts[c].contains(jIdx) ? featureCounts[c][jIdx] : 0;
 
         logProb +=
-            features[j] *
-            log((countForFeatureInClass + alpha) /
-                (totalForClass + (static_cast<double>(features.size()) * alpha)));
+            features[j] * log((countForFeatureInClass + alpha) /
+                              (totalForClass +
+                               (static_cast<double>(features.size()) * alpha)));
       }
 
       if (logProb > maxLogProb) {

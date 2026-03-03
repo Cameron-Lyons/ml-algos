@@ -43,7 +43,9 @@ struct DenseMatrixBuffer {
     return ConstMatrixView(data.data(), rows, cols);
   }
 
-  [[nodiscard]] MatrixView view() { return MatrixView(data.data(), rows, cols); }
+  [[nodiscard]] MatrixView view() {
+    return MatrixView(data.data(), rows, cols);
+  }
 
   [[nodiscard]] Matrix toNested() const {
     Matrix matrix(rows, Vector(cols, 0.0));

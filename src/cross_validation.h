@@ -1,3 +1,6 @@
+#ifndef CROSS_VALIDATION_H
+#define CROSS_VALIDATION_H
+
 #include "matrix.h"
 #include <algorithm>
 #include <map>
@@ -27,7 +30,8 @@ C subsetByIndices(const C &data, const std::vector<size_t> &indices) {
   return subset;
 }
 
-std::vector<FoldIndices> kFoldSplit(size_t n_samples, int k, unsigned int seed) {
+inline std::vector<FoldIndices> kFoldSplit(size_t n_samples, int k,
+                                           unsigned int seed) {
   auto indices =
       std::views::iota(size_t{0}, n_samples) | std::ranges::to<std::vector>();
   std::ranges::shuffle(indices, std::default_random_engine(seed));
@@ -37,8 +41,8 @@ std::vector<FoldIndices> kFoldSplit(size_t n_samples, int k, unsigned int seed) 
   size_t fold_size = n_samples / static_cast<size_t>(k);
 
   for (int i = 0; i < k; i++) {
-    auto start = static_cast<size_t>(i) * fold_size;
-    size_t end = (i == k - 1) ? n_samples : start + fold_size;
+    size_t start = static_cast<size_t>(i) * fold_size;
+    size_t end = (i == (k - 1)) ? n_samples : start + fold_size;
 
     std::vector<size_t> test_indices(
         indices.begin() + static_cast<ptrdiff_t>(start),
@@ -51,15 +55,15 @@ std::vector<FoldIndices> kFoldSplit(size_t n_samples, int k, unsigned int seed) 
                          indices.begin() + static_cast<ptrdiff_t>(end),
                          indices.end());
 
-    folds.push_back(
-        {.trainIndices = std::move(train_indices), .testIndices = std::move(test_indices)});
+    folds.push_back({.trainIndices = std::move(train_indices),
+                     .testIndices = std::move(test_indices)});
   }
 
   return folds;
 }
 
-std::vector<FoldIndices> stratifiedKFoldSplit(const Vector &y, int k,
-                                              unsigned int seed) {
+inline std::vector<FoldIndices> stratifiedKFoldSplit(const Vector &y, int k,
+                                                     unsigned int seed) {
   std::map<int, std::vector<size_t>> class_indices;
   for (size_t i = 0; i < y.size(); i++) {
     class_indices[static_cast<int>(y[i])].push_back(i);
@@ -67,11 +71,13 @@ std::vector<FoldIndices> stratifiedKFoldSplit(const Vector &y, int k,
 
   std::default_random_engine rng(seed);
   for (auto &[cls, indices] : class_indices) {
+    (void)cls;
     std::ranges::shuffle(indices, rng);
   }
 
   std::vector<std::vector<size_t>> fold_indices(static_cast<size_t>(k));
   for (const auto &[cls, indices] : class_indices) {
+    (void)cls;
     size_t n = indices.size();
     size_t fold_size = n / static_cast<size_t>(k);
     size_t remainder = n % static_cast<size_t>(k);
@@ -97,9 +103,11 @@ std::vector<FoldIndices> stratifiedKFoldSplit(const Vector &y, int k,
                              fold_indices[static_cast<size_t>(j)].end());
       }
     }
-    folds.push_back(
-        {.trainIndices = std::move(train_indices), .testIndices = std::move(test_indices)});
+    folds.push_back({.trainIndices = std::move(train_indices),
+                     .testIndices = std::move(test_indices)});
   }
 
   return folds;
 }
+
+#endif // CROSS_VALIDATION_H

@@ -114,7 +114,7 @@ public:
     maxDepth_ = static_cast<int>(
         std::ceil(std::log2(static_cast<double>(subsampleSize))));
 
-    std::mt19937 rng(42);
+    std::mt19937 rng(kDefaultSeed);
     trees_.clear();
     trees_.reserve(nEstimators_);
 

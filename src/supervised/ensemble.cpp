@@ -11,7 +11,7 @@ protected:
   std::vector<DecisionTree> trees;
   size_t num_trees;
   int max_features;
-  std::mt19937 rng_{42};
+  std::mt19937 rng_{kDefaultSeed};
 
   virtual void bootstrapSample(const Matrix &X, const Vector &y,
                                Matrix &X_sample, Vector &y_sample) {
@@ -128,7 +128,7 @@ protected:
     size_t n = X.size();
     auto indices =
         std::views::iota(size_t{0}, n) | std::ranges::to<std::vector>();
-    std::ranges::shuffle(indices, std::default_random_engine(42));
+    std::ranges::shuffle(indices, std::default_random_engine(kDefaultSeed));
     size_t val_size =
         static_cast<size_t>(static_cast<double>(n) * validationFraction);
     X_val.reserve(val_size);

@@ -66,9 +66,10 @@ private:
           continue;
         }
 
-        double gain = (0.5 * ((GL * GL / (HL + lambda)) +
-                              (GR * GR / (HR + lambda)) - (G * G / (H + lambda)))) -
-                      gamma;
+        double gain =
+            (0.5 * ((GL * GL / (HL + lambda)) + (GR * GR / (HR + lambda)) -
+                    (G * G / (H + lambda)))) -
+            gamma;
 
         if (gain > bestGain) {
           bestGain = gain;
@@ -149,7 +150,7 @@ private:
     size_t n = X.size();
     auto indices =
         std::views::iota(size_t{0}, n) | std::ranges::to<std::vector>();
-    std::ranges::shuffle(indices, std::default_random_engine(42));
+    std::ranges::shuffle(indices, std::default_random_engine(kDefaultSeed));
     size_t val_size =
         static_cast<size_t>(static_cast<double>(n) * validationFraction);
     X_val.reserve(val_size);
@@ -276,7 +277,7 @@ private:
     size_t n = X.size();
     auto indices =
         std::views::iota(size_t{0}, n) | std::ranges::to<std::vector>();
-    std::ranges::shuffle(indices, std::default_random_engine(42));
+    std::ranges::shuffle(indices, std::default_random_engine(kDefaultSeed));
     size_t val_size =
         static_cast<size_t>(static_cast<double>(n) * validationFraction);
     X_val.reserve(val_size);

@@ -31,7 +31,7 @@ public:
     hiddenBias = Vector(hiddenSize, 0.1);
     outputBias = Vector(outputSize, 0.1);
 
-    std::mt19937 rng(42);
+    std::mt19937 rng(kDefaultSeed);
     std::uniform_real_distribution<double> dist(-0.5, 0.5);
     for (size_t i = 0; i < inputSize; i++) {
       for (size_t j = 0; j < hiddenSize; j++) {

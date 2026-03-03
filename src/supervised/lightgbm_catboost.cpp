@@ -59,7 +59,8 @@ Matrix histogramTransform(const Matrix &X, std::vector<Vector> &edges,
   return transformed;
 }
 
-Vector histogramTransformRow(const Vector &x, const std::vector<Vector> &edges) {
+Vector histogramTransformRow(const Vector &x,
+                             const std::vector<Vector> &edges) {
   Vector transformed(x.size(), 0.0);
   for (size_t j = 0; j < x.size(); j++) {
     const auto &featureEdges = edges[j];
@@ -72,7 +73,7 @@ Vector histogramTransformRow(const Vector &x, const std::vector<Vector> &edges) 
 }
 
 double sigmoidClamped(double v) {
-  const double clamped = std::clamp(v, -60.0, 60.0);
+  const double clamped = std::clamp(v, -kSigmoidClampAbs, kSigmoidClampAbs);
   return 1.0 / (1.0 + std::exp(-clamped));
 }
 
@@ -131,8 +132,8 @@ struct CatBoostTree {
         constexpr int kCandidates = 10;
         for (int c = 0; c < kCandidates; c++) {
           const double threshold = thresholdDist(rng);
-          const size_t nLeaves =
-              static_cast<size_t>(1) << static_cast<size_t>(level + 1);
+          const size_t nLeaves = static_cast<size_t>(1)
+                                 << static_cast<size_t>(level + 1);
           Vector sums(nLeaves, 0.0);
           Vector sqSums(nLeaves, 0.0);
           std::vector<int> counts(nLeaves, 0);
@@ -279,7 +280,7 @@ public:
   CatBoostRegressor(int nEstimators = 150, double learningRate = 0.05,
                     int depth = 4)
       : nEstimators_(nEstimators), learningRate_(learningRate), depth_(depth),
-        basePrediction_(0.0), trees_(), rng_(42) {}
+        basePrediction_(0.0), trees_(), rng_(kDefaultSeed) {}
 
   void fit(const Matrix &X, const Vector &y) {
     if (X.empty() || y.empty()) {
@@ -288,8 +289,8 @@ public:
       return;
     }
 
-    basePrediction_ =
-        std::accumulate(y.begin(), y.end(), 0.0) / static_cast<double>(y.size());
+    basePrediction_ = std::accumulate(y.begin(), y.end(), 0.0) /
+                      static_cast<double>(y.size());
     Vector preds(y.size(), basePrediction_);
 
     trees_.clear();
@@ -334,7 +335,7 @@ public:
   CatBoostClassifier(int nEstimators = 200, double learningRate = 0.05,
                      int depth = 4)
       : nEstimators_(nEstimators), learningRate_(learningRate), depth_(depth),
-        baseLogit_(0.0), trees_(), rng_(42) {}
+        baseLogit_(0.0), trees_(), rng_(kDefaultSeed) {}
 
   void fit(const Matrix &X, const Vector &y) {
     if (X.empty() || y.empty()) {
@@ -343,8 +344,8 @@ public:
       return;
     }
 
-    double positiveRate =
-        std::accumulate(y.begin(), y.end(), 0.0) / static_cast<double>(y.size());
+    double positiveRate = std::accumulate(y.begin(), y.end(), 0.0) /
+                          static_cast<double>(y.size());
     positiveRate = std::clamp(positiveRate, 1e-6, 1.0 - 1e-6);
     baseLogit_ = std::log(positiveRate / (1.0 - positiveRate));
 

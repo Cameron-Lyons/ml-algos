@@ -28,10 +28,9 @@ std::vector<Neighbor> neighborsWithin(const Points &data, size_t point,
       out.push_back({i, d});
     }
   }
-  std::sort(out.begin(), out.end(),
-            [](const Neighbor &a, const Neighbor &b) {
-              return a.distance < b.distance;
-            });
+  std::sort(out.begin(), out.end(), [](const Neighbor &a, const Neighbor &b) {
+    return a.distance < b.distance;
+  });
   return out;
 }
 

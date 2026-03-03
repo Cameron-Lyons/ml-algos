@@ -109,7 +109,7 @@ std::vector<int> spectralClustering(const Points &data, size_t k,
     }
   }
 
-  std::srand(42);
+  std::srand(kDefaultSeed);
   Points centroids(k);
   for (size_t i = 0; i < k; i++) {
     centroids[i] = embedded[static_cast<size_t>(std::rand()) % n];
