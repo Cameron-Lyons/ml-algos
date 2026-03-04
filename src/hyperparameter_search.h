@@ -59,8 +59,9 @@ template <typename Factory>
 GridSearchResult
 gridSearchCV(Factory factory, const std::vector<ParamSet> &paramGrid,
              const Matrix &X, const Vector &y, int k, bool higherIsBetter,
-             bool isClassification = false) {
-  auto folds = kFoldSplit(X.size(), k, kDefaultSeed);
+             bool isClassification = false,
+             unsigned int seed = kDefaultSeed) {
+  auto folds = kFoldSplit(X.size(), k, seed);
   std::vector<PreparedFold> preparedFolds;
   preparedFolds.reserve(folds.size());
   for (const auto &[trainIdx, testIdx] : folds) {

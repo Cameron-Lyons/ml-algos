@@ -45,17 +45,12 @@ private:
   }
 
 public:
-  void train(const std::vector<std::vector<double>> &features,
-             const std::vector<int> &labels) {
+  void train(const Matrix &features, const std::vector<int> &labels) {
     int numSamples = static_cast<int>(features.size());
     int numFeatures = static_cast<int>(features[0].size());
     int countClass0 = 0;
-    Matrix valuesClass0, valuesClass1;
-
-    for (int i = 0; i < numFeatures; ++i) {
-      valuesClass0.emplace_back();
-      valuesClass1.emplace_back();
-    }
+    std::vector<Vector> valuesClass0(static_cast<size_t>(numFeatures));
+    std::vector<Vector> valuesClass1(static_cast<size_t>(numFeatures));
 
     for (int i = 0; i < numSamples; ++i) {
       if (labels[static_cast<size_t>(i)] == 0) {

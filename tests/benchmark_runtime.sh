@@ -487,7 +487,7 @@ run_suite() {
   tsne_exe="$(build_tsne_harness "$repo" "$tmp_dir")"
 
   local grid_stats
-  grid_stats="$(measure_command_ms "$runs" "$warmup" "$bin" "$data_file" "gridsearch")"
+  grid_stats="$(measure_command_ms "$runs" "$warmup" "$bin" "tune" "--task" "regression" "--algorithm" "ridge" "--data" "$data_file")"
   local tsne_stats
   tsne_stats="$(measure_command_ms "$runs" "$warmup" "$tsne_exe")"
 
