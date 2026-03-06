@@ -1,0 +1,17 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "core",
+    hdrs = [
+        "dense_matrix.h",
+        "linalg.h",
+        "metrics.h",
+    ],
+    srcs = [
+        "dense_matrix.cc",
+        "linalg.cc",
+        "metrics.cc",
+    ],
+)

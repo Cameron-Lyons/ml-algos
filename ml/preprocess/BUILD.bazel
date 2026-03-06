@@ -1,0 +1,16 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "preprocess",
+    hdrs = [
+        "specs.h",
+        "transformers.h",
+    ],
+    srcs = [
+        "specs.cc",
+        "transformers.cc",
+    ],
+    deps = ["//ml/core:core"],
+)

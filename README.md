@@ -1,18 +1,61 @@
-# ML Algorithms Library (v2)
+# ML Algorithms Library (v3)
 
-A from-scratch machine learning toolkit in C++23 with an explicit, task-driven CLI and a small stable library surface.
+A Bazel-first C++23 machine learning toolkit for numeric tabular pipelines. v3 breaks the old v2 API and CLI on purpose: the library is now the primary surface, the CLI is a thin wrapper, data is headered CSV, and models use the binary `MLALGOS_V3` bundle format.
 
-## What Changed in v2 (Backward-Incompatible)
+## Build And Test
 
-- Replaced the old implicit mode/algorithm CLI with explicit subcommands.
-- Removed automatic task detection; you now must provide `--task regression|classification`.
-- Introduced a unified `RunConfig` (`--seed`, `--test-ratio`, `--cv-folds`) used across train/evaluate/tune.
-- Split CLI and library layers (`src/main.cpp` + `src/ml_v2.cpp`/`src/ml_v2.h`).
-- Replaced ad-hoc model files with schema-based `MLALGOS_MODEL_V2` envelopes including metadata, feature schema, payload checksum, and payload size.
-- Added `model-info` and `predict` commands that do not require the original training CSV.
-- Replaced raw `using Matrix = std::vector<std::vector<double>>` with a dedicated `Matrix` type in `src/matrix.h`.
+```sh
+bazel build //app:ml-algos
+bazel test //...
+```
 
-## Supported Algorithms (v2)
+## CLI
+
+```sh
+# Fit and save a regression pipeline
+./bazel-bin/app/ml-algos fit \
+  --task regression \
+  --algorithm ridge \
+  --data data/v3/regression.csv \
+  --target target \
+  --model /tmp/ridge.bundle
+
+# Evaluate a classifier with preprocessing
+./bazel-bin/app/ml-algos eval \
+  --task classification \
+  --algorithm logistic \
+  --data data/v3/classification_binary.csv \
+  --target label \
+  --transformers standard_scaler
+
+# Tune a classifier
+./bazel-bin/app/ml-algos tune \
+  --task classification \
+  --algorithm logistic \
+  --data data/v3/classification_binary.csv \
+  --target label \
+  --transformers standard_scaler \
+  --cv-folds 4
+
+# Inspect a saved bundle
+./bazel-bin/app/ml-algos inspect --model /tmp/ridge.bundle
+
+# Predict from a saved bundle
+./bazel-bin/app/ml-algos predict \
+  --model /tmp/ridge.bundle \
+  --input data/v3/regression_features.csv
+```
+
+Commands support `--json` for machine-readable output.
+
+## Data Contract
+
+- Training/eval/tune CSV files must be headered and numeric.
+- `--target` names the supervised target column.
+- Prediction CSV files must be headered; feature columns are matched by name against the saved model schema.
+- Extra prediction columns are ignored, but missing required feature columns fail.
+
+## Supported Pipelines
 
 ### Regression
 
@@ -20,104 +63,44 @@ A from-scratch machine learning toolkit in C++23 with an explicit, task-driven C
 - `ridge`
 - `lasso`
 - `elasticnet`
-- `tree`
-- `knn-regressor`
+- `knn`
+- `decision_tree`
+- `random_forest`
 
 ### Classification
 
-- `logistic` (binary)
-- `knn-classifier`
+- `logistic`
 - `softmax`
-- `naive-bayes`
+- `gaussian_nb`
+- `knn`
+- `decision_tree`
+- `random_forest`
 
-## Build
+### Transformers
 
-Requires a C++23-capable compiler.
+- `standard_scaler`
+- `minmax_scaler`
 
-```sh
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
+## Library Layout
 
-## CLI
+- `ml/core`: dense matrix, linear algebra, metrics
+- `ml/io`: headered CSV loading and binary model bundles
+- `ml/preprocess`: transformer specs and implementations
+- `ml/models`: typed estimator specs and model factories
+- `ml/pipeline`: dataset types, splitters, evaluation, grid search, and the `Pipeline` abstraction
 
-```sh
-# Train (+ optional model save)
-./build/ml-algos train \
-  --task regression \
-  --algorithm ridge \
-  --data data/sample_data.csv \
-  --model /tmp/ridge.model
+## Model Bundles
 
-# Evaluate
-./build/ml-algos evaluate \
-  --task classification \
-  --algorithm logistic \
-  --data data/sample_binary_data.csv
+Saved models are binary bundles with:
 
-# Tune (grid search)
-./build/ml-algos tune \
-  --task regression \
-  --algorithm ridge \
-  --data data/sample_data.csv \
-  --cv-folds 5
+- fixed magic: `MLALGOS_V3`
+- version field
+- task id
+- estimator id and typed estimator spec
+- feature schema and target name
+- class labels for classifiers
+- transformer specs and fitted transformer state
+- fitted estimator state
+- checksum validation
 
-# Inspect a model without loading any dataset
-./build/ml-algos model-info --model /tmp/ridge.model
-
-# Predict from a saved model using features-only CSV
-./build/ml-algos predict --model /tmp/ridge.model --input /tmp/features.csv
-
-# JSON output mode
-./build/ml-algos evaluate \
-  --task classification \
-  --algorithm knn-classifier \
-  --data data/sample_binary_data.csv \
-  --json
-
-# List available algorithms for a task
-./build/ml-algos list --task regression
-```
-
-## Data Format
-
-### Supervised data (`train`/`evaluate`/`tune`)
-
-- CSV, no header
-- last column is target
-- all preceding columns are features
-
-### Features-only data (`predict`)
-
-- CSV, no header
-- all columns are features
-- feature count must match the model metadata
-
-## Library Surface
-
-The main public API is in:
-
-- `src/ml_v2.h`
-
-Key entry points:
-
-- `readSupervisedCsv`
-- `readFeatureCsv`
-- `train`
-- `evaluate`
-- `tune`
-- `predict`
-- `inspectModel`
-- JSON serializers for reports
-
-## Model Serialization (v2)
-
-Models are saved with:
-
-- magic header: `MLALGOS_MODEL_V2`
-- metadata fields (`algorithm`, `task`, `feature_count`, `class_count`, `seed`, `feature_schema`)
-- payload metadata (`payload_checksum`, `payload_size`)
-- payload body
-
-Payload integrity is verified using FNV-1a checksum before deserialization.
+v3 does not load `MLALGOS_MODEL_V2`.

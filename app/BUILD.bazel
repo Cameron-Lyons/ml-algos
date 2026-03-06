@@ -1,0 +1,15 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_binary(
+    name = "ml-algos",
+    srcs = ["main.cc"],
+    deps = [
+        "//ml/io:io",
+        "//ml/models:models",
+        "//ml/pipeline:pipeline",
+        "//ml/pipeline:pipeline_types",
+        "//ml/preprocess:preprocess",
+    ],
+)

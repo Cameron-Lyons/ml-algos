@@ -1,0 +1,74 @@
+load("@rules_cc//cc:defs.bzl", "cc_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_test(
+    name = "core_test",
+    srcs = [
+        "core_test.cc",
+        "support/test_support.h",
+    ],
+    deps = ["//ml/core:core"],
+)
+
+cc_test(
+    name = "io_test",
+    srcs = [
+        "io_test.cc",
+        "support/test_support.h",
+    ],
+    data = [
+        "//data/v3:classification_binary.csv",
+        "//data/v3:regression.csv",
+    ],
+    deps = [
+        "//ml/io:io",
+        "//ml/pipeline:pipeline_types",
+    ],
+)
+
+cc_test(
+    name = "models_test",
+    srcs = [
+        "models_test.cc",
+        "support/test_support.h",
+    ],
+    deps = [
+        "//ml/core:core",
+        "//ml/models:models",
+    ],
+)
+
+cc_test(
+    name = "pipeline_test",
+    srcs = [
+        "pipeline_test.cc",
+        "support/test_support.h",
+    ],
+    data = [
+        "//data/v3:classification_offset.csv",
+        "//data/v3:prediction_features.csv",
+    ],
+    deps = [
+        "//ml/core:core",
+        "//ml/io:io",
+        "//ml/models:models",
+        "//ml/pipeline:pipeline",
+        "//ml/pipeline:pipeline_types",
+        "//ml/preprocess:preprocess",
+    ],
+)
+
+sh_test(
+    name = "cli_smoke_test",
+    srcs = ["cli_smoke_test.sh"],
+    data = [
+        "//app:ml-algos",
+        "//data/v3:classification_binary.csv",
+        "//data/v3:classification_offset.csv",
+        "//data/v3:prediction_features.csv",
+        "//data/v3:regression.csv",
+        "//data/v3:regression_features.csv",
+    ],
+)

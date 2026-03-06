@@ -1,0 +1,9 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "classification_binary.csv",
+    "classification_offset.csv",
+    "prediction_features.csv",
+    "regression.csv",
+    "regression_features.csv",
+])

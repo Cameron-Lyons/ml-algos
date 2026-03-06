@@ -1,0 +1,21 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "io",
+    hdrs = [
+        "csv.h",
+        "model_bundle.h",
+    ],
+    srcs = [
+        "csv.cc",
+        "model_bundle.cc",
+    ],
+    deps = [
+        "//ml/core:core",
+        "//ml/models:models",
+        "//ml/pipeline:pipeline_types",
+        "//ml/preprocess:preprocess",
+    ],
+)

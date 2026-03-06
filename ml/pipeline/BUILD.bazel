@@ -1,0 +1,25 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "pipeline_types",
+    hdrs = ["types.h"],
+    deps = [
+        "//ml/core:core",
+        "//ml/models:models",
+        "//ml/preprocess:preprocess",
+    ],
+)
+
+cc_library(
+    name = "pipeline",
+    hdrs = ["pipeline.h"],
+    srcs = ["pipeline.cc"],
+    deps = [
+        ":pipeline_types",
+        "//ml/core:core",
+        "//ml/models:models",
+        "//ml/preprocess:preprocess",
+    ],
+)

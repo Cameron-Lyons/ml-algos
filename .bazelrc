@@ -1,0 +1,8 @@
+build --cxxopt=-std=c++23
+build --host_cxxopt=-std=c++23
+build --cxxopt=-Wall
+build --cxxopt=-Wextra
+build --cxxopt=-Wpedantic
+build --cxxopt=-Wconversion
+build --cxxopt=-Wsign-conversion
+test --test_output=errors
