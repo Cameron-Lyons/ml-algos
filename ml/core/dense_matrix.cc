@@ -19,12 +19,12 @@ void DenseMatrix::Clear() {
   values_.clear();
 }
 
-DenseMatrix::RowView DenseMatrix::operator[](std::size_t row) {
-  return RowView(values_.data() + (row * cols_), cols_);
+DenseMatrix::Row DenseMatrix::operator[](std::size_t row) {
+  return Row(values_.data() + (row * cols_), cols_);
 }
 
-DenseMatrix::ConstRowView DenseMatrix::operator[](std::size_t row) const {
-  return ConstRowView(values_.data() + (row * cols_), cols_);
+DenseMatrix::ConstRow DenseMatrix::operator[](std::size_t row) const {
+  return ConstRow(values_.data() + (row * cols_), cols_);
 }
 
 std::expected<void, std::string>
@@ -40,8 +40,7 @@ DenseMatrix::AppendRow(std::span<const double> row) {
   return {};
 }
 
-DenseMatrix
-DenseMatrix::SliceRows(const std::vector<std::size_t> &indices) const {
+DenseMatrix DenseMatrix::SliceRows(std::span<const std::size_t> indices) const {
   DenseMatrix out;
   out.cols_ = cols_;
   out.rows_ = indices.size();
@@ -64,11 +63,11 @@ std::vector<Vector> DenseMatrix::ToRows() const {
 }
 
 std::expected<DenseMatrix, std::string>
-DenseMatrix::FromRows(const std::vector<Vector> &rows) {
+DenseMatrix::FromRows(std::span<const Vector> rows) {
   DenseMatrix matrix;
   matrix.ReserveRows(rows.size());
   for (const auto &row : rows) {
-    auto status = matrix.AppendRow(std::span<const double>(row));
+    auto status = matrix.AppendRow(row);
     if (!status) {
       return std::unexpected(status.error());
     }

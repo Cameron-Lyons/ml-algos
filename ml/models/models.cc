@@ -1,5 +1,7 @@
 #include "ml/models/interfaces.h"
 
+#include <charconv>
+#include <concepts>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -32,6 +34,9 @@ template <typename... Ts> struct Overload : Ts... {
 
 template <typename... Ts> Overload(Ts...) -> Overload<Ts...>;
 
+template <typename T>
+concept ParsedNumber = std::integral<T> || std::floating_point<T>;
+
 std::string JoinDoubles(std::span<const double> values) {
   std::ostringstream out;
   for (std::size_t index = 0; index < values.size(); ++index) {
@@ -54,30 +59,111 @@ std::string JoinInts(std::span<const int> values) {
   return out.str();
 }
 
-std::expected<Vector, std::string> ParseDoubles(std::string_view text) {
-  Vector values;
-  std::stringstream stream{std::string(text)};
-  std::string token;
-  while (std::getline(stream, token, ',')) {
-    if (token.empty()) {
-      continue;
+template <ParsedNumber T>
+std::expected<T, std::string> ParseNumber(std::string_view text,
+                                          std::string_view label) {
+  T value{};
+  const char *begin = text.data();
+  const char *end = text.data() + text.size();
+  const auto [ptr, ec] = std::from_chars(begin, end, value);
+  if (ec != std::errc{} || ptr != end) {
+    return std::unexpected("invalid " + std::string(label) + ": " +
+                           std::string(text));
+  }
+  return value;
+}
+
+template <ParsedNumber T>
+std::expected<std::vector<T>, std::string>
+ParseDelimitedNumbers(std::string_view text, std::string_view label) {
+  std::vector<T> values;
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    const auto end = text.find(',', start);
+    const auto token = end == std::string_view::npos
+                           ? text.substr(start)
+                           : text.substr(start, end - start);
+    if (!token.empty()) {
+      auto value = ParseNumber<T>(token, label);
+      if (!value) {
+        return std::unexpected(value.error());
+      }
+      values.push_back(*value);
     }
-    values.push_back(std::stod(token));
+    if (end == std::string_view::npos) {
+      break;
+    }
+    start = end + 1;
   }
   return values;
 }
 
-std::expected<LabelVector, std::string> ParseInts(std::string_view text) {
-  LabelVector values;
-  std::stringstream stream{std::string(text)};
-  std::string token;
-  while (std::getline(stream, token, ',')) {
-    if (token.empty()) {
-      continue;
+class StateReader {
+public:
+  explicit StateReader(std::string_view remaining) : remaining_(remaining) {}
+
+  [[nodiscard]] bool empty() const { return remaining_.empty(); }
+
+  std::expected<std::string_view, std::string>
+  ReadLine(std::string_view error) {
+    if (remaining_.empty()) {
+      return std::unexpected(std::string(error));
     }
-    values.push_back(std::stoi(token));
+    const auto newline = remaining_.find('\n');
+    if (newline == std::string_view::npos) {
+      const std::string_view line = remaining_;
+      remaining_ = {};
+      return line;
+    }
+    const std::string_view line = remaining_.substr(0, newline);
+    remaining_.remove_prefix(newline + 1);
+    return line;
   }
-  return values;
+
+  std::expected<std::string_view, std::string>
+  ReadChunk(std::size_t size, std::string_view error) {
+    if (remaining_.size() < size) {
+      return std::unexpected(std::string(error));
+    }
+    const std::string_view chunk = remaining_.substr(0, size);
+    remaining_.remove_prefix(size);
+    return chunk;
+  }
+
+private:
+  std::string_view remaining_;
+};
+
+std::expected<std::pair<std::size_t, std::size_t>, std::string>
+ParseShape(std::string_view text, std::string_view error) {
+  const auto separator = text.find(' ');
+  if (separator == std::string_view::npos) {
+    return std::unexpected(std::string(error));
+  }
+  auto rows = ParseNumber<std::size_t>(text.substr(0, separator), "row count");
+  if (!rows) {
+    return std::unexpected(rows.error());
+  }
+  std::string_view cols_text = text.substr(separator + 1);
+  while (!cols_text.empty() && cols_text.front() == ' ') {
+    cols_text.remove_prefix(1);
+  }
+  if (cols_text.empty()) {
+    return std::unexpected(std::string(error));
+  }
+  auto cols = ParseNumber<std::size_t>(cols_text, "column count");
+  if (!cols) {
+    return std::unexpected(cols.error());
+  }
+  return std::pair{*rows, *cols};
+}
+
+std::expected<Vector, std::string> ParseDoubles(std::string_view text) {
+  return ParseDelimitedNumbers<double>(text, "floating point value");
+}
+
+std::expected<LabelVector, std::string> ParseInts(std::string_view text) {
+  return ParseDelimitedNumbers<int>(text, "integer value");
 }
 
 std::expected<DenseMatrix, std::string>
@@ -546,28 +632,34 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::size_t rows = 0;
-    std::size_t cols = 0;
-    stream >> rows >> cols;
-    std::string line;
-    std::getline(stream, line);
+    StateReader reader(state);
+    auto shape_line = reader.ReadLine("invalid knn regressor state");
+    if (!shape_line) {
+      return std::unexpected(shape_line.error());
+    }
+    auto shape = ParseShape(*shape_line, "invalid knn regressor state");
+    if (!shape) {
+      return std::unexpected(shape.error());
+    }
+    const auto [rows, cols] = *shape;
     std::vector<Vector> rows_data;
     rows_data.reserve(rows);
     for (std::size_t row = 0; row < rows; ++row) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid knn regressor state");
+      auto line = reader.ReadLine("invalid knn regressor state");
+      if (!line) {
+        return std::unexpected(line.error());
       }
-      auto parsed = ParseDoubles(line);
+      auto parsed = ParseDoubles(*line);
       if (!parsed || parsed->size() != cols) {
         return std::unexpected("invalid knn regressor features");
       }
       rows_data.push_back(std::move(*parsed));
     }
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid knn regressor targets");
+    auto line = reader.ReadLine("invalid knn regressor targets");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    auto targets = ParseDoubles(line);
+    auto targets = ParseDoubles(*line);
     if (!targets || targets->size() != rows) {
       return std::unexpected("invalid knn regressor targets");
     }
@@ -621,7 +713,7 @@ public:
     root_ = Build(features, targets, indices, 0);
   }
 
-  double Predict(DenseMatrix::ConstRowView row) const {
+  double Predict(DenseMatrix::ConstRow row) const {
     const RegressionTreeNode *node = root_.get();
     while (node != nullptr && !node->leaf) {
       node = row[node->feature] <= node->threshold ? node->left.get()
@@ -645,27 +737,34 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid regression tree state");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid regression tree state");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    const auto feature_count = static_cast<std::size_t>(std::stoul(line));
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid regression tree feature list");
+    auto feature_count = ParseNumber<std::size_t>(*line, "feature count");
+    if (!feature_count) {
+      return std::unexpected(feature_count.error());
+    }
+    line = reader.ReadLine("invalid regression tree feature list");
+    if (!line) {
+      return std::unexpected(line.error());
     }
     feature_indices_.clear();
-    std::stringstream feature_stream(line);
-    std::string token;
-    while (std::getline(feature_stream, token, ',')) {
-      if (!token.empty()) {
-        feature_indices_.push_back(static_cast<std::size_t>(std::stoul(token)));
-      }
+    auto parsed_indices =
+        ParseDelimitedNumbers<std::size_t>(*line, "feature index");
+    if (!parsed_indices) {
+      return std::unexpected(parsed_indices.error());
     }
-    if (feature_indices_.size() != feature_count) {
+    feature_indices_ = std::move(*parsed_indices);
+    if (feature_indices_.size() != *feature_count) {
       return std::unexpected("regression tree feature list mismatch");
     }
-    root_ = ReadNode(stream);
+    auto root = ReadNode(reader);
+    if (!root) {
+      return std::unexpected(root.error());
+    }
+    root_ = std::move(*root);
     return {};
   }
 
@@ -765,22 +864,59 @@ private:
     WriteNode(node->right.get(), out);
   }
 
-  static std::unique_ptr<RegressionTreeNode> ReadNode(std::istream &input) {
-    std::string kind;
-    input >> kind;
-    if (kind == "null") {
+  static std::expected<std::unique_ptr<RegressionTreeNode>, std::string>
+  ReadNode(StateReader &reader) {
+    auto line = reader.ReadLine("invalid regression tree node");
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    if (*line == "null") {
       return nullptr;
     }
-    if (kind == "leaf") {
+    if (line->starts_with("leaf ")) {
+      auto value = ParseNumber<double>(line->substr(5),
+                                       "regression tree leaf value");
+      if (!value) {
+        return std::unexpected(value.error());
+      }
       auto node = std::make_unique<RegressionTreeNode>();
-      input >> node->value;
+      node->value = *value;
       return node;
+    }
+    if (!line->starts_with("split ")) {
+      return std::unexpected("invalid regression tree node");
+    }
+    const std::string_view payload = line->substr(6);
+    const auto separator = payload.find(' ');
+    if (separator == std::string_view::npos) {
+      return std::unexpected("invalid regression tree split");
+    }
+    auto feature =
+        ParseNumber<std::size_t>(payload.substr(0, separator),
+                                 "regression tree split feature");
+    if (!feature) {
+      return std::unexpected(feature.error());
+    }
+    auto threshold =
+        ParseNumber<double>(payload.substr(separator + 1),
+                            "regression tree split threshold");
+    if (!threshold) {
+      return std::unexpected(threshold.error());
     }
     auto node = std::make_unique<RegressionTreeNode>();
     node->leaf = false;
-    input >> node->feature >> node->threshold;
-    node->left = ReadNode(input);
-    node->right = ReadNode(input);
+    node->feature = *feature;
+    node->threshold = *threshold;
+    auto left = ReadNode(reader);
+    if (!left) {
+      return std::unexpected(left.error());
+    }
+    auto right = ReadNode(reader);
+    if (!right) {
+      return std::unexpected(right.error());
+    }
+    node->left = std::move(*left);
+    node->right = std::move(*right);
     return node;
   }
 
@@ -856,7 +992,7 @@ public:
     root_ = Build(features, labels, indices, 0);
   }
 
-  Vector PredictProba(DenseMatrix::ConstRowView row) const {
+  Vector PredictProba(DenseMatrix::ConstRow row) const {
     const ClassificationTreeNode *node = root_.get();
     while (node != nullptr && !node->leaf) {
       node = row[node->feature] <= node->threshold ? node->left.get()
@@ -866,7 +1002,7 @@ public:
                            : node->probabilities;
   }
 
-  int Predict(DenseMatrix::ConstRowView row) const {
+  int Predict(DenseMatrix::ConstRow row) const {
     const Vector probabilities = PredictProba(row);
     return static_cast<int>(
         std::max_element(probabilities.begin(), probabilities.end()) -
@@ -889,31 +1025,43 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid classification tree class count");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid classification tree class count");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    class_count_ = std::stoi(line);
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid classification tree feature count");
+    auto class_count = ParseNumber<int>(*line, "classification tree class count");
+    if (!class_count) {
+      return std::unexpected(class_count.error());
     }
-    const auto feature_count = static_cast<std::size_t>(std::stoul(line));
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid classification tree feature list");
+    class_count_ = *class_count;
+    line = reader.ReadLine("invalid classification tree feature count");
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto feature_count = ParseNumber<std::size_t>(*line, "feature count");
+    if (!feature_count) {
+      return std::unexpected(feature_count.error());
+    }
+    line = reader.ReadLine("invalid classification tree feature list");
+    if (!line) {
+      return std::unexpected(line.error());
     }
     feature_indices_.clear();
-    std::stringstream feature_stream(line);
-    std::string token;
-    while (std::getline(feature_stream, token, ',')) {
-      if (!token.empty()) {
-        feature_indices_.push_back(static_cast<std::size_t>(std::stoul(token)));
-      }
+    auto parsed_indices =
+        ParseDelimitedNumbers<std::size_t>(*line, "feature index");
+    if (!parsed_indices) {
+      return std::unexpected(parsed_indices.error());
     }
-    if (feature_indices_.size() != feature_count) {
+    feature_indices_ = std::move(*parsed_indices);
+    if (feature_indices_.size() != *feature_count) {
       return std::unexpected("invalid classification tree feature list");
     }
-    root_ = ReadNode(stream);
+    auto root = ReadNode(reader);
+    if (!root) {
+      return std::unexpected(root.error());
+    }
+    root_ = std::move(*root);
     return {};
   }
 
@@ -1025,25 +1173,70 @@ private:
     WriteNode(node->right.get(), out);
   }
 
-  static std::unique_ptr<ClassificationTreeNode> ReadNode(std::istream &input) {
-    std::string kind;
-    input >> kind;
-    if (kind == "null") {
+  static std::expected<std::unique_ptr<ClassificationTreeNode>, std::string>
+  ReadNode(StateReader &reader) {
+    auto line = reader.ReadLine("invalid classification tree node");
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    if (*line == "null") {
       return nullptr;
     }
-    if (kind == "leaf") {
+    if (line->starts_with("leaf ")) {
+      const std::string_view payload = line->substr(5);
+      const auto separator = payload.find(' ');
+      if (separator == std::string_view::npos) {
+        return std::unexpected("invalid classification tree leaf");
+      }
+      auto predicted_class =
+          ParseNumber<int>(payload.substr(0, separator),
+                           "classification tree predicted class");
+      if (!predicted_class) {
+        return std::unexpected(predicted_class.error());
+      }
+      auto probabilities = ParseDoubles(payload.substr(separator + 1));
+      if (!probabilities) {
+        return std::unexpected(probabilities.error());
+      }
       auto node = std::make_unique<ClassificationTreeNode>();
-      std::string probs;
-      input >> node->predicted_class >> probs;
-      auto parsed = ParseDoubles(probs);
-      node->probabilities = parsed ? *parsed : Vector{};
+      node->predicted_class = *predicted_class;
+      node->probabilities = std::move(*probabilities);
       return node;
+    }
+    if (!line->starts_with("split ")) {
+      return std::unexpected("invalid classification tree node");
+    }
+    const std::string_view payload = line->substr(6);
+    const auto separator = payload.find(' ');
+    if (separator == std::string_view::npos) {
+      return std::unexpected("invalid classification tree split");
+    }
+    auto feature =
+        ParseNumber<std::size_t>(payload.substr(0, separator),
+                                 "classification tree split feature");
+    if (!feature) {
+      return std::unexpected(feature.error());
+    }
+    auto threshold =
+        ParseNumber<double>(payload.substr(separator + 1),
+                            "classification tree split threshold");
+    if (!threshold) {
+      return std::unexpected(threshold.error());
     }
     auto node = std::make_unique<ClassificationTreeNode>();
     node->leaf = false;
-    input >> node->feature >> node->threshold;
-    node->left = ReadNode(input);
-    node->right = ReadNode(input);
+    node->feature = *feature;
+    node->threshold = *threshold;
+    auto left = ReadNode(reader);
+    if (!left) {
+      return std::unexpected(left.error());
+    }
+    auto right = ReadNode(reader);
+    if (!right) {
+      return std::unexpected(right.error());
+    }
+    node->left = std::move(*left);
+    node->right = std::move(*right);
     return node;
   }
 
@@ -1128,16 +1321,21 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid logistic state");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid logistic state");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    bias_ = std::stod(line);
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid logistic weights");
+    auto bias = ParseNumber<double>(*line, "logistic bias");
+    if (!bias) {
+      return std::unexpected(bias.error());
     }
-    auto parsed = ParseDoubles(line);
+    bias_ = *bias;
+    line = reader.ReadLine("invalid logistic weights");
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto parsed = ParseDoubles(*line);
     if (!parsed) {
       return std::unexpected(parsed.error());
     }
@@ -1243,23 +1441,32 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid softmax class count");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid softmax class count");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    class_count_ = static_cast<std::size_t>(std::stoul(line));
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid softmax biases");
+    auto class_count = ParseNumber<std::size_t>(*line, "softmax class count");
+    if (!class_count) {
+      return std::unexpected(class_count.error());
     }
-    auto biases = ParseDoubles(line);
+    class_count_ = *class_count;
+    line = reader.ReadLine("invalid softmax biases");
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto biases = ParseDoubles(*line);
     if (!biases || biases->size() != class_count_) {
       return std::unexpected("invalid softmax biases");
     }
     biases_ = std::move(*biases);
     std::vector<Vector> rows;
-    while (std::getline(stream, line)) {
-      auto row = ParseDoubles(line);
+    while (!reader.empty()) {
+      line = reader.ReadLine("invalid softmax weight row");
+      if (!line) {
+        return std::unexpected(line.error());
+      }
+      auto row = ParseDoubles(*line);
       if (!row || row->size() != class_count_) {
         return std::unexpected("invalid softmax weight row");
       }
@@ -1377,16 +1584,22 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid gaussian nb class count");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid gaussian nb class count");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    class_count_ = static_cast<std::size_t>(std::stoul(line));
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid gaussian nb priors");
+    auto class_count =
+        ParseNumber<std::size_t>(*line, "gaussian nb class count");
+    if (!class_count) {
+      return std::unexpected(class_count.error());
     }
-    auto priors = ParseDoubles(line);
+    class_count_ = *class_count;
+    line = reader.ReadLine("invalid gaussian nb priors");
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto priors = ParseDoubles(*line);
     if (!priors || priors->size() != class_count_) {
       return std::unexpected("invalid gaussian nb priors");
     }
@@ -1394,10 +1607,11 @@ public:
     std::vector<Vector> means_rows;
     means_rows.reserve(class_count_);
     for (std::size_t cls = 0; cls < class_count_; ++cls) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid gaussian nb means");
+      line = reader.ReadLine("invalid gaussian nb means");
+      if (!line) {
+        return std::unexpected(line.error());
       }
-      auto row = ParseDoubles(line);
+      auto row = ParseDoubles(*line);
       if (!row) {
         return std::unexpected(row.error());
       }
@@ -1406,10 +1620,11 @@ public:
     std::vector<Vector> variance_rows;
     variance_rows.reserve(class_count_);
     for (std::size_t cls = 0; cls < class_count_; ++cls) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid gaussian nb variances");
+      line = reader.ReadLine("invalid gaussian nb variances");
+      if (!line) {
+        return std::unexpected(line.error());
       }
-      auto row = ParseDoubles(line);
+      auto row = ParseDoubles(*line);
       if (!row) {
         return std::unexpected(row.error());
       }
@@ -1506,31 +1721,44 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid knn classifier class count");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid knn classifier class count");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    class_count_ = static_cast<std::size_t>(std::stoul(line));
-    std::size_t rows = 0;
-    std::size_t cols = 0;
-    stream >> rows >> cols;
-    std::getline(stream, line);
+    auto class_count =
+        ParseNumber<std::size_t>(*line, "knn classifier class count");
+    if (!class_count) {
+      return std::unexpected(class_count.error());
+    }
+    class_count_ = *class_count;
+    line = reader.ReadLine("invalid knn classifier state");
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto shape = ParseShape(*line, "invalid knn classifier state");
+    if (!shape) {
+      return std::unexpected(shape.error());
+    }
+    const auto [rows, cols] = *shape;
     std::vector<Vector> rows_data;
+    rows_data.reserve(rows);
     for (std::size_t row = 0; row < rows; ++row) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid knn classifier state");
+      line = reader.ReadLine("invalid knn classifier state");
+      if (!line) {
+        return std::unexpected(line.error());
       }
-      auto parsed = ParseDoubles(line);
+      auto parsed = ParseDoubles(*line);
       if (!parsed || parsed->size() != cols) {
         return std::unexpected("invalid knn classifier features");
       }
       rows_data.push_back(std::move(*parsed));
     }
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid knn classifier labels");
+    line = reader.ReadLine("invalid knn classifier labels");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    auto labels = ParseInts(line);
+    auto labels = ParseInts(*line);
     if (!labels || labels->size() != rows) {
       return std::unexpected("invalid knn classifier labels");
     }
@@ -1663,22 +1891,32 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid random forest regressor state");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid random forest regressor state");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    const auto tree_count = static_cast<std::size_t>(std::stoul(line));
+    auto tree_count =
+        ParseNumber<std::size_t>(*line, "random forest regressor tree count");
+    if (!tree_count) {
+      return std::unexpected(tree_count.error());
+    }
     trees_.clear();
-    for (std::size_t index = 0; index < tree_count; ++index) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid random forest regressor size");
+    for (std::size_t index = 0; index < *tree_count; ++index) {
+      line = reader.ReadLine("invalid random forest regressor size");
+      if (!line) {
+        return std::unexpected(line.error());
       }
-      const auto size = static_cast<std::size_t>(std::stoul(line));
-      std::string buffer(size, '\0');
-      stream.read(buffer.data(), static_cast<std::streamsize>(size));
+      auto size = ParseNumber<std::size_t>(*line, "random forest regressor size");
+      if (!size) {
+        return std::unexpected(size.error());
+      }
+      auto buffer = reader.ReadChunk(*size, "invalid random forest regressor state");
+      if (!buffer) {
+        return std::unexpected(buffer.error());
+      }
       RegressionTree tree(spec_.max_depth, spec_.min_samples_split, {});
-      auto status = tree.LoadState(buffer);
+      auto status = tree.LoadState(*buffer);
       if (!status) {
         return std::unexpected(status.error());
       }
@@ -1767,27 +2005,45 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid random forest classifier class count");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid random forest classifier class count");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    class_count_ = static_cast<std::size_t>(std::stoul(line));
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid random forest classifier tree count");
+    auto class_count =
+        ParseNumber<std::size_t>(*line, "random forest classifier class count");
+    if (!class_count) {
+      return std::unexpected(class_count.error());
     }
-    const auto tree_count = static_cast<std::size_t>(std::stoul(line));
+    class_count_ = *class_count;
+    line = reader.ReadLine("invalid random forest classifier tree count");
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto tree_count =
+        ParseNumber<std::size_t>(*line, "random forest classifier tree count");
+    if (!tree_count) {
+      return std::unexpected(tree_count.error());
+    }
     trees_.clear();
-    for (std::size_t index = 0; index < tree_count; ++index) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid random forest classifier size");
+    for (std::size_t index = 0; index < *tree_count; ++index) {
+      line = reader.ReadLine("invalid random forest classifier size");
+      if (!line) {
+        return std::unexpected(line.error());
       }
-      const auto size = static_cast<std::size_t>(std::stoul(line));
-      std::string buffer(size, '\0');
-      stream.read(buffer.data(), static_cast<std::streamsize>(size));
+      auto size =
+          ParseNumber<std::size_t>(*line, "random forest classifier size");
+      if (!size) {
+        return std::unexpected(size.error());
+      }
+      auto buffer =
+          reader.ReadChunk(*size, "invalid random forest classifier state");
+      if (!buffer) {
+        return std::unexpected(buffer.error());
+      }
       ClassificationTree tree(spec_.max_depth, spec_.min_samples_split,
                               static_cast<int>(class_count_), {});
-      auto status = tree.LoadState(buffer);
+      auto status = tree.LoadState(*buffer);
       if (!status) {
         return std::unexpected(status.error());
       }

@@ -3,6 +3,7 @@
 
 #include <expected>
 #include <string>
+#include <string_view>
 #include <variant>
 
 namespace ml::models {
@@ -53,10 +54,10 @@ using EstimatorSpec =
                  DecisionTreeSpec, RandomForestSpec, LogisticSpec, SoftmaxSpec,
                  GaussianNbSpec>;
 
-std::string EstimatorId(const EstimatorSpec &spec);
+std::string_view EstimatorId(const EstimatorSpec &spec);
 std::string SerializeEstimatorSpec(const EstimatorSpec &spec);
 std::expected<EstimatorSpec, std::string>
-ParseEstimatorSpec(const std::string &text);
+ParseEstimatorSpec(std::string_view text);
 
 } // namespace ml::models
 

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ml/core/dense_matrix.h"
@@ -109,7 +110,7 @@ struct TuneReport {
   std::vector<TuneCandidate> candidates;
 };
 
-inline std::string TaskName(Task task) {
+constexpr std::string_view TaskName(Task task) {
   return task == Task::kRegression ? "regression" : "classification";
 }
 

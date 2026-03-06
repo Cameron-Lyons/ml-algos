@@ -1,8 +1,9 @@
 #include "ml/io/csv.h"
 
+#include <charconv>
 #include <fstream>
-#include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -10,25 +11,38 @@ namespace ml::io {
 
 namespace {
 
-std::vector<std::string> SplitCsvLine(const std::string &line) {
+std::vector<std::string> SplitCsvLine(std::string_view line) {
   std::vector<std::string> cells;
-  std::stringstream stream(line);
-  std::string cell;
-  while (std::getline(stream, cell, ',')) {
-    cells.push_back(cell);
+  if (line.empty()) {
+    return cells;
+  }
+  std::size_t start = 0;
+  while (start <= line.size()) {
+    const auto end = line.find(',', start);
+    cells.emplace_back(end == std::string_view::npos
+                           ? line.substr(start)
+                           : line.substr(start, end - start));
+    if (end == std::string_view::npos) {
+      break;
+    }
+    start = end + 1;
   }
   return cells;
 }
 
-std::expected<double, std::string> ParseDouble(const std::string &text,
+std::expected<double, std::string> ParseDouble(std::string_view text,
                                                std::size_t row,
-                                               const std::string &column) {
-  try {
-    return std::stod(text);
-  } catch (const std::exception &) {
+                                               std::string_view column) {
+  double value = 0.0;
+  const char *begin = text.data();
+  const char *end = text.data() + text.size();
+  const auto [ptr, ec] = std::from_chars(begin, end, value);
+  if (ec != std::errc{} || ptr != end) {
     return std::unexpected("invalid numeric value at row " +
-                           std::to_string(row) + ", column '" + column + "'");
+                           std::to_string(row) + ", column '" +
+                           std::string(column) + "'");
   }
+  return value;
 }
 
 } // namespace

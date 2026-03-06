@@ -131,16 +131,6 @@ Vector MeanColumns(const DenseMatrix &matrix) {
   return means;
 }
 
-double SquaredEuclideanDistance(DenseMatrix::ConstRowView lhs,
-                                DenseMatrix::ConstRowView rhs) {
-  double sum = 0.0;
-  for (std::size_t index = 0; index < lhs.size(); ++index) {
-    const double diff = lhs[index] - rhs[index];
-    sum += diff * diff;
-  }
-  return sum;
-}
-
 double SquaredEuclideanDistance(std::span<const double> lhs,
                                 std::span<const double> rhs) {
   double sum = 0.0;

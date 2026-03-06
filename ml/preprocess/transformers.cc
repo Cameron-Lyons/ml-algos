@@ -1,14 +1,54 @@
 #include "ml/preprocess/transformers.h"
 
+#include <charconv>
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <memory>
 #include <sstream>
+#include <type_traits>
 
 namespace ml::preprocess {
 
 namespace {
+
+class StateReader {
+public:
+  explicit StateReader(std::string_view remaining) : remaining_(remaining) {}
+
+  std::expected<std::string_view, std::string>
+  ReadLine(std::string_view error) {
+    if (remaining_.empty()) {
+      return std::unexpected(std::string(error));
+    }
+    const auto newline = remaining_.find('\n');
+    if (newline == std::string_view::npos) {
+      const std::string_view line = remaining_;
+      remaining_ = {};
+      return line;
+    }
+    const std::string_view line = remaining_.substr(0, newline);
+    remaining_.remove_prefix(newline + 1);
+    return line;
+  }
+
+private:
+  std::string_view remaining_;
+};
+
+template <typename T>
+std::expected<T, std::string> ParseNumber(std::string_view text,
+                                          std::string_view label) {
+  T value{};
+  const char *begin = text.data();
+  const char *end = text.data() + text.size();
+  const auto [ptr, ec] = std::from_chars(begin, end, value);
+  if (ec != std::errc{} || ptr != end) {
+    return std::unexpected("invalid " + std::string(label) + ": " +
+                           std::string(text));
+  }
+  return value;
+}
 
 class StandardScaler final : public Transformer {
 public:
@@ -74,25 +114,39 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid standard scaler state");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid standard scaler state");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    const auto column_count = static_cast<std::size_t>(std::stoul(line));
-    means_.assign(column_count, 0.0);
-    stddevs_.assign(column_count, 0.0);
-    for (std::size_t index = 0; index < column_count; ++index) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid standard scaler means");
-      }
-      means_[index] = std::stod(line);
+    auto column_count =
+        ParseNumber<std::size_t>(*line, "standard scaler column count");
+    if (!column_count) {
+      return std::unexpected(column_count.error());
     }
-    for (std::size_t index = 0; index < column_count; ++index) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid standard scaler stddevs");
+    means_.assign(*column_count, 0.0);
+    stddevs_.assign(*column_count, 0.0);
+    for (std::size_t index = 0; index < *column_count; ++index) {
+      line = reader.ReadLine("invalid standard scaler means");
+      if (!line) {
+        return std::unexpected(line.error());
       }
-      stddevs_[index] = std::stod(line);
+      auto value = ParseNumber<double>(*line, "standard scaler mean");
+      if (!value) {
+        return std::unexpected(value.error());
+      }
+      means_[index] = *value;
+    }
+    for (std::size_t index = 0; index < *column_count; ++index) {
+      line = reader.ReadLine("invalid standard scaler stddevs");
+      if (!line) {
+        return std::unexpected(line.error());
+      }
+      auto value = ParseNumber<double>(*line, "standard scaler stddev");
+      if (!value) {
+        return std::unexpected(value.error());
+      }
+      stddevs_[index] = *value;
     }
     return {};
   }
@@ -153,25 +207,39 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    std::stringstream stream{std::string(state)};
-    std::string line;
-    if (!std::getline(stream, line)) {
-      return std::unexpected("invalid minmax scaler state");
+    StateReader reader(state);
+    auto line = reader.ReadLine("invalid minmax scaler state");
+    if (!line) {
+      return std::unexpected(line.error());
     }
-    const auto column_count = static_cast<std::size_t>(std::stoul(line));
-    mins_.assign(column_count, 0.0);
-    maxs_.assign(column_count, 0.0);
-    for (std::size_t index = 0; index < column_count; ++index) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid minmax scaler mins");
-      }
-      mins_[index] = std::stod(line);
+    auto column_count =
+        ParseNumber<std::size_t>(*line, "minmax scaler column count");
+    if (!column_count) {
+      return std::unexpected(column_count.error());
     }
-    for (std::size_t index = 0; index < column_count; ++index) {
-      if (!std::getline(stream, line)) {
-        return std::unexpected("invalid minmax scaler maxs");
+    mins_.assign(*column_count, 0.0);
+    maxs_.assign(*column_count, 0.0);
+    for (std::size_t index = 0; index < *column_count; ++index) {
+      line = reader.ReadLine("invalid minmax scaler mins");
+      if (!line) {
+        return std::unexpected(line.error());
       }
-      maxs_[index] = std::stod(line);
+      auto value = ParseNumber<double>(*line, "minmax scaler minimum");
+      if (!value) {
+        return std::unexpected(value.error());
+      }
+      mins_[index] = *value;
+    }
+    for (std::size_t index = 0; index < *column_count; ++index) {
+      line = reader.ReadLine("invalid minmax scaler maxs");
+      if (!line) {
+        return std::unexpected(line.error());
+      }
+      auto value = ParseNumber<double>(*line, "minmax scaler maximum");
+      if (!value) {
+        return std::unexpected(value.error());
+      }
+      maxs_[index] = *value;
     }
     return {};
   }
@@ -185,13 +253,16 @@ private:
 
 std::expected<std::unique_ptr<Transformer>, std::string>
 MakeTransformer(const TransformerSpec &spec) {
-  if (std::holds_alternative<StandardScalerSpec>(spec)) {
-    return std::make_unique<StandardScaler>();
-  }
-  if (std::holds_alternative<MinMaxScalerSpec>(spec)) {
-    return std::make_unique<MinMaxScaler>();
-  }
-  return std::unexpected("unsupported transformer spec");
+  return std::visit(
+      []<typename T>(const T &) -> std::expected<std::unique_ptr<Transformer>,
+                                                 std::string> {
+        if constexpr (std::is_same_v<T, StandardScalerSpec>) {
+          return std::make_unique<StandardScaler>();
+        } else if constexpr (std::is_same_v<T, MinMaxScalerSpec>) {
+          return std::make_unique<MinMaxScaler>();
+        }
+      },
+      spec);
 }
 
 } // namespace ml::preprocess

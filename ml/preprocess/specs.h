@@ -3,6 +3,7 @@
 
 #include <expected>
 #include <string>
+#include <string_view>
 #include <variant>
 
 namespace ml::preprocess {
@@ -12,10 +13,10 @@ struct MinMaxScalerSpec {};
 
 using TransformerSpec = std::variant<StandardScalerSpec, MinMaxScalerSpec>;
 
-std::string TransformerId(const TransformerSpec &spec);
+std::string_view TransformerId(const TransformerSpec &spec);
 std::string SerializeTransformerSpec(const TransformerSpec &spec);
 std::expected<TransformerSpec, std::string>
-ParseTransformerSpec(const std::string &text);
+ParseTransformerSpec(std::string_view text);
 
 } // namespace ml::preprocess
 

@@ -2,7 +2,6 @@
 
 #include <charconv>
 #include <map>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,69 +16,90 @@ template <typename... Ts> struct Overload : Ts... {
 
 template <typename... Ts> Overload(Ts...) -> Overload<Ts...>;
 
-std::string Join(const std::string &id, const std::string &payload) {
-  return id + "|" + payload;
+std::string Join(std::string_view id, std::string_view payload) {
+  std::string value;
+  value.reserve(id.size() + payload.size() + 1);
+  value.append(id);
+  value.push_back('|');
+  value.append(payload);
+  return value;
 }
 
-std::expected<double, std::string> ParseDouble(const std::string &text) {
+std::expected<double, std::string> ParseDouble(std::string_view text) {
   double value = 0.0;
   const char *begin = text.data();
   const char *end = text.data() + text.size();
   auto [ptr, ec] = std::from_chars(begin, end, value);
   if (ec != std::errc{} || ptr != end) {
-    return std::unexpected("invalid floating point value: " + text);
+    return std::unexpected("invalid floating point value: " +
+                           std::string(text));
   }
   return value;
 }
 
-std::expected<int, std::string> ParseInt(const std::string &text) {
+std::expected<int, std::string> ParseInt(std::string_view text) {
   int value = 0;
   const char *begin = text.data();
   const char *end = text.data() + text.size();
   auto [ptr, ec] = std::from_chars(begin, end, value);
   if (ec != std::errc{} || ptr != end) {
-    return std::unexpected("invalid integer value: " + text);
+    return std::unexpected("invalid integer value: " + std::string(text));
   }
   return value;
 }
 
 std::expected<unsigned int, std::string>
-ParseUnsigned(const std::string &text) {
+ParseUnsigned(std::string_view text) {
   unsigned int value = 0;
   const char *begin = text.data();
   const char *end = text.data() + text.size();
   auto [ptr, ec] = std::from_chars(begin, end, value);
   if (ec != std::errc{} || ptr != end) {
-    return std::unexpected("invalid unsigned integer value: " + text);
+    return std::unexpected("invalid unsigned integer value: " +
+                           std::string(text));
   }
   return value;
 }
 
-std::vector<std::string> Split(const std::string &text, char delimiter) {
-  std::vector<std::string> tokens;
-  std::stringstream stream(text);
-  std::string token;
-  while (std::getline(stream, token, delimiter)) {
-    tokens.push_back(token);
+std::vector<std::string_view> Split(std::string_view text, char delimiter) {
+  std::vector<std::string_view> tokens;
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    const auto end = text.find(delimiter, start);
+    tokens.push_back(end == std::string_view::npos
+                         ? text.substr(start)
+                         : text.substr(start, end - start));
+    if (end == std::string_view::npos) {
+      break;
+    }
+    start = end + 1;
   }
   return tokens;
 }
 
 } // namespace
 
-std::string EstimatorId(const EstimatorSpec &spec) {
+std::string_view EstimatorId(const EstimatorSpec &spec) {
   return std::visit(
       Overload{
-          [](const LinearSpec &) { return std::string("linear"); },
-          [](const RidgeSpec &) { return std::string("ridge"); },
-          [](const LassoSpec &) { return std::string("lasso"); },
-          [](const ElasticNetSpec &) { return std::string("elasticnet"); },
-          [](const KnnSpec &) { return std::string("knn"); },
-          [](const DecisionTreeSpec &) { return std::string("decision_tree"); },
-          [](const RandomForestSpec &) { return std::string("random_forest"); },
-          [](const LogisticSpec &) { return std::string("logistic"); },
-          [](const SoftmaxSpec &) { return std::string("softmax"); },
-          [](const GaussianNbSpec &) { return std::string("gaussian_nb"); },
+          [](const LinearSpec &) -> std::string_view { return "linear"; },
+          [](const RidgeSpec &) -> std::string_view { return "ridge"; },
+          [](const LassoSpec &) -> std::string_view { return "lasso"; },
+          [](const ElasticNetSpec &) -> std::string_view {
+            return "elasticnet";
+          },
+          [](const KnnSpec &) -> std::string_view { return "knn"; },
+          [](const DecisionTreeSpec &) -> std::string_view {
+            return "decision_tree";
+          },
+          [](const RandomForestSpec &) -> std::string_view {
+            return "random_forest";
+          },
+          [](const LogisticSpec &) -> std::string_view { return "logistic"; },
+          [](const SoftmaxSpec &) -> std::string_view { return "softmax"; },
+          [](const GaussianNbSpec &) -> std::string_view {
+            return "gaussian_nb";
+          },
       },
       spec);
 }
@@ -147,21 +167,22 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
 }
 
 std::expected<EstimatorSpec, std::string>
-ParseEstimatorSpec(const std::string &text) {
+ParseEstimatorSpec(std::string_view text) {
   const auto pipe = text.find('|');
-  const std::string id =
-      pipe == std::string::npos ? text : text.substr(0, pipe);
-  const std::string payload =
-      pipe == std::string::npos ? "" : text.substr(pipe + 1);
+  const std::string_view id =
+      pipe == std::string_view::npos ? text : text.substr(0, pipe);
+  const std::string_view payload =
+      pipe == std::string_view::npos ? "" : text.substr(pipe + 1);
 
-  std::map<std::string, std::string> values;
+  std::map<std::string_view, std::string_view> values;
   for (const auto &token : Split(payload, ';')) {
     if (token.empty()) {
       continue;
     }
     const auto eq = token.find('=');
-    if (eq == std::string::npos) {
-      return std::unexpected("invalid estimator payload: " + token);
+    if (eq == std::string_view::npos) {
+      return std::unexpected("invalid estimator payload: " +
+                             std::string(token));
     }
     values[token.substr(0, eq)] = token.substr(eq + 1);
   }
@@ -353,7 +374,7 @@ ParseEstimatorSpec(const std::string &text) {
     return EstimatorSpec(spec);
   }
 
-  return std::unexpected("unknown estimator spec: " + id);
+  return std::unexpected("unknown estimator spec: " + std::string(id));
 }
 
 } // namespace ml::models

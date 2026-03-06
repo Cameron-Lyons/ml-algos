@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "ml/models/specs.h"
 #include "ml/preprocess/specs.h"
@@ -152,7 +153,7 @@ std::uint64_t Checksum(std::string_view input) {
 
 std::string SerializeBody(const ModelBundle &bundle) {
   std::string out;
-  WriteU8(&out, static_cast<std::uint8_t>(bundle.task));
+  WriteU8(&out, std::to_underlying(bundle.task));
   WriteString(&out, bundle.estimator_name);
   WriteString(&out, bundle.schema.target_name);
   WriteStrings(&out, bundle.schema.feature_names);

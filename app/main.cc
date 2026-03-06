@@ -1,3 +1,5 @@
+#include <charconv>
+#include <concepts>
 #include <cstdlib>
 #include <expected>
 #include <iostream>
@@ -68,11 +70,28 @@ std::expected<std::string, std::string> RequireOption(const CommandArgs &args,
   return std::unexpected("missing required option " + key);
 }
 
+template <typename T>
+concept ParsedNumber = std::integral<T> || std::floating_point<T>;
+
+template <ParsedNumber T>
+std::expected<T, std::string> ParseNumber(std::string_view text,
+                                          std::string_view option_name) {
+  T value{};
+  const char *begin = text.data();
+  const char *end = text.data() + text.size();
+  const auto [ptr, ec] = std::from_chars(begin, end, value);
+  if (ec != std::errc{} || ptr != end) {
+    return std::unexpected("invalid value for " + std::string(option_name) +
+                           ": " + std::string(text));
+  }
+  return value;
+}
+
 std::expected<double, std::string> ParseDoubleOption(const CommandArgs &args,
                                                      const std::string &key,
                                                      double fallback) {
   if (const auto it = args.values.find(key); it != args.values.end()) {
-    return std::stod(it->second);
+    return ParseNumber<double>(it->second, key);
   }
   return fallback;
 }
@@ -81,7 +100,7 @@ std::expected<unsigned int, std::string>
 ParseUnsignedOption(const CommandArgs &args, const std::string &key,
                     unsigned int fallback) {
   if (const auto it = args.values.find(key); it != args.values.end()) {
-    return static_cast<unsigned int>(std::stoul(it->second));
+    return ParseNumber<unsigned int>(it->second, key);
   }
   return fallback;
 }
@@ -89,29 +108,36 @@ ParseUnsignedOption(const CommandArgs &args, const std::string &key,
 std::expected<int, std::string>
 ParseIntOption(const CommandArgs &args, const std::string &key, int fallback) {
   if (const auto it = args.values.find(key); it != args.values.end()) {
-    return std::stoi(it->second);
+    return ParseNumber<int>(it->second, key);
   }
   return fallback;
 }
 
-std::expected<Task, std::string> ParseTask(const std::string &text) {
+std::expected<Task, std::string> ParseTask(std::string_view text) {
   if (text == "regression") {
     return Task::kRegression;
   }
   if (text == "classification") {
     return Task::kClassification;
   }
-  return std::unexpected("unknown task: " + text);
+  return std::unexpected("unknown task: " + std::string(text));
 }
 
-std::vector<std::string> SplitCommaSeparated(const std::string &text) {
-  std::vector<std::string> values;
-  std::stringstream stream(text);
-  std::string token;
-  while (std::getline(stream, token, ',')) {
+std::vector<std::string_view> SplitCommaSeparated(std::string_view text) {
+  std::vector<std::string_view> values;
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    const auto end = text.find(',', start);
+    const auto token = end == std::string_view::npos
+                           ? text.substr(start)
+                           : text.substr(start, end - start);
     if (!token.empty()) {
       values.push_back(token);
     }
+    if (end == std::string_view::npos) {
+      break;
+    }
+    start = end + 1;
   }
   return values;
 }
@@ -121,7 +147,7 @@ ParseTransformers(const CommandArgs &args) {
   std::vector<ml::preprocess::TransformerSpec> specs;
   if (const auto it = args.values.find("--transformers");
       it != args.values.end()) {
-    for (const auto &token : SplitCommaSeparated(it->second)) {
+    for (const std::string_view token : SplitCommaSeparated(it->second)) {
       auto spec = ml::preprocess::ParseTransformerSpec(token);
       if (!spec) {
         return std::unexpected(spec.error());
@@ -489,12 +515,10 @@ int main(int argc, char *argv[]) {
   }
 
   if (command == "inspect") {
-    auto model_path = RequireOption(args, "--model");
-    if (!model_path) {
-      std::cerr << model_path.error() << "\n";
-      return 1;
-    }
-    auto bundle = ml::io::LoadModelBundle(*model_path);
+    auto bundle = RequireOption(args, "--model")
+                      .and_then([](const std::string &path) {
+                        return ml::io::LoadModelBundle(path);
+                      });
     if (!bundle) {
       std::cerr << bundle.error() << "\n";
       return 1;
@@ -581,7 +605,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  auto task = ParseTask(*task_text);
+  auto task = task_text.and_then(ParseTask);
   if (!task) {
     std::cerr << task.error() << "\n";
     return 1;
