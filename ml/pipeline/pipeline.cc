@@ -41,7 +41,7 @@ ValidateDataset(const TabularDataset &dataset) {
 }
 
 TabularDataset SliceDataset(const TabularDataset &dataset,
-                            const std::vector<std::size_t> &indices) {
+                            std::span<const std::size_t> indices) {
   TabularDataset out;
   out.schema = dataset.schema;
   out.features = dataset.features.SliceRows(indices);
@@ -87,7 +87,7 @@ EncodeLabels(std::span<const double> targets) {
 }
 
 std::expected<LabelVector, std::string>
-DecodeLabels(std::span<const int> encoded, const std::vector<int> &original) {
+DecodeLabels(std::span<const int> encoded, std::span<const int> original) {
   LabelVector labels;
   labels.reserve(encoded.size());
   for (int value : encoded) {
@@ -531,9 +531,12 @@ std::expected<FoldSet, std::string> MakeKFoldSet(const TabularDataset &dataset,
 
 std::expected<EvaluationReport, std::string>
 EvaluateSplit(const Split &split, Task task,
-              const std::vector<preprocess::TransformerSpec> &transformer_specs,
+              std::span<const preprocess::TransformerSpec> transformer_specs,
               const models::EstimatorSpec &estimator_spec) {
-  Pipeline pipeline(task, transformer_specs, estimator_spec);
+  Pipeline pipeline(task,
+                    std::vector<preprocess::TransformerSpec>(
+                        transformer_specs.begin(), transformer_specs.end()),
+                    estimator_spec);
   auto status = pipeline.Fit(split.train);
   if (!status) {
     return std::unexpected(status.error());
@@ -541,11 +544,24 @@ EvaluateSplit(const Split &split, Task task,
   return EvaluateFittedPipeline(pipeline, split);
 }
 
+std::expected<EvaluationReport, std::string> EvaluateSplit(
+    const Split &split, Task task,
+    std::initializer_list<preprocess::TransformerSpec> transformer_specs,
+    const models::EstimatorSpec &estimator_spec) {
+  return EvaluateSplit(split, task,
+                       std::span<const preprocess::TransformerSpec>(
+                           transformer_specs.begin(), transformer_specs.size()),
+                       estimator_spec);
+}
+
 std::expected<FitArtifacts, std::string>
 FitSplit(const Split &split, Task task,
-         const std::vector<preprocess::TransformerSpec> &transformer_specs,
+         std::span<const preprocess::TransformerSpec> transformer_specs,
          const models::EstimatorSpec &estimator_spec) {
-  Pipeline pipeline(task, transformer_specs, estimator_spec);
+  Pipeline pipeline(task,
+                    std::vector<preprocess::TransformerSpec>(
+                        transformer_specs.begin(), transformer_specs.end()),
+                    estimator_spec);
   auto status = pipeline.Fit(split.train);
   if (!status) {
     return std::unexpected(status.error());
@@ -562,6 +578,16 @@ FitSplit(const Split &split, Task task,
   artifacts.report = std::move(*report);
   artifacts.bundle = std::move(*bundle);
   return artifacts;
+}
+
+std::expected<FitArtifacts, std::string>
+FitSplit(const Split &split, Task task,
+         std::initializer_list<preprocess::TransformerSpec> transformer_specs,
+         const models::EstimatorSpec &estimator_spec) {
+  return FitSplit(split, task,
+                  std::span<const preprocess::TransformerSpec>(
+                      transformer_specs.begin(), transformer_specs.size()),
+                  estimator_spec);
 }
 
 std::expected<TuneReport, std::string>

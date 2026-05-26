@@ -1,9 +1,9 @@
 #include "ml/models/interfaces.h"
 
-#include <charconv>
-#include <concepts>
 #include <algorithm>
+#include <charconv>
 #include <cmath>
+#include <concepts>
 #include <limits>
 #include <memory>
 #include <numbers>
@@ -252,7 +252,7 @@ double Sigmoid(double value) {
 }
 
 Vector Softmax(const Vector &logits) {
-  const double max_logit = *std::max_element(logits.begin(), logits.end());
+  const double max_logit = *std::ranges::max_element(logits);
   Vector probabilities(logits.size(), 0.0);
   double sum = 0.0;
   for (std::size_t index = 0; index < logits.size(); ++index) {
@@ -268,9 +268,9 @@ Vector Softmax(const Vector &logits) {
 LabelVector ArgMaxLabels(const DenseMatrix &probabilities) {
   LabelVector labels(probabilities.rows(), 0);
   for (std::size_t row = 0; row < probabilities.rows(); ++row) {
-    labels[row] = static_cast<int>(
-        std::max_element(probabilities[row].begin(), probabilities[row].end()) -
-        probabilities[row].begin());
+    const auto probabilities_row = probabilities[row];
+    labels[row] = static_cast<int>(std::ranges::max_element(probabilities_row) -
+                                   probabilities_row.begin());
   }
   return labels;
 }
@@ -604,11 +604,9 @@ public:
           static_cast<std::size_t>(std::max(spec_.k, 1));
       const std::size_t k = std::min(requested_k, distances.size());
       if (k < distances.size()) {
-        std::nth_element(distances.begin(),
-                         distances.begin() + static_cast<std::ptrdiff_t>(k),
-                         distances.end(), [](const auto &lhs, const auto &rhs) {
-                           return lhs.first < rhs.first;
-                         });
+        std::ranges::nth_element(
+            distances, distances.begin() + static_cast<std::ptrdiff_t>(k), {},
+            &std::pair<double, double>::first);
       }
       double total = 0.0;
       for (std::size_t index = 0; index < k; ++index) {
@@ -788,10 +786,7 @@ private:
       for (std::size_t index : indices) {
         pairs.emplace_back(features[index][feature], targets[index]);
       }
-      std::sort(pairs.begin(), pairs.end(),
-                [](const auto &lhs, const auto &rhs) {
-                  return lhs.first < rhs.first;
-                });
+      std::ranges::sort(pairs, {}, &std::pair<double, double>::first);
       std::vector<double> prefix_sum(pairs.size(), 0.0);
       std::vector<double> prefix_sq(pairs.size(), 0.0);
       for (std::size_t index = 0; index < pairs.size(); ++index) {
@@ -874,8 +869,8 @@ private:
       return nullptr;
     }
     if (line->starts_with("leaf ")) {
-      auto value = ParseNumber<double>(line->substr(5),
-                                       "regression tree leaf value");
+      auto value =
+          ParseNumber<double>(line->substr(5), "regression tree leaf value");
       if (!value) {
         return std::unexpected(value.error());
       }
@@ -891,15 +886,13 @@ private:
     if (separator == std::string_view::npos) {
       return std::unexpected("invalid regression tree split");
     }
-    auto feature =
-        ParseNumber<std::size_t>(payload.substr(0, separator),
-                                 "regression tree split feature");
+    auto feature = ParseNumber<std::size_t>(payload.substr(0, separator),
+                                            "regression tree split feature");
     if (!feature) {
       return std::unexpected(feature.error());
     }
-    auto threshold =
-        ParseNumber<double>(payload.substr(separator + 1),
-                            "regression tree split threshold");
+    auto threshold = ParseNumber<double>(payload.substr(separator + 1),
+                                         "regression tree split threshold");
     if (!threshold) {
       return std::unexpected(threshold.error());
     }
@@ -1004,9 +997,8 @@ public:
 
   int Predict(DenseMatrix::ConstRow row) const {
     const Vector probabilities = PredictProba(row);
-    return static_cast<int>(
-        std::max_element(probabilities.begin(), probabilities.end()) -
-        probabilities.begin());
+    return static_cast<int>(std::ranges::max_element(probabilities) -
+                            probabilities.begin());
   }
 
   std::string SaveState() const {
@@ -1030,7 +1022,8 @@ public:
     if (!line) {
       return std::unexpected(line.error());
     }
-    auto class_count = ParseNumber<int>(*line, "classification tree class count");
+    auto class_count =
+        ParseNumber<int>(*line, "classification tree class count");
     if (!class_count) {
       return std::unexpected(class_count.error());
     }
@@ -1078,8 +1071,7 @@ private:
       value /= static_cast<double>(indices.size());
     }
     node->predicted_class =
-        static_cast<int>(std::max_element(node->probabilities.begin(),
-                                          node->probabilities.end()) -
+        static_cast<int>(std::ranges::max_element(node->probabilities) -
                          node->probabilities.begin());
 
     if (depth >= max_depth_ ||
@@ -1096,10 +1088,7 @@ private:
       for (std::size_t index : indices) {
         pairs.emplace_back(features[index][feature], labels[index]);
       }
-      std::sort(pairs.begin(), pairs.end(),
-                [](const auto &lhs, const auto &rhs) {
-                  return lhs.first < rhs.first;
-                });
+      std::ranges::sort(pairs, {}, &std::pair<double, int>::first);
       std::vector<int> left_counts(static_cast<std::size_t>(class_count_), 0);
       std::vector<int> right_counts(static_cast<std::size_t>(class_count_), 0);
       for (const auto &pair : pairs) {
@@ -1188,9 +1177,8 @@ private:
       if (separator == std::string_view::npos) {
         return std::unexpected("invalid classification tree leaf");
       }
-      auto predicted_class =
-          ParseNumber<int>(payload.substr(0, separator),
-                           "classification tree predicted class");
+      auto predicted_class = ParseNumber<int>(
+          payload.substr(0, separator), "classification tree predicted class");
       if (!predicted_class) {
         return std::unexpected(predicted_class.error());
       }
@@ -1211,15 +1199,13 @@ private:
     if (separator == std::string_view::npos) {
       return std::unexpected("invalid classification tree split");
     }
-    auto feature =
-        ParseNumber<std::size_t>(payload.substr(0, separator),
-                                 "classification tree split feature");
+    auto feature = ParseNumber<std::size_t>(
+        payload.substr(0, separator), "classification tree split feature");
     if (!feature) {
       return std::unexpected(feature.error());
     }
-    auto threshold =
-        ParseNumber<double>(payload.substr(separator + 1),
-                            "classification tree split threshold");
+    auto threshold = ParseNumber<double>(payload.substr(separator + 1),
+                                         "classification tree split threshold");
     if (!threshold) {
       return std::unexpected(threshold.error());
     }
@@ -1357,7 +1343,7 @@ public:
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
                                        std::span<const int> labels) override {
-    const int max_label = *std::max_element(labels.begin(), labels.end());
+    const int max_label = *std::ranges::max_element(labels);
     class_count_ = static_cast<std::size_t>(max_label) + 1;
     weights_ = DenseMatrix(features.cols(), class_count_, 0.0);
     biases_.assign(class_count_, 0.0);
@@ -1495,7 +1481,7 @@ public:
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
                                        std::span<const int> labels) override {
-    const int max_label = *std::max_element(labels.begin(), labels.end());
+    const int max_label = *std::ranges::max_element(labels);
     class_count_ = static_cast<std::size_t>(max_label) + 1;
     priors_.assign(class_count_, 0.0);
     means_ = DenseMatrix(class_count_, features.cols(), 0.0);
@@ -1689,11 +1675,9 @@ public:
           static_cast<std::size_t>(std::max(spec_.k, 1));
       const std::size_t k = std::min(requested_k, distances.size());
       if (k < distances.size()) {
-        std::nth_element(distances.begin(),
-                         distances.begin() + static_cast<std::ptrdiff_t>(k),
-                         distances.end(), [](const auto &lhs, const auto &rhs) {
-                           return lhs.first < rhs.first;
-                         });
+        std::ranges::nth_element(
+            distances, distances.begin() + static_cast<std::ptrdiff_t>(k), {},
+            &std::pair<double, int>::first);
       }
       for (std::size_t index = 0; index < k; ++index) {
         probabilities[row][static_cast<std::size_t>(distances[index].second)] +=
@@ -1907,11 +1891,13 @@ public:
       if (!line) {
         return std::unexpected(line.error());
       }
-      auto size = ParseNumber<std::size_t>(*line, "random forest regressor size");
+      auto size =
+          ParseNumber<std::size_t>(*line, "random forest regressor size");
       if (!size) {
         return std::unexpected(size.error());
       }
-      auto buffer = reader.ReadChunk(*size, "invalid random forest regressor state");
+      auto buffer =
+          reader.ReadChunk(*size, "invalid random forest regressor state");
       if (!buffer) {
         return std::unexpected(buffer.error());
       }

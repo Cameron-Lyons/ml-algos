@@ -2,6 +2,7 @@
 #define ML_PIPELINE_PIPELINE_H_
 
 #include <expected>
+#include <initializer_list>
 #include <memory>
 #include <span>
 #include <string>
@@ -64,11 +65,19 @@ std::expected<FoldSet, std::string> MakeKFoldSet(const TabularDataset &dataset,
                                                  unsigned int seed);
 std::expected<EvaluationReport, std::string>
 EvaluateSplit(const Split &split, Task task,
-              const std::vector<preprocess::TransformerSpec> &transformer_specs,
+              std::span<const preprocess::TransformerSpec> transformer_specs,
               const models::EstimatorSpec &estimator_spec);
+std::expected<EvaluationReport, std::string> EvaluateSplit(
+    const Split &split, Task task,
+    std::initializer_list<preprocess::TransformerSpec> transformer_specs,
+    const models::EstimatorSpec &estimator_spec);
 std::expected<FitArtifacts, std::string>
 FitSplit(const Split &split, Task task,
-         const std::vector<preprocess::TransformerSpec> &transformer_specs,
+         std::span<const preprocess::TransformerSpec> transformer_specs,
+         const models::EstimatorSpec &estimator_spec);
+std::expected<FitArtifacts, std::string>
+FitSplit(const Split &split, Task task,
+         std::initializer_list<preprocess::TransformerSpec> transformer_specs,
          const models::EstimatorSpec &estimator_spec);
 std::expected<TuneReport, std::string>
 GridSearch(const FoldSet &folds, Task task,
