@@ -1,5 +1,6 @@
 #include "ml/io/csv.h"
 
+#include <algorithm>
 #include <charconv>
 #include <fstream>
 #include <string>
@@ -30,9 +31,8 @@ std::vector<std::string> SplitCsvLine(std::string_view line) {
   return cells;
 }
 
-std::expected<double, std::string> ParseDouble(std::string_view text,
-                                               std::size_t row,
-                                               std::string_view column) {
+std::expected<double, std::string>
+ParseDouble(std::string_view text, std::size_t row, std::string_view column) {
   double value = 0.0;
   const char *begin = text.data();
   const char *end = text.data() + text.size();
@@ -114,16 +114,12 @@ ReadDatasetCsv(const std::string &path, const std::string &target_column) {
     return std::unexpected(table.error());
   }
 
-  std::size_t target_index = table->column_names.size();
-  for (std::size_t index = 0; index < table->column_names.size(); ++index) {
-    if (table->column_names[index] == target_column) {
-      target_index = index;
-      break;
-    }
-  }
-  if (target_index == table->column_names.size()) {
+  const auto target_it = std::ranges::find(table->column_names, target_column);
+  if (target_it == table->column_names.end()) {
     return std::unexpected("target column not found: " + target_column);
   }
+  const std::size_t target_index =
+      static_cast<std::size_t>(target_it - table->column_names.begin());
   if (table->column_names.size() < 2) {
     return std::unexpected("dataset must include at least one feature column");
   }
@@ -154,7 +150,7 @@ ReadDatasetCsv(const std::string &path, const std::string &target_column) {
 
 std::expected<ml::core::DenseMatrix, std::string>
 SelectFeatureColumns(const NumericTable &table,
-                     const std::vector<std::string> &feature_names) {
+                     std::span<const std::string> feature_names) {
   std::unordered_map<std::string, std::size_t> index_by_name;
   for (std::size_t index = 0; index < table.column_names.size(); ++index) {
     index_by_name[table.column_names[index]] = index;
@@ -172,6 +168,17 @@ SelectFeatureColumns(const NumericTable &table,
     }
   }
   return selected;
+}
+
+std::expected<ml::core::DenseMatrix, std::string>
+SelectFeatureColumns(const NumericTable &table,
+                     std::initializer_list<std::string_view> feature_names) {
+  std::vector<std::string> owned_names;
+  owned_names.reserve(feature_names.size());
+  for (std::string_view name : feature_names) {
+    owned_names.emplace_back(name);
+  }
+  return SelectFeatureColumns(table, std::span<const std::string>(owned_names));
 }
 
 } // namespace ml::io
