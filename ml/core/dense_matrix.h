@@ -34,7 +34,8 @@ public:
   [[nodiscard]] const double *data() const { return values_.data(); }
 
   std::expected<void, std::string> AppendRow(std::span<const double> row);
-  [[nodiscard]] DenseMatrix SliceRows(std::span<const std::size_t> indices) const;
+  [[nodiscard]] DenseMatrix
+  SliceRows(std::span<const std::size_t> indices) const;
   [[nodiscard]] std::vector<Vector> ToRows() const;
 
   static std::expected<DenseMatrix, std::string>

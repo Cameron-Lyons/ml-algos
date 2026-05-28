@@ -33,8 +33,8 @@ std::expected<T, std::string> ParseNumber(std::string_view text,
   return value;
 }
 
-inline std::vector<std::string_view> Split(std::string_view text, char delimiter,
-                                           bool skip_empty = false) {
+inline std::vector<std::string_view>
+Split(std::string_view text, char delimiter, bool skip_empty = false) {
   std::vector<std::string_view> tokens;
   std::size_t start = 0;
   while (start <= text.size()) {
@@ -53,7 +53,8 @@ inline std::vector<std::string_view> Split(std::string_view text, char delimiter
   return tokens;
 }
 
-inline std::vector<std::string_view> SplitCommaSeparated(std::string_view text) {
+inline std::vector<std::string_view>
+SplitCommaSeparated(std::string_view text) {
   return Split(text, ',', true);
 }
 

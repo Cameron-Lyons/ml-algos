@@ -51,22 +51,21 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
             return std::format("ridge|lambda={}", value.lambda);
           },
           [](const LassoSpec &value) {
-            return std::format(
-                "lasso|lambda={};max_iterations={};tolerance={}",
-                value.lambda, value.max_iterations, value.tolerance);
+            return std::format("lasso|lambda={};max_iterations={};tolerance={}",
+                               value.lambda, value.max_iterations,
+                               value.tolerance);
           },
           [](const ElasticNetSpec &value) {
-            return std::format(
-                "elasticnet|alpha={};l1_ratio={};max_iterations={};tolerance={}",
-                value.alpha, value.l1_ratio, value.max_iterations,
-                value.tolerance);
+            return std::format("elasticnet|alpha={};l1_ratio={};max_iterations="
+                               "{};tolerance={}",
+                               value.alpha, value.l1_ratio,
+                               value.max_iterations, value.tolerance);
           },
-          [](const KnnSpec &value) {
-            return std::format("knn|k={}", value.k);
-          },
+          [](const KnnSpec &value) { return std::format("knn|k={}", value.k); },
           [](const DecisionTreeSpec &value) {
-            return std::format("decision_tree|max_depth={};min_samples_split={}",
-                               value.max_depth, value.min_samples_split);
+            return std::format(
+                "decision_tree|max_depth={};min_samples_split={}",
+                value.max_depth, value.min_samples_split);
           },
           [](const RandomForestSpec &value) {
             return std::format(
@@ -206,8 +205,8 @@ ParseEstimatorSpec(std::string_view text) {
       spec.max_depth = *value;
     }
     if (values.contains("min_samples_split")) {
-      auto value = ParseNumber<int>(values.at("min_samples_split"),
-                                    "min_samples_split");
+      auto value =
+          ParseNumber<int>(values.at("min_samples_split"), "min_samples_split");
       if (!value) {
         return std::unexpected(value.error());
       }
@@ -232,16 +231,16 @@ ParseEstimatorSpec(std::string_view text) {
       spec.max_depth = *value;
     }
     if (values.contains("min_samples_split")) {
-      auto value = ParseNumber<int>(values.at("min_samples_split"),
-                                    "min_samples_split");
+      auto value =
+          ParseNumber<int>(values.at("min_samples_split"), "min_samples_split");
       if (!value) {
         return std::unexpected(value.error());
       }
       spec.min_samples_split = *value;
     }
     if (values.contains("feature_fraction")) {
-      auto value =
-          ParseNumber<double>(values.at("feature_fraction"), "feature_fraction");
+      auto value = ParseNumber<double>(values.at("feature_fraction"),
+                                       "feature_fraction");
       if (!value) {
         return std::unexpected(value.error());
       }
