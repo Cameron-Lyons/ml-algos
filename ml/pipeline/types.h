@@ -71,7 +71,8 @@ struct ClassificationSummary {
   std::vector<std::vector<std::size_t>> confusion_matrix;
 };
 
-using EvaluationMetrics = std::variant<RegressionSummary, ClassificationSummary>;
+using EvaluationMetrics =
+    std::variant<RegressionSummary, ClassificationSummary>;
 
 struct EvaluationReport {
   Task task = Task::kRegression;

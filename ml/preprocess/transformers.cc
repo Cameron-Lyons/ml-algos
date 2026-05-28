@@ -243,8 +243,8 @@ private:
 std::expected<std::unique_ptr<Transformer>, std::string>
 MakeTransformer(const TransformerSpec &spec) {
   return std::visit(
-      []<typename T>(const T &) -> std::expected<std::unique_ptr<Transformer>,
-                                                 std::string> {
+      []<typename T>(const T &)
+          -> std::expected<std::unique_ptr<Transformer>, std::string> {
         if constexpr (std::is_same_v<T, StandardScalerSpec>) {
           return std::make_unique<StandardScaler>();
         } else if constexpr (std::is_same_v<T, MinMaxScalerSpec>) {

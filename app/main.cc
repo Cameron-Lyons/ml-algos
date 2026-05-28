@@ -234,31 +234,31 @@ BuildGrid(Task task, const std::string &algorithm) {
   return std::unexpected("unsupported tuning grid for algorithm: " + algorithm);
 }
 
-std::string FormatConfusionMatrixJson(
-    const std::vector<std::vector<std::size_t>> &matrix) {
+std::string
+FormatConfusionMatrixJson(const std::vector<std::vector<std::size_t>> &matrix) {
   std::string out = "[";
   for (std::size_t row = 0; row < matrix.size(); ++row) {
     if (row > 0) {
       out += ',';
     }
-    out += std::format(
-        "[{}]", ml::core::JoinFormatted(std::span<const std::size_t>(
-                    matrix[row].data(), matrix[row].size())));
+    out += std::format("[{}]",
+                       ml::core::JoinFormatted(std::span<const std::size_t>(
+                           matrix[row].data(), matrix[row].size())));
   }
   out += ']';
   return out;
 }
 
-std::string FormatClassificationMetricsJson(
-    const ml::ClassificationSummary &summary) {
+std::string
+FormatClassificationMetricsJson(const ml::ClassificationSummary &summary) {
   const std::string log_loss =
       summary.log_loss ? std::format("{}", *summary.log_loss) : "null";
   return std::format(
       "\"classification\":{{\"accuracy\":{},\"macro_f1\":{},\"log_loss\":{},"
       "\"labels\":[{}],\"confusion_matrix\":{}}}",
       summary.accuracy, summary.macro_f1, log_loss,
-      ml::core::JoinFormatted(std::span<const int>(summary.labels.data(),
-                                                   summary.labels.size())),
+      ml::core::JoinFormatted(
+          std::span<const int>(summary.labels.data(), summary.labels.size())),
       FormatConfusionMatrixJson(summary.confusion_matrix));
 }
 
@@ -291,20 +291,20 @@ std::string ToJson(const ml::TuneReport &report) {
     if (index > 0) {
       candidates += ',';
     }
-    candidates += std::format(
-        "{{\"spec\":\"{}\",\"objective\":{}}}",
-        ml::core::EscapeJson(
-            ml::models::SerializeEstimatorSpec(report.candidates[index].spec)),
-        report.candidates[index].objective);
+    candidates +=
+        std::format("{{\"spec\":\"{}\",\"objective\":{}}}",
+                    ml::core::EscapeJson(ml::models::SerializeEstimatorSpec(
+                        report.candidates[index].spec)),
+                    report.candidates[index].objective);
   }
-  return std::format(
-      "{{\"task\":\"{}\",\"objective\":\"{}\",\"best_score\":{},"
-      "\"best_spec\":\"{}\",\"candidates\":[{}]}}",
-      ml::TaskName(report.task), ml::core::EscapeJson(report.objective_name),
-      report.best_score,
-      ml::core::EscapeJson(
-          ml::models::SerializeEstimatorSpec(report.best_spec)),
-      candidates);
+  return std::format("{{\"task\":\"{}\",\"objective\":\"{}\",\"best_score\":{},"
+                     "\"best_spec\":\"{}\",\"candidates\":[{}]}}",
+                     ml::TaskName(report.task),
+                     ml::core::EscapeJson(report.objective_name),
+                     report.best_score,
+                     ml::core::EscapeJson(
+                         ml::models::SerializeEstimatorSpec(report.best_spec)),
+                     candidates);
 }
 
 std::string ToJson(const ml::ModelBundle &bundle) {
@@ -315,8 +315,7 @@ std::string ToJson(const ml::ModelBundle &bundle) {
       features += ',';
     }
     features += std::format(
-        "\"{}\"",
-        ml::core::EscapeJson(bundle.schema.feature_names[index]));
+        "\"{}\"", ml::core::EscapeJson(bundle.schema.feature_names[index]));
   }
 
   std::string transformers;
@@ -326,9 +325,8 @@ std::string ToJson(const ml::ModelBundle &bundle) {
       transformers += ',';
     }
     transformers += std::format(
-        "\"{}\"",
-        ml::core::EscapeJson(ml::preprocess::SerializeTransformerSpec(
-            bundle.transformer_specs[index])));
+        "\"{}\"", ml::core::EscapeJson(ml::preprocess::SerializeTransformerSpec(
+                      bundle.transformer_specs[index])));
   }
 
   return std::format(
@@ -346,32 +344,30 @@ std::string ToJson(const ml::ModelBundle &bundle) {
 }
 
 std::string ToJsonPredictions(const ml::core::Vector &predictions) {
-  return std::format(
-      "{{\"predictions\":[{}]}}",
-      ml::core::JoinFormatted(std::span<const double>(predictions.data(),
-                                                      predictions.size())));
+  return std::format("{{\"predictions\":[{}]}}",
+                     ml::core::JoinFormatted(std::span<const double>(
+                         predictions.data(), predictions.size())));
 }
 
 void PrintEvaluation(const ml::EvaluationReport &report) {
   std::println("Task: {}", ml::TaskName(report.task));
   std::println("Estimator: {}", report.estimator_name);
   std::println("Rows: train={} test={}", report.train_rows, report.test_rows);
-  std::visit(
-      Overload{
-          [](const ml::RegressionSummary &summary) {
-            std::println("RMSE: {}", summary.rmse);
-            std::println("MAE: {}", summary.mae);
-            std::println("R2: {}", summary.r2);
-          },
-          [](const ml::ClassificationSummary &summary) {
-            std::println("Accuracy: {}", summary.accuracy);
-            std::println("Macro F1: {}", summary.macro_f1);
-            if (summary.log_loss) {
-              std::println("Log loss: {}", *summary.log_loss);
-            }
-          },
-      },
-      report.metrics);
+  std::visit(Overload{
+                 [](const ml::RegressionSummary &summary) {
+                   std::println("RMSE: {}", summary.rmse);
+                   std::println("MAE: {}", summary.mae);
+                   std::println("R2: {}", summary.r2);
+                 },
+                 [](const ml::ClassificationSummary &summary) {
+                   std::println("Accuracy: {}", summary.accuracy);
+                   std::println("Macro F1: {}", summary.macro_f1);
+                   if (summary.log_loss) {
+                     std::println("Log loss: {}", *summary.log_loss);
+                   }
+                 },
+             },
+             report.metrics);
 }
 
 void PrintTune(const ml::TuneReport &report) {
@@ -388,7 +384,8 @@ void PrintTune(const ml::TuneReport &report) {
   }
 }
 
-std::string FormatAlgorithmListJson(const std::vector<std::string> &algorithms) {
+std::string
+FormatAlgorithmListJson(const std::vector<std::string> &algorithms) {
   std::string out;
   for (std::size_t index = 0; index < algorithms.size(); ++index) {
     if (index > 0) {
@@ -407,11 +404,10 @@ int HandleList(const CommandArgs &args) {
       return 1;
     }
     if (args.json) {
-      std::println(
-          "{{\"task\":\"{}\",\"algorithms\":[{}],"
-          "\"transformers\":[\"standard_scaler\",\"minmax_scaler\"]}}",
-          ml::TaskName(*task),
-          FormatAlgorithmListJson(AlgorithmsForTask(*task)));
+      std::println("{{\"task\":\"{}\",\"algorithms\":[{}],"
+                   "\"transformers\":[\"standard_scaler\",\"minmax_scaler\"]}}",
+                   ml::TaskName(*task),
+                   FormatAlgorithmListJson(AlgorithmsForTask(*task)));
       return 0;
     }
     std::println("Task: {}", ml::TaskName(*task));
@@ -466,10 +462,10 @@ int main(int argc, char *argv[]) {
   }
 
   if (command == "inspect") {
-    auto bundle = RequireOption(args, "--model")
-                      .and_then([](const std::string &path) {
-                        return ml::io::LoadModelBundle(path);
-                      });
+    auto bundle =
+        RequireOption(args, "--model").and_then([](const std::string &path) {
+          return ml::io::LoadModelBundle(path);
+        });
     if (!bundle) {
       std::cerr << bundle.error() << "\n";
       return 1;

@@ -179,9 +179,7 @@ double ObjectiveForReport(const EvaluationReport &report) {
   return std::visit(
       Overload{
           [](const RegressionSummary &summary) { return summary.r2; },
-          [](const ClassificationSummary &summary) {
-            return summary.accuracy;
-          },
+          [](const ClassificationSummary &summary) { return summary.accuracy; },
       },
       report.metrics);
 }

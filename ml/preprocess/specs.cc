@@ -11,13 +11,14 @@ using ml::core::Overload;
 } // namespace
 
 std::string_view TransformerId(const TransformerSpec &spec) {
-  return std::visit(Overload{[](const StandardScalerSpec &) -> std::string_view {
-                               return "standard_scaler";
-                             },
-                             [](const MinMaxScalerSpec &) -> std::string_view {
-                               return "minmax_scaler";
-                             }},
-                    spec);
+  return std::visit(
+      Overload{[](const StandardScalerSpec &) -> std::string_view {
+                 return "standard_scaler";
+               },
+               [](const MinMaxScalerSpec &) -> std::string_view {
+                 return "minmax_scaler";
+               }},
+      spec);
 }
 
 std::string SerializeTransformerSpec(const TransformerSpec &spec) {
