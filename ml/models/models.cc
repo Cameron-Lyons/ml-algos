@@ -1,9 +1,8 @@
 #include "ml/models/interfaces.h"
 
 #include <algorithm>
-#include <charconv>
 #include <cmath>
-#include <concepts>
+#include <format>
 #include <limits>
 #include <memory>
 #include <numbers>
@@ -16,87 +15,23 @@
 #include <utility>
 #include <vector>
 
+#include "ml/core/format.h"
 #include "ml/core/linalg.h"
+#include "ml/core/parse.h"
 
 namespace ml::models {
 
 namespace {
 
 using ml::core::DenseMatrix;
+using ml::core::JoinFormatted;
 using ml::core::LabelVector;
+using ml::core::Overload;
+using ml::core::ParseDelimitedNumbers;
+using ml::core::ParseNumber;
 using ml::core::Vector;
 
 constexpr double kProbabilityFloor = 1e-12;
-
-template <typename... Ts> struct Overload : Ts... {
-  using Ts::operator()...;
-};
-
-template <typename... Ts> Overload(Ts...) -> Overload<Ts...>;
-
-template <typename T>
-concept ParsedNumber = std::integral<T> || std::floating_point<T>;
-
-std::string JoinDoubles(std::span<const double> values) {
-  std::ostringstream out;
-  for (std::size_t index = 0; index < values.size(); ++index) {
-    if (index > 0) {
-      out << ',';
-    }
-    out << values[index];
-  }
-  return out.str();
-}
-
-std::string JoinInts(std::span<const int> values) {
-  std::ostringstream out;
-  for (std::size_t index = 0; index < values.size(); ++index) {
-    if (index > 0) {
-      out << ',';
-    }
-    out << values[index];
-  }
-  return out.str();
-}
-
-template <ParsedNumber T>
-std::expected<T, std::string> ParseNumber(std::string_view text,
-                                          std::string_view label) {
-  T value{};
-  const char *begin = text.data();
-  const char *end = text.data() + text.size();
-  const auto [ptr, ec] = std::from_chars(begin, end, value);
-  if (ec != std::errc{} || ptr != end) {
-    return std::unexpected("invalid " + std::string(label) + ": " +
-                           std::string(text));
-  }
-  return value;
-}
-
-template <ParsedNumber T>
-std::expected<std::vector<T>, std::string>
-ParseDelimitedNumbers(std::string_view text, std::string_view label) {
-  std::vector<T> values;
-  std::size_t start = 0;
-  while (start <= text.size()) {
-    const auto end = text.find(',', start);
-    const auto token = end == std::string_view::npos
-                           ? text.substr(start)
-                           : text.substr(start, end - start);
-    if (!token.empty()) {
-      auto value = ParseNumber<T>(token, label);
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      values.push_back(*value);
-    }
-    if (end == std::string_view::npos) {
-      break;
-    }
-    start = end + 1;
-  }
-  return values;
-}
 
 class StateReader {
 public:
@@ -159,11 +94,11 @@ ParseShape(std::string_view text, std::string_view error) {
 }
 
 std::expected<Vector, std::string> ParseDoubles(std::string_view text) {
-  return ParseDelimitedNumbers<double>(text, "floating point value");
+  return ParseDelimitedNumbers<double>(text, ',', "floating point value");
 }
 
 std::expected<LabelVector, std::string> ParseInts(std::string_view text) {
-  return ParseDelimitedNumbers<int>(text, "integer value");
+  return ParseDelimitedNumbers<int>(text, ',', "integer value");
 }
 
 std::expected<DenseMatrix, std::string>
@@ -344,7 +279,7 @@ public:
   EstimatorSpec spec() const override { return LinearSpec{}; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    return JoinDoubles(coefficients_);
+    return JoinFormatted(coefficients_);
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
@@ -384,7 +319,7 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    return JoinDoubles(coefficients_);
+    return JoinFormatted(coefficients_);
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
@@ -472,7 +407,7 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    return JoinDoubles(coefficients_);
+    return JoinFormatted(coefficients_);
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
@@ -559,7 +494,7 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    return JoinDoubles(coefficients_);
+    return JoinFormatted(coefficients_);
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
@@ -623,9 +558,9 @@ public:
     std::ostringstream out;
     out << features_.rows() << " " << features_.cols() << "\n";
     for (std::size_t row = 0; row < features_.rows(); ++row) {
-      out << JoinDoubles(features_[row]) << "\n";
+      out << JoinFormatted(features_[row]) << "\n";
     }
-    out << JoinDoubles(targets_) << "\n";
+    out << JoinFormatted(targets_) << "\n";
     return out.str();
   }
 
@@ -750,7 +685,7 @@ public:
     }
     feature_indices_.clear();
     auto parsed_indices =
-        ParseDelimitedNumbers<std::size_t>(*line, "feature index");
+        ParseDelimitedNumbers<std::size_t>(*line, ',', "feature index");
     if (!parsed_indices) {
       return std::unexpected(parsed_indices.error());
     }
@@ -1042,7 +977,7 @@ public:
     }
     feature_indices_.clear();
     auto parsed_indices =
-        ParseDelimitedNumbers<std::size_t>(*line, "feature index");
+        ParseDelimitedNumbers<std::size_t>(*line, ',', "feature index");
     if (!parsed_indices) {
       return std::unexpected(parsed_indices.error());
     }
@@ -1154,7 +1089,7 @@ private:
     }
     if (node->leaf) {
       out << "leaf " << node->predicted_class << " "
-          << JoinDoubles(node->probabilities) << "\n";
+          << JoinFormatted(node->probabilities) << "\n";
       return;
     }
     out << "split " << node->feature << " " << node->threshold << "\n";
@@ -1302,7 +1237,7 @@ public:
 
   std::expected<std::string, std::string> SaveState() const override {
     std::ostringstream out;
-    out << bias_ << "\n" << JoinDoubles(weights_);
+    out << bias_ << "\n" << JoinFormatted(weights_);
     return out.str();
   }
 
@@ -1419,9 +1354,9 @@ public:
   std::expected<std::string, std::string> SaveState() const override {
     std::ostringstream out;
     out << class_count_ << "\n";
-    out << JoinDoubles(biases_) << "\n";
+    out << JoinFormatted(biases_) << "\n";
     for (std::size_t row = 0; row < weights_.rows(); ++row) {
-      out << JoinDoubles(weights_[row]) << "\n";
+      out << JoinFormatted(weights_[row]) << "\n";
     }
     return out.str();
   }
@@ -1559,12 +1494,12 @@ public:
   std::expected<std::string, std::string> SaveState() const override {
     std::ostringstream out;
     out << class_count_ << "\n";
-    out << JoinDoubles(priors_) << "\n";
+    out << JoinFormatted(priors_) << "\n";
     for (std::size_t row = 0; row < means_.rows(); ++row) {
-      out << JoinDoubles(means_[row]) << "\n";
+      out << JoinFormatted(means_[row]) << "\n";
     }
     for (std::size_t row = 0; row < variances_.rows(); ++row) {
-      out << JoinDoubles(variances_[row]) << "\n";
+      out << JoinFormatted(variances_[row]) << "\n";
     }
     return out.str();
   }
@@ -1698,9 +1633,9 @@ public:
     out << class_count_ << "\n";
     out << features_.rows() << " " << features_.cols() << "\n";
     for (std::size_t row = 0; row < features_.rows(); ++row) {
-      out << JoinDoubles(features_[row]) << "\n";
+      out << JoinFormatted(features_[row]) << "\n";
     }
-    out << JoinInts(labels_) << "\n";
+    out << JoinFormatted(labels_) << "\n";
     return out.str();
   }
 

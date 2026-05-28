@@ -1,6 +1,5 @@
 #include "ml/preprocess/transformers.h"
 
-#include <charconv>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -8,9 +7,13 @@
 #include <sstream>
 #include <type_traits>
 
+#include "ml/core/parse.h"
+
 namespace ml::preprocess {
 
 namespace {
+
+using ml::core::ParseNumber;
 
 class StateReader {
 public:
@@ -35,20 +38,6 @@ public:
 private:
   std::string_view remaining_;
 };
-
-template <typename T>
-std::expected<T, std::string> ParseNumber(std::string_view text,
-                                          std::string_view label) {
-  T value{};
-  const char *begin = text.data();
-  const char *end = text.data() + text.size();
-  const auto [ptr, ec] = std::from_chars(begin, end, value);
-  if (ec != std::errc{} || ptr != end) {
-    return std::unexpected("invalid " + std::string(label) + ": " +
-                           std::string(text));
-  }
-  return value;
-}
 
 class StandardScaler final : public Transformer {
 public:

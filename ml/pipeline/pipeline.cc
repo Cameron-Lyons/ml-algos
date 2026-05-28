@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "ml/core/metrics.h"
+#include "ml/core/parse.h"
 
 namespace ml {
 
@@ -15,6 +16,7 @@ namespace {
 
 using ml::core::DenseMatrix;
 using ml::core::LabelVector;
+using ml::core::Overload;
 using ml::core::Vector;
 
 constexpr double kIntegerTolerance = 1e-9;
@@ -131,7 +133,7 @@ EvaluateFittedPipeline(const Pipeline &pipeline, const Split &split) {
         ml::core::RootMeanSquaredError(split.test.targets, *predictions);
     summary.mae = ml::core::MeanAbsoluteError(split.test.targets, *predictions);
     summary.r2 = ml::core::RSquared(split.test.targets, *predictions);
-    report.regression = summary;
+    report.metrics = summary;
     return report;
   }
 
@@ -169,15 +171,19 @@ EvaluateFittedPipeline(const Pipeline &pipeline, const Split &split) {
     }
     summary.log_loss = ml::core::LogLoss(*probabilities, actual_encoded);
   }
-  report.classification = summary;
+  report.metrics = summary;
   return report;
 }
 
 double ObjectiveForReport(const EvaluationReport &report) {
-  if (report.task == Task::kRegression) {
-    return report.regression ? report.regression->r2 : 0.0;
-  }
-  return report.classification ? report.classification->accuracy : 0.0;
+  return std::visit(
+      Overload{
+          [](const RegressionSummary &summary) { return summary.r2; },
+          [](const ClassificationSummary &summary) {
+            return summary.accuracy;
+          },
+      },
+      report.metrics);
 }
 
 std::expected<std::vector<std::size_t>, std::string>

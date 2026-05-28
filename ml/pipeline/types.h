@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include "ml/core/dense_matrix.h"
@@ -70,13 +71,14 @@ struct ClassificationSummary {
   std::vector<std::vector<std::size_t>> confusion_matrix;
 };
 
+using EvaluationMetrics = std::variant<RegressionSummary, ClassificationSummary>;
+
 struct EvaluationReport {
   Task task = Task::kRegression;
   std::string estimator_name;
   std::size_t train_rows = 0;
   std::size_t test_rows = 0;
-  std::optional<RegressionSummary> regression;
-  std::optional<ClassificationSummary> classification;
+  EvaluationMetrics metrics;
 };
 
 struct ModelBundle {

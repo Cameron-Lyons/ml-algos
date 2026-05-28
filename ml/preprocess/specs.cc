@@ -1,16 +1,12 @@
 #include "ml/preprocess/specs.h"
 
-#include <utility>
+#include "ml/core/parse.h"
 
 namespace ml::preprocess {
 
 namespace {
 
-template <typename... Ts> struct Overload : Ts... {
-  using Ts::operator()...;
-};
-
-template <typename... Ts> Overload(Ts...) -> Overload<Ts...>;
+using ml::core::Overload;
 
 } // namespace
 
