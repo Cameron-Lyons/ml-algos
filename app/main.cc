@@ -1,15 +1,16 @@
-#include <charconv>
-#include <concepts>
 #include <cstdlib>
 #include <expected>
+#include <format>
 #include <iostream>
-#include <optional>
-#include <sstream>
+#include <print>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "ml/core/format.h"
+#include "ml/core/parse.h"
 #include "ml/io/csv.h"
 #include "ml/io/model_bundle.h"
 #include "ml/models/specs.h"
@@ -18,6 +19,9 @@
 namespace {
 
 using ml::Task;
+using ml::core::Overload;
+using ml::core::ParseNumber;
+using ml::core::SplitCommaSeparated;
 
 struct CommandArgs {
   std::unordered_map<std::string, std::string> values;
@@ -70,23 +74,6 @@ std::expected<std::string, std::string> RequireOption(const CommandArgs &args,
   return std::unexpected("missing required option " + key);
 }
 
-template <typename T>
-concept ParsedNumber = std::integral<T> || std::floating_point<T>;
-
-template <ParsedNumber T>
-std::expected<T, std::string> ParseNumber(std::string_view text,
-                                          std::string_view option_name) {
-  T value{};
-  const char *begin = text.data();
-  const char *end = text.data() + text.size();
-  const auto [ptr, ec] = std::from_chars(begin, end, value);
-  if (ec != std::errc{} || ptr != end) {
-    return std::unexpected("invalid value for " + std::string(option_name) +
-                           ": " + std::string(text));
-  }
-  return value;
-}
-
 std::expected<double, std::string> ParseDoubleOption(const CommandArgs &args,
                                                      const std::string &key,
                                                      double fallback) {
@@ -121,25 +108,6 @@ std::expected<Task, std::string> ParseTask(std::string_view text) {
     return Task::kClassification;
   }
   return std::unexpected("unknown task: " + std::string(text));
-}
-
-std::vector<std::string_view> SplitCommaSeparated(std::string_view text) {
-  std::vector<std::string_view> values;
-  std::size_t start = 0;
-  while (start <= text.size()) {
-    const auto end = text.find(',', start);
-    const auto token = end == std::string_view::npos
-                           ? text.substr(start)
-                           : text.substr(start, end - start);
-    if (!token.empty()) {
-      values.push_back(token);
-    }
-    if (end == std::string_view::npos) {
-      break;
-    }
-    start = end + 1;
-  }
-  return values;
 }
 
 std::expected<std::vector<ml::preprocess::TransformerSpec>, std::string>
@@ -266,182 +234,169 @@ BuildGrid(Task task, const std::string &algorithm) {
   return std::unexpected("unsupported tuning grid for algorithm: " + algorithm);
 }
 
-std::string EscapeJson(std::string_view text) {
-  std::string out;
-  for (char c : text) {
-    switch (c) {
-    case '"':
-      out += "\\\"";
-      break;
-    case '\\':
-      out += "\\\\";
-      break;
-    case '\n':
-      out += "\\n";
-      break;
-    default:
-      out.push_back(c);
-      break;
+std::string FormatConfusionMatrixJson(
+    const std::vector<std::vector<std::size_t>> &matrix) {
+  std::string out = "[";
+  for (std::size_t row = 0; row < matrix.size(); ++row) {
+    if (row > 0) {
+      out += ',';
     }
+    out += std::format(
+        "[{}]", ml::core::JoinFormatted(std::span<const std::size_t>(
+                    matrix[row].data(), matrix[row].size())));
   }
+  out += ']';
   return out;
 }
 
+std::string FormatClassificationMetricsJson(
+    const ml::ClassificationSummary &summary) {
+  const std::string log_loss =
+      summary.log_loss ? std::format("{}", *summary.log_loss) : "null";
+  return std::format(
+      "\"classification\":{{\"accuracy\":{},\"macro_f1\":{},\"log_loss\":{},"
+      "\"labels\":[{}],\"confusion_matrix\":{}}}",
+      summary.accuracy, summary.macro_f1, log_loss,
+      ml::core::JoinFormatted(std::span<const int>(summary.labels.data(),
+                                                   summary.labels.size())),
+      FormatConfusionMatrixJson(summary.confusion_matrix));
+}
+
+std::string FormatMetricsJson(const ml::EvaluationMetrics &metrics) {
+  return std::visit(
+      Overload{
+          [](const ml::RegressionSummary &summary) {
+            return std::format(
+                "\"regression\":{{\"rmse\":{},\"mae\":{},\"r2\":{}}}",
+                summary.rmse, summary.mae, summary.r2);
+          },
+          [](const ml::ClassificationSummary &summary) {
+            return FormatClassificationMetricsJson(summary);
+          },
+      },
+      metrics);
+}
+
 std::string ToJson(const ml::EvaluationReport &report) {
-  std::ostringstream out;
-  out << "{";
-  out << "\"task\":\"" << ml::TaskName(report.task) << "\",";
-  out << "\"estimator\":\"" << EscapeJson(report.estimator_name) << "\",";
-  out << "\"train_rows\":" << report.train_rows << ",";
-  out << "\"test_rows\":" << report.test_rows << ",";
-  if (report.regression) {
-    out << "\"regression\":{\"rmse\":" << report.regression->rmse
-        << ",\"mae\":" << report.regression->mae
-        << ",\"r2\":" << report.regression->r2 << "}";
-  } else if (report.classification) {
-    out << "\"classification\":{\"accuracy\":"
-        << report.classification->accuracy
-        << ",\"macro_f1\":" << report.classification->macro_f1
-        << ",\"log_loss\":";
-    if (report.classification->log_loss) {
-      out << *report.classification->log_loss;
-    } else {
-      out << "null";
-    }
-    out << ",\"labels\":[";
-    for (std::size_t index = 0; index < report.classification->labels.size();
-         ++index) {
-      if (index > 0) {
-        out << ",";
-      }
-      out << report.classification->labels[index];
-    }
-    out << "],\"confusion_matrix\":[";
-    for (std::size_t row = 0;
-         row < report.classification->confusion_matrix.size(); ++row) {
-      if (row > 0) {
-        out << ",";
-      }
-      out << "[";
-      for (std::size_t col = 0;
-           col < report.classification->confusion_matrix[row].size(); ++col) {
-        if (col > 0) {
-          out << ",";
-        }
-        out << report.classification->confusion_matrix[row][col];
-      }
-      out << "]";
-    }
-    out << "]}";
-  }
-  out << "}";
-  return out.str();
+  return std::format(
+      "{{\"task\":\"{}\",\"estimator\":\"{}\",\"train_rows\":{},"
+      "\"test_rows\":{},{}}}",
+      ml::TaskName(report.task), ml::core::EscapeJson(report.estimator_name),
+      report.train_rows, report.test_rows, FormatMetricsJson(report.metrics));
 }
 
 std::string ToJson(const ml::TuneReport &report) {
-  std::ostringstream out;
-  out << "{";
-  out << "\"task\":\"" << ml::TaskName(report.task) << "\",";
-  out << "\"objective\":\"" << EscapeJson(report.objective_name) << "\",";
-  out << "\"best_score\":" << report.best_score << ",";
-  out << "\"best_spec\":\""
-      << EscapeJson(ml::models::SerializeEstimatorSpec(report.best_spec))
-      << "\",";
-  out << "\"candidates\":[";
+  std::string candidates;
   for (std::size_t index = 0; index < report.candidates.size(); ++index) {
     if (index > 0) {
-      out << ",";
+      candidates += ',';
     }
-    out << "{\"spec\":\""
-        << EscapeJson(ml::models::SerializeEstimatorSpec(
-               report.candidates[index].spec))
-        << "\",\"objective\":" << report.candidates[index].objective << "}";
+    candidates += std::format(
+        "{{\"spec\":\"{}\",\"objective\":{}}}",
+        ml::core::EscapeJson(
+            ml::models::SerializeEstimatorSpec(report.candidates[index].spec)),
+        report.candidates[index].objective);
   }
-  out << "]}";
-  return out.str();
+  return std::format(
+      "{{\"task\":\"{}\",\"objective\":\"{}\",\"best_score\":{},"
+      "\"best_spec\":\"{}\",\"candidates\":[{}]}}",
+      ml::TaskName(report.task), ml::core::EscapeJson(report.objective_name),
+      report.best_score,
+      ml::core::EscapeJson(
+          ml::models::SerializeEstimatorSpec(report.best_spec)),
+      candidates);
 }
 
 std::string ToJson(const ml::ModelBundle &bundle) {
-  std::ostringstream out;
-  out << "{";
-  out << "\"version\":" << bundle.version << ",";
-  out << "\"task\":\"" << ml::TaskName(bundle.task) << "\",";
-  out << "\"estimator\":\"" << EscapeJson(bundle.estimator_name) << "\",";
-  out << "\"target\":\"" << EscapeJson(bundle.schema.target_name) << "\",";
-  out << "\"features\":[";
+  std::string features;
   for (std::size_t index = 0; index < bundle.schema.feature_names.size();
        ++index) {
     if (index > 0) {
-      out << ",";
+      features += ',';
     }
-    out << "\"" << EscapeJson(bundle.schema.feature_names[index]) << "\"";
+    features += std::format(
+        "\"{}\"",
+        ml::core::EscapeJson(bundle.schema.feature_names[index]));
   }
-  out << "],\"class_labels\":[";
-  for (std::size_t index = 0; index < bundle.class_labels.size(); ++index) {
-    if (index > 0) {
-      out << ",";
-    }
-    out << bundle.class_labels[index];
-  }
-  out << "],\"transformers\":[";
+
+  std::string transformers;
   for (std::size_t index = 0; index < bundle.transformer_specs.size();
        ++index) {
     if (index > 0) {
-      out << ",";
+      transformers += ',';
     }
-    out << "\""
-        << EscapeJson(ml::preprocess::SerializeTransformerSpec(
-               bundle.transformer_specs[index]))
-        << "\"";
+    transformers += std::format(
+        "\"{}\"",
+        ml::core::EscapeJson(ml::preprocess::SerializeTransformerSpec(
+            bundle.transformer_specs[index])));
   }
-  out << "],\"estimator_spec\":\""
-      << EscapeJson(ml::models::SerializeEstimatorSpec(bundle.estimator_spec))
-      << "\"}";
-  return out.str();
+
+  return std::format(
+      "{{\"version\":{},\"task\":\"{}\",\"estimator\":\"{}\","
+      "\"target\":\"{}\",\"features\":[{}],\"class_labels\":[{}],"
+      "\"transformers\":[{}],\"estimator_spec\":\"{}\"}}",
+      bundle.version, ml::TaskName(bundle.task),
+      ml::core::EscapeJson(bundle.estimator_name),
+      ml::core::EscapeJson(bundle.schema.target_name), features,
+      ml::core::JoinFormatted(std::span<const int>(bundle.class_labels.data(),
+                                                   bundle.class_labels.size())),
+      transformers,
+      ml::core::EscapeJson(
+          ml::models::SerializeEstimatorSpec(bundle.estimator_spec)));
 }
 
 std::string ToJsonPredictions(const ml::core::Vector &predictions) {
-  std::ostringstream out;
-  out << "{\"predictions\":[";
-  for (std::size_t index = 0; index < predictions.size(); ++index) {
-    if (index > 0) {
-      out << ",";
-    }
-    out << predictions[index];
-  }
-  out << "]}";
-  return out.str();
+  return std::format(
+      "{{\"predictions\":[{}]}}",
+      ml::core::JoinFormatted(std::span<const double>(predictions.data(),
+                                                      predictions.size())));
 }
 
 void PrintEvaluation(const ml::EvaluationReport &report) {
-  std::cout << "Task: " << ml::TaskName(report.task) << "\n";
-  std::cout << "Estimator: " << report.estimator_name << "\n";
-  std::cout << "Rows: train=" << report.train_rows
-            << " test=" << report.test_rows << "\n";
-  if (report.regression) {
-    std::cout << "RMSE: " << report.regression->rmse << "\n";
-    std::cout << "MAE: " << report.regression->mae << "\n";
-    std::cout << "R2: " << report.regression->r2 << "\n";
-  } else if (report.classification) {
-    std::cout << "Accuracy: " << report.classification->accuracy << "\n";
-    std::cout << "Macro F1: " << report.classification->macro_f1 << "\n";
-    if (report.classification->log_loss) {
-      std::cout << "Log loss: " << *report.classification->log_loss << "\n";
-    }
-  }
+  std::println("Task: {}", ml::TaskName(report.task));
+  std::println("Estimator: {}", report.estimator_name);
+  std::println("Rows: train={} test={}", report.train_rows, report.test_rows);
+  std::visit(
+      Overload{
+          [](const ml::RegressionSummary &summary) {
+            std::println("RMSE: {}", summary.rmse);
+            std::println("MAE: {}", summary.mae);
+            std::println("R2: {}", summary.r2);
+          },
+          [](const ml::ClassificationSummary &summary) {
+            std::println("Accuracy: {}", summary.accuracy);
+            std::println("Macro F1: {}", summary.macro_f1);
+            if (summary.log_loss) {
+              std::println("Log loss: {}", *summary.log_loss);
+            }
+          },
+      },
+      report.metrics);
 }
 
 void PrintTune(const ml::TuneReport &report) {
-  std::cout << "Task: " << ml::TaskName(report.task) << "\n";
-  std::cout << "Objective: " << report.objective_name << "\n";
-  std::cout << "Best score: " << report.best_score << "\n";
-  std::cout << "Best spec: "
-            << ml::models::SerializeEstimatorSpec(report.best_spec) << "\n";
-  std::cout << "Candidates:\n";
+  std::println("Task: {}", ml::TaskName(report.task));
+  std::println("Objective: {}", report.objective_name);
+  std::println("Best score: {}", report.best_score);
+  std::println("Best spec: {}",
+               ml::models::SerializeEstimatorSpec(report.best_spec));
+  std::println("Candidates:");
   for (const auto &candidate : report.candidates) {
-    std::cout << "  " << ml::models::SerializeEstimatorSpec(candidate.spec)
-              << " => " << candidate.objective << "\n";
+    std::println("  {} => {}",
+                 ml::models::SerializeEstimatorSpec(candidate.spec),
+                 candidate.objective);
   }
+}
+
+std::string FormatAlgorithmListJson(const std::vector<std::string> &algorithms) {
+  std::string out;
+  for (std::size_t index = 0; index < algorithms.size(); ++index) {
+    if (index > 0) {
+      out += ',';
+    }
+    out += std::format("\"{}\"", algorithms[index]);
+  }
+  return out;
 }
 
 int HandleList(const CommandArgs &args) {
@@ -452,44 +407,40 @@ int HandleList(const CommandArgs &args) {
       return 1;
     }
     if (args.json) {
-      std::ostringstream out;
-      out << "{\"task\":\"" << ml::TaskName(*task) << "\",\"algorithms\":[";
-      const auto algorithms = AlgorithmsForTask(*task);
-      for (std::size_t index = 0; index < algorithms.size(); ++index) {
-        if (index > 0) {
-          out << ",";
-        }
-        out << "\"" << algorithms[index] << "\"";
-      }
-      out << "],\"transformers\":[\"standard_scaler\",\"minmax_scaler\"]}";
-      std::cout << out.str() << "\n";
+      std::println(
+          "{{\"task\":\"{}\",\"algorithms\":[{}],"
+          "\"transformers\":[\"standard_scaler\",\"minmax_scaler\"]}}",
+          ml::TaskName(*task),
+          FormatAlgorithmListJson(AlgorithmsForTask(*task)));
       return 0;
     }
-    std::cout << "Task: " << ml::TaskName(*task) << "\nAlgorithms:\n";
+    std::println("Task: {}", ml::TaskName(*task));
+    std::println("Algorithms:");
     for (const auto &algorithm : AlgorithmsForTask(*task)) {
-      std::cout << "  " << algorithm << "\n";
+      std::println("  {}", algorithm);
     }
-    std::cout << "Transformers:\n  standard_scaler\n  minmax_scaler\n";
+    std::println("Transformers:\n  standard_scaler\n  minmax_scaler");
     return 0;
   }
 
   if (args.json) {
-    std::cout << "{\"regression\":[\"linear\",\"ridge\",\"lasso\","
-                 "\"elasticnet\",\"knn\",\"decision_tree\",\"random_forest\"],"
-              << "\"classification\":[\"logistic\",\"softmax\",\"gaussian_nb\","
-                 "\"knn\",\"decision_tree\",\"random_forest\"],"
-              << "\"transformers\":[\"standard_scaler\",\"minmax_scaler\"]}\n";
+    std::println(
+        "{{\"regression\":[\"linear\",\"ridge\",\"lasso\",\"elasticnet\","
+        "\"knn\",\"decision_tree\",\"random_forest\"],"
+        "\"classification\":[\"logistic\",\"softmax\",\"gaussian_nb\","
+        "\"knn\",\"decision_tree\",\"random_forest\"],"
+        "\"transformers\":[\"standard_scaler\",\"minmax_scaler\"]}}");
     return 0;
   }
-  std::cout << "Regression:\n";
+  std::println("Regression:");
   for (const auto &algorithm : AlgorithmsForTask(Task::kRegression)) {
-    std::cout << "  " << algorithm << "\n";
+    std::println("  {}", algorithm);
   }
-  std::cout << "Classification:\n";
+  std::println("Classification:");
   for (const auto &algorithm : AlgorithmsForTask(Task::kClassification)) {
-    std::cout << "  " << algorithm << "\n";
+    std::println("  {}", algorithm);
   }
-  std::cout << "Transformers:\n  standard_scaler\n  minmax_scaler\n";
+  std::println("Transformers:\n  standard_scaler\n  minmax_scaler");
   return 0;
 }
 

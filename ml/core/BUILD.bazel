@@ -6,8 +6,10 @@ cc_library(
     name = "core",
     hdrs = [
         "dense_matrix.h",
+        "format.h",
         "linalg.h",
         "metrics.h",
+        "parse.h",
     ],
     srcs = [
         "dense_matrix.cc",

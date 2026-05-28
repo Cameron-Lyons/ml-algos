@@ -1,6 +1,6 @@
 # ML Algorithms Library (v3)
 
-A Bazel-first C++23 machine learning toolkit for numeric tabular pipelines. v3 breaks the old v2 API and CLI on purpose: the library is now the primary surface, the CLI is a thin wrapper, data is headered CSV, and models use the binary `MLALGOS_V3` bundle format.
+A Bazel-first C++26 machine learning toolkit for numeric tabular pipelines. v3 breaks the old v2 API and CLI on purpose: the library is now the primary surface, the CLI is a thin wrapper, data is headered CSV, and models use the binary `MLALGOS_V3` bundle format.
 
 ## Build And Test
 
