@@ -1,7 +1,7 @@
 #include "ml/models/specs.h"
 
-#include <flat_map>
 #include <format>
+#include <map>
 #include <string>
 
 #include "ml/core/parse.h"
@@ -96,7 +96,7 @@ ParseEstimatorSpec(std::string_view text) {
   const std::string_view payload =
       pipe == std::string_view::npos ? "" : text.substr(pipe + 1);
 
-  std::flat_map<std::string_view, std::string_view> values;
+  std::map<std::string_view, std::string_view> values;
   for (const auto &token : Split(payload, ';')) {
     if (token.empty()) {
       continue;
