@@ -4,7 +4,9 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${root}"
 
-if command -v clang-format-22 >/dev/null 2>&1; then
+if command -v clang-format-23 >/dev/null 2>&1; then
+  clang_format=(clang-format-23)
+elif command -v clang-format-22 >/dev/null 2>&1; then
   clang_format=(clang-format-22)
 elif command -v clang-format >/dev/null 2>&1; then
   clang_format=(clang-format)
