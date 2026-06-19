@@ -4,13 +4,13 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "models",
-    hdrs = [
-        "interfaces.h",
-        "specs.h",
-    ],
     srcs = [
         "models.cc",
         "specs.cc",
     ],
-    deps = ["//ml/core:core"],
+    hdrs = [
+        "interfaces.h",
+        "specs.h",
+    ],
+    deps = ["//ml/core"],
 )

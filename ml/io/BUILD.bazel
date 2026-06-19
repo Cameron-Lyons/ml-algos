@@ -4,18 +4,18 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "io",
-    hdrs = [
-        "csv.h",
-        "model_bundle.h",
-    ],
     srcs = [
         "csv.cc",
         "model_bundle.cc",
     ],
+    hdrs = [
+        "csv.h",
+        "model_bundle.h",
+    ],
     deps = [
-        "//ml/core:core",
-        "//ml/models:models",
+        "//ml/core",
+        "//ml/models",
         "//ml/pipeline:pipeline_types",
-        "//ml/preprocess:preprocess",
+        "//ml/preprocess",
     ],
 )

@@ -4,6 +4,7 @@
 #include <charconv>
 #include <concepts>
 #include <expected>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,22 +36,24 @@ std::expected<T, std::string> ParseNumber(std::string_view text,
 
 inline std::vector<std::string_view>
 Split(std::string_view text, char delimiter, bool skip_empty = false) {
-  std::vector<std::string_view> tokens;
-  std::size_t start = 0;
-  while (start <= text.size()) {
-    const auto end = text.find(delimiter, start);
-    const auto token = end == std::string_view::npos
-                           ? text.substr(start)
-                           : text.substr(start, end - start);
-    if (!skip_empty || !token.empty()) {
-      tokens.push_back(token);
-    }
-    if (end == std::string_view::npos) {
-      break;
-    }
-    start = end + 1;
+  if (text.empty()) {
+    return skip_empty ? std::vector<std::string_view>{}
+                      : std::vector<std::string_view>{std::string_view{}};
   }
-  return tokens;
+  auto parts = text | std::views::split(delimiter);
+  auto to_string_view = [](auto &&part) -> std::string_view {
+    const auto &range = part;
+    return std::string_view(range.begin(), range.end());
+  };
+  if (skip_empty) {
+    return std::ranges::to<std::vector<std::string_view>>(
+        parts | std::views::filter([](auto &&part) {
+          return !std::ranges::empty(part);
+        }) |
+        std::views::transform(to_string_view));
+  }
+  return std::ranges::to<std::vector<std::string_view>>(
+      parts | std::views::transform(to_string_view));
 }
 
 inline std::vector<std::string_view>
@@ -71,6 +74,24 @@ ParseDelimitedNumbers(std::string_view text, char delimiter,
     values.push_back(*value);
   }
   return values;
+}
+
+template <typename Map>
+concept StringViewMapped = requires(const Map &map, std::string_view key) {
+  { map.contains(key) } -> std::convertible_to<bool>;
+  { map.at(key) } -> std::convertible_to<std::string_view>;
+};
+
+template <ParsedNumber T, StringViewMapped Map>
+std::expected<void, std::string>
+AssignFieldIfPresent(T &field, const Map &values, std::string_view key,
+                     std::string_view label = {}) {
+  if (!values.contains(key)) {
+    return {};
+  }
+  const std::string_view resolved_label = label.empty() ? key : label;
+  return ParseNumber<T>(values.at(key), resolved_label)
+      .transform([&field](T parsed) { field = parsed; });
 }
 
 } // namespace ml::core

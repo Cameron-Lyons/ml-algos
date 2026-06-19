@@ -4,16 +4,17 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "core",
+    srcs = [
+        "dense_matrix.cc",
+        "linalg.cc",
+        "metrics.cc",
+    ],
     hdrs = [
         "dense_matrix.h",
         "format.h",
         "linalg.h",
         "metrics.h",
         "parse.h",
-    ],
-    srcs = [
-        "dense_matrix.cc",
-        "linalg.cc",
-        "metrics.cc",
+        "state_reader.h",
     ],
 )

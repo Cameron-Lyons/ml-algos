@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
-#include <numeric>
 #include <random>
+#include <ranges>
 #include <unordered_map>
 
 #include "ml/core/metrics.h"
@@ -198,7 +198,7 @@ BuildStratifiedOrder(const TabularDataset &dataset, unsigned int seed) {
   std::vector<std::size_t> order;
   for (auto &[label, indices] : groups) {
     (void)label;
-    std::shuffle(indices.begin(), indices.end(), rng);
+    std::ranges::shuffle(indices, rng);
   }
   bool progress = true;
   while (progress) {
@@ -221,10 +221,10 @@ BuildShuffledOrder(const TabularDataset &dataset, Task task, bool stratified,
   if (task == Task::kClassification && stratified) {
     return BuildStratifiedOrder(dataset, seed);
   }
-  std::vector<std::size_t> order(dataset.features.rows(), 0);
-  std::iota(order.begin(), order.end(), 0);
+  auto order = std::ranges::to<std::vector<std::size_t>>(
+      std::views::iota(0uz, dataset.features.rows()));
   std::mt19937 rng(seed);
-  std::shuffle(order.begin(), order.end(), rng);
+  std::ranges::shuffle(order, rng);
   return order;
 }
 
@@ -497,16 +497,16 @@ std::expected<FoldSet, std::string> MakeKFoldSet(const TabularDataset &dataset,
     std::mt19937 rng(seed);
     for (auto &[label, indices] : groups) {
       (void)label;
-      std::shuffle(indices.begin(), indices.end(), rng);
+      std::ranges::shuffle(indices, rng);
       for (std::size_t index = 0; index < indices.size(); ++index) {
         test_indices[index % test_indices.size()].push_back(indices[index]);
       }
     }
   } else {
-    std::vector<std::size_t> order(dataset.features.rows(), 0);
-    std::iota(order.begin(), order.end(), 0);
+    auto order = std::ranges::to<std::vector<std::size_t>>(
+        std::views::iota(0uz, dataset.features.rows()));
     std::mt19937 rng(seed);
-    std::shuffle(order.begin(), order.end(), rng);
+    std::ranges::shuffle(order, rng);
     for (std::size_t index = 0; index < order.size(); ++index) {
       test_indices[index % test_indices.size()].push_back(order[index]);
     }

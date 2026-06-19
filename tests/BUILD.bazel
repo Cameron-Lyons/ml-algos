@@ -9,7 +9,7 @@ cc_test(
         "core_test.cc",
         "support/test_support.h",
     ],
-    deps = ["//ml/core:core"],
+    deps = ["//ml/core"],
 )
 
 cc_test(
@@ -23,7 +23,7 @@ cc_test(
         "//data/v3:regression.csv",
     ],
     deps = [
-        "//ml/io:io",
+        "//ml/io",
         "//ml/pipeline:pipeline_types",
     ],
 )
@@ -35,8 +35,8 @@ cc_test(
         "support/test_support.h",
     ],
     deps = [
-        "//ml/core:core",
-        "//ml/models:models",
+        "//ml/core",
+        "//ml/models",
     ],
 )
 
@@ -51,12 +51,12 @@ cc_test(
         "//data/v3:prediction_features.csv",
     ],
     deps = [
-        "//ml/core:core",
-        "//ml/io:io",
-        "//ml/models:models",
-        "//ml/pipeline:pipeline",
+        "//ml/core",
+        "//ml/io",
+        "//ml/models",
+        "//ml/pipeline",
         "//ml/pipeline:pipeline_types",
-        "//ml/preprocess:preprocess",
+        "//ml/preprocess",
     ],
 )
 
@@ -69,6 +69,5 @@ sh_test(
         "//data/v3:classification_offset.csv",
         "//data/v3:prediction_features.csv",
         "//data/v3:regression.csv",
-        "//data/v3:regression_features.csv",
     ],
 )

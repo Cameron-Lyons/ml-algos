@@ -6,20 +6,20 @@ cc_library(
     name = "pipeline_types",
     hdrs = ["types.h"],
     deps = [
-        "//ml/core:core",
-        "//ml/models:models",
-        "//ml/preprocess:preprocess",
+        "//ml/core",
+        "//ml/models",
+        "//ml/preprocess",
     ],
 )
 
 cc_library(
     name = "pipeline",
-    hdrs = ["pipeline.h"],
     srcs = ["pipeline.cc"],
+    hdrs = ["pipeline.h"],
     deps = [
         ":pipeline_types",
-        "//ml/core:core",
-        "//ml/models:models",
-        "//ml/preprocess:preprocess",
+        "//ml/core",
+        "//ml/models",
+        "//ml/preprocess",
     ],
 )

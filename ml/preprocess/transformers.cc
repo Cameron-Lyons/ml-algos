@@ -4,40 +4,17 @@
 #include <cmath>
 #include <limits>
 #include <memory>
-#include <sstream>
 #include <type_traits>
 
-#include "ml/core/parse.h"
+#include "ml/core/state_reader.h"
 
 namespace ml::preprocess {
 
 namespace {
 
-using ml::core::ParseNumber;
-
-class StateReader {
-public:
-  explicit StateReader(std::string_view remaining) : remaining_(remaining) {}
-
-  std::expected<std::string_view, std::string>
-  ReadLine(std::string_view error) {
-    if (remaining_.empty()) {
-      return std::unexpected(std::string(error));
-    }
-    const auto newline = remaining_.find('\n');
-    if (newline == std::string_view::npos) {
-      const std::string_view line = remaining_;
-      remaining_ = {};
-      return line;
-    }
-    const std::string_view line = remaining_.substr(0, newline);
-    remaining_.remove_prefix(newline + 1);
-    return line;
-  }
-
-private:
-  std::string_view remaining_;
-};
+using ml::core::FormatDualScalarBlock;
+using ml::core::LoadDualScalarBlock;
+using ml::core::StateReader;
 
 class StandardScaler final : public Transformer {
 public:
@@ -48,8 +25,8 @@ public:
     if (matrix.rows() == 0) {
       return std::unexpected("standard scaler requires at least one row");
     }
-    means_.assign(matrix.cols(), 0.0);
-    stddevs_.assign(matrix.cols(), 0.0);
+    means_ = ml::core::Vector(matrix.cols(), 0.0);
+    stddevs_ = ml::core::Vector(matrix.cols(), 0.0);
     for (std::size_t row = 0; row < matrix.rows(); ++row) {
       for (std::size_t col = 0; col < matrix.cols(); ++col) {
         means_[col] += matrix[row][col];
@@ -91,53 +68,21 @@ public:
   TransformerSpec spec() const override { return StandardScalerSpec{}; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << means_.size() << "\n";
-    for (double value : means_) {
-      out << value << "\n";
-    }
-    for (double value : stddevs_) {
-      out << value << "\n";
-    }
-    return out.str();
+    return FormatDualScalarBlock(means_, stddevs_);
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid standard scaler state");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto column_count =
-        ParseNumber<std::size_t>(*line, "standard scaler column count");
-    if (!column_count) {
-      return std::unexpected(column_count.error());
-    }
-    means_.assign(*column_count, 0.0);
-    stddevs_.assign(*column_count, 0.0);
-    for (std::size_t index = 0; index < *column_count; ++index) {
-      line = reader.ReadLine("invalid standard scaler means");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto value = ParseNumber<double>(*line, "standard scaler mean");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      means_[index] = *value;
-    }
-    for (std::size_t index = 0; index < *column_count; ++index) {
-      line = reader.ReadLine("invalid standard scaler stddevs");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto value = ParseNumber<double>(*line, "standard scaler stddev");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      stddevs_[index] = *value;
-    }
-    return {};
+    return LoadDualScalarBlock(
+               reader, "invalid standard scaler state",
+               "standard scaler column count", "invalid standard scaler means",
+               "standard scaler mean", "invalid standard scaler stddevs",
+               "standard scaler stddev")
+        .and_then([this](std::pair<ml::core::Vector, ml::core::Vector> values) {
+          means_ = std::move(values.first);
+          stddevs_ = std::move(values.second);
+          return std::expected<void, std::string>{};
+        });
   }
 
 private:
@@ -154,8 +99,9 @@ public:
     if (matrix.rows() == 0) {
       return std::unexpected("minmax scaler requires at least one row");
     }
-    mins_.assign(matrix.cols(), std::numeric_limits<double>::max());
-    maxs_.assign(matrix.cols(), std::numeric_limits<double>::lowest());
+    mins_ = ml::core::Vector(matrix.cols(), std::numeric_limits<double>::max());
+    maxs_ =
+        ml::core::Vector(matrix.cols(), std::numeric_limits<double>::lowest());
     for (std::size_t row = 0; row < matrix.rows(); ++row) {
       for (std::size_t col = 0; col < matrix.cols(); ++col) {
         mins_[col] = std::min(mins_[col], matrix[row][col]);
@@ -184,53 +130,21 @@ public:
   TransformerSpec spec() const override { return MinMaxScalerSpec{}; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << mins_.size() << "\n";
-    for (double value : mins_) {
-      out << value << "\n";
-    }
-    for (double value : maxs_) {
-      out << value << "\n";
-    }
-    return out.str();
+    return FormatDualScalarBlock(mins_, maxs_);
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid minmax scaler state");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto column_count =
-        ParseNumber<std::size_t>(*line, "minmax scaler column count");
-    if (!column_count) {
-      return std::unexpected(column_count.error());
-    }
-    mins_.assign(*column_count, 0.0);
-    maxs_.assign(*column_count, 0.0);
-    for (std::size_t index = 0; index < *column_count; ++index) {
-      line = reader.ReadLine("invalid minmax scaler mins");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto value = ParseNumber<double>(*line, "minmax scaler minimum");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      mins_[index] = *value;
-    }
-    for (std::size_t index = 0; index < *column_count; ++index) {
-      line = reader.ReadLine("invalid minmax scaler maxs");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto value = ParseNumber<double>(*line, "minmax scaler maximum");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      maxs_[index] = *value;
-    }
-    return {};
+    return LoadDualScalarBlock(
+               reader, "invalid minmax scaler state",
+               "minmax scaler column count", "invalid minmax scaler mins",
+               "minmax scaler minimum", "invalid minmax scaler maxs",
+               "minmax scaler maximum")
+        .and_then([this](std::pair<ml::core::Vector, ml::core::Vector> values) {
+          mins_ = std::move(values.first);
+          maxs_ = std::move(values.second);
+          return std::expected<void, std::string>{};
+        });
   }
 
 private:

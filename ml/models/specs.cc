@@ -1,10 +1,8 @@
 #include "ml/models/specs.h"
 
+#include <flat_map>
 #include <format>
-#include <map>
 #include <string>
-#include <utility>
-#include <vector>
 
 #include "ml/core/parse.h"
 
@@ -12,8 +10,8 @@ namespace ml::models {
 
 namespace {
 
+using ml::core::AssignFieldIfPresent;
 using ml::core::Overload;
-using ml::core::ParseNumber;
 using ml::core::Split;
 
 } // namespace
@@ -98,7 +96,7 @@ ParseEstimatorSpec(std::string_view text) {
   const std::string_view payload =
       pipe == std::string_view::npos ? "" : text.substr(pipe + 1);
 
-  std::map<std::string_view, std::string_view> values;
+  std::flat_map<std::string_view, std::string_view> values;
   for (const auto &token : Split(payload, ';')) {
     if (token.empty()) {
       continue;
@@ -116,196 +114,93 @@ ParseEstimatorSpec(std::string_view text) {
   }
   if (id == "ridge") {
     RidgeSpec spec;
-    if (values.contains("lambda")) {
-      auto value = ParseNumber<double>(values.at("lambda"), "lambda");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.lambda = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.lambda, values, "lambda").transform([&] {
+      return EstimatorSpec(spec);
+    });
   }
   if (id == "lasso") {
     LassoSpec spec;
-    if (values.contains("lambda")) {
-      auto value = ParseNumber<double>(values.at("lambda"), "lambda");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.lambda = *value;
-    }
-    if (values.contains("max_iterations")) {
-      auto value =
-          ParseNumber<int>(values.at("max_iterations"), "max_iterations");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.max_iterations = *value;
-    }
-    if (values.contains("tolerance")) {
-      auto value = ParseNumber<double>(values.at("tolerance"), "tolerance");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.tolerance = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.lambda, values, "lambda")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_iterations, values,
+                                      "max_iterations");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.tolerance, values, "tolerance");
+        })
+        .transform([&] { return EstimatorSpec(spec); });
   }
   if (id == "elasticnet") {
     ElasticNetSpec spec;
-    if (values.contains("alpha")) {
-      auto value = ParseNumber<double>(values.at("alpha"), "alpha");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.alpha = *value;
-    }
-    if (values.contains("l1_ratio")) {
-      auto value = ParseNumber<double>(values.at("l1_ratio"), "l1_ratio");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.l1_ratio = *value;
-    }
-    if (values.contains("max_iterations")) {
-      auto value =
-          ParseNumber<int>(values.at("max_iterations"), "max_iterations");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.max_iterations = *value;
-    }
-    if (values.contains("tolerance")) {
-      auto value = ParseNumber<double>(values.at("tolerance"), "tolerance");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.tolerance = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.alpha, values, "alpha")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.l1_ratio, values, "l1_ratio");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_iterations, values,
+                                      "max_iterations");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.tolerance, values, "tolerance");
+        })
+        .transform([&] { return EstimatorSpec(spec); });
   }
   if (id == "knn") {
     KnnSpec spec;
-    if (values.contains("k")) {
-      auto value = ParseNumber<int>(values.at("k"), "k");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.k = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.k, values, "k").transform([&] {
+      return EstimatorSpec(spec);
+    });
   }
   if (id == "decision_tree") {
     DecisionTreeSpec spec;
-    if (values.contains("max_depth")) {
-      auto value = ParseNumber<int>(values.at("max_depth"), "max_depth");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.max_depth = *value;
-    }
-    if (values.contains("min_samples_split")) {
-      auto value =
-          ParseNumber<int>(values.at("min_samples_split"), "min_samples_split");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.min_samples_split = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.max_depth, values, "max_depth")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.min_samples_split, values,
+                                      "min_samples_split");
+        })
+        .transform([&] { return EstimatorSpec(spec); });
   }
   if (id == "random_forest") {
     RandomForestSpec spec;
-    if (values.contains("tree_count")) {
-      auto value = ParseNumber<int>(values.at("tree_count"), "tree_count");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.tree_count = *value;
-    }
-    if (values.contains("max_depth")) {
-      auto value = ParseNumber<int>(values.at("max_depth"), "max_depth");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.max_depth = *value;
-    }
-    if (values.contains("min_samples_split")) {
-      auto value =
-          ParseNumber<int>(values.at("min_samples_split"), "min_samples_split");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.min_samples_split = *value;
-    }
-    if (values.contains("feature_fraction")) {
-      auto value = ParseNumber<double>(values.at("feature_fraction"),
-                                       "feature_fraction");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.feature_fraction = *value;
-    }
-    if (values.contains("seed")) {
-      auto value = ParseNumber<unsigned int>(values.at("seed"), "seed");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.seed = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.tree_count, values, "tree_count")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_depth, values, "max_depth");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.min_samples_split, values,
+                                      "min_samples_split");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.feature_fraction, values,
+                                      "feature_fraction");
+        })
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })
+        .transform([&] { return EstimatorSpec(spec); });
   }
   if (id == "logistic") {
     LogisticSpec spec;
-    if (values.contains("learning_rate")) {
-      auto value =
-          ParseNumber<double>(values.at("learning_rate"), "learning_rate");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.learning_rate = *value;
-    }
-    if (values.contains("max_iterations")) {
-      auto value =
-          ParseNumber<int>(values.at("max_iterations"), "max_iterations");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.max_iterations = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.learning_rate, values, "learning_rate")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_iterations, values,
+                                      "max_iterations");
+        })
+        .transform([&] { return EstimatorSpec(spec); });
   }
   if (id == "softmax") {
     SoftmaxSpec spec;
-    if (values.contains("learning_rate")) {
-      auto value =
-          ParseNumber<double>(values.at("learning_rate"), "learning_rate");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.learning_rate = *value;
-    }
-    if (values.contains("max_iterations")) {
-      auto value =
-          ParseNumber<int>(values.at("max_iterations"), "max_iterations");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.max_iterations = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.learning_rate, values, "learning_rate")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_iterations, values,
+                                      "max_iterations");
+        })
+        .transform([&] { return EstimatorSpec(spec); });
   }
   if (id == "gaussian_nb") {
     GaussianNbSpec spec;
-    if (values.contains("variance_smoothing")) {
-      auto value = ParseNumber<double>(values.at("variance_smoothing"),
-                                       "variance_smoothing");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      spec.variance_smoothing = *value;
-    }
-    return EstimatorSpec(spec);
+    return AssignFieldIfPresent(spec.variance_smoothing, values,
+                                "variance_smoothing")
+        .transform([&] { return EstimatorSpec(spec); });
   }
 
   return std::unexpected("unknown estimator spec: " + std::string(id));
