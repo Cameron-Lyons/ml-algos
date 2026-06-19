@@ -6,10 +6,8 @@
 #include <limits>
 #include <memory>
 #include <numbers>
-#include <numeric>
-#include <optional>
 #include <random>
-#include <sstream>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -18,6 +16,7 @@
 #include "ml/core/format.h"
 #include "ml/core/linalg.h"
 #include "ml/core/parse.h"
+#include "ml/core/state_reader.h"
 
 namespace ml::models {
 
@@ -29,45 +28,10 @@ using ml::core::LabelVector;
 using ml::core::Overload;
 using ml::core::ParseDelimitedNumbers;
 using ml::core::ParseNumber;
+using ml::core::StateReader;
 using ml::core::Vector;
 
 constexpr double kProbabilityFloor = 1e-12;
-
-class StateReader {
-public:
-  explicit StateReader(std::string_view remaining) : remaining_(remaining) {}
-
-  [[nodiscard]] bool empty() const { return remaining_.empty(); }
-
-  std::expected<std::string_view, std::string>
-  ReadLine(std::string_view error) {
-    if (remaining_.empty()) {
-      return std::unexpected(std::string(error));
-    }
-    const auto newline = remaining_.find('\n');
-    if (newline == std::string_view::npos) {
-      const std::string_view line = remaining_;
-      remaining_ = {};
-      return line;
-    }
-    const std::string_view line = remaining_.substr(0, newline);
-    remaining_.remove_prefix(newline + 1);
-    return line;
-  }
-
-  std::expected<std::string_view, std::string>
-  ReadChunk(std::size_t size, std::string_view error) {
-    if (remaining_.size() < size) {
-      return std::unexpected(std::string(error));
-    }
-    const std::string_view chunk = remaining_.substr(0, size);
-    remaining_.remove_prefix(size);
-    return chunk;
-  }
-
-private:
-  std::string_view remaining_;
-};
 
 std::expected<std::pair<std::size_t, std::size_t>, std::string>
 ParseShape(std::string_view text, std::string_view error) {
@@ -75,22 +39,21 @@ ParseShape(std::string_view text, std::string_view error) {
   if (separator == std::string_view::npos) {
     return std::unexpected(std::string(error));
   }
-  auto rows = ParseNumber<std::size_t>(text.substr(0, separator), "row count");
-  if (!rows) {
-    return std::unexpected(rows.error());
-  }
-  std::string_view cols_text = text.substr(separator + 1);
-  while (!cols_text.empty() && cols_text.front() == ' ') {
-    cols_text.remove_prefix(1);
-  }
-  if (cols_text.empty()) {
-    return std::unexpected(std::string(error));
-  }
-  auto cols = ParseNumber<std::size_t>(cols_text, "column count");
-  if (!cols) {
-    return std::unexpected(cols.error());
-  }
-  return std::pair{*rows, *cols};
+  return ParseNumber<std::size_t>(text.substr(0, separator), "row count")
+      .and_then([text, separator, error](std::size_t rows)
+                    -> std::expected<std::pair<std::size_t, std::size_t>,
+                                     std::string> {
+        std::string_view cols_text = text.substr(separator + 1);
+        while (!cols_text.empty() && cols_text.front() == ' ') {
+          cols_text.remove_prefix(1);
+        }
+        if (cols_text.empty()) {
+          return std::unexpected(std::string(error));
+        }
+        return ParseNumber<std::size_t>(cols_text, "column count")
+            .transform(
+                [rows](std::size_t cols) { return std::pair{rows, cols}; });
+      });
 }
 
 std::expected<Vector, std::string> ParseDoubles(std::string_view text) {
@@ -104,6 +67,136 @@ std::expected<LabelVector, std::string> ParseInts(std::string_view text) {
 std::expected<DenseMatrix, std::string>
 MatrixFromRows(const std::vector<Vector> &rows) {
   return DenseMatrix::FromRows(rows);
+}
+
+template <std::integral T>
+std::vector<T> IotaVector(std::size_t count, T start = T{}) {
+  return std::ranges::to<std::vector<T>>(
+      std::views::iota(start, start + static_cast<T>(count)));
+}
+
+std::expected<std::vector<Vector>, std::string>
+ReadDoubleRowBlock(StateReader &reader, std::size_t row_count,
+                   std::size_t col_count, std::string_view line_error,
+                   std::string_view row_error) {
+  std::vector<Vector> rows;
+  rows.reserve(row_count);
+  for (std::size_t row = 0; row < row_count; ++row) {
+    auto line = reader.ReadLine(line_error);
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto parsed = ParseDoubles(*line);
+    if (!parsed || parsed->size() != col_count) {
+      return std::unexpected(std::string(row_error));
+    }
+    rows.push_back(std::move(*parsed));
+  }
+  return rows;
+}
+
+std::expected<std::vector<Vector>, std::string>
+ReadDoubleLines(StateReader &reader, std::size_t line_count,
+                std::string_view line_error) {
+  std::vector<Vector> rows;
+  rows.reserve(line_count);
+  for (std::size_t index = 0; index < line_count; ++index) {
+    auto line = reader.ReadLine(line_error);
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto parsed = ParseDoubles(*line);
+    if (!parsed) {
+      return std::unexpected(parsed.error());
+    }
+    rows.push_back(std::move(*parsed));
+  }
+  return rows;
+}
+
+std::expected<std::vector<Vector>, std::string>
+ReadRemainingDoubleRows(StateReader &reader, std::string_view line_error) {
+  std::vector<Vector> rows;
+  while (!reader.empty()) {
+    auto line = reader.ReadLine(line_error);
+    if (!line) {
+      return std::unexpected(line.error());
+    }
+    auto row = ParseDoubles(*line);
+    if (!row) {
+      return std::unexpected(row.error());
+    }
+    rows.push_back(std::move(*row));
+  }
+  return rows;
+}
+
+template <typename Tree, typename MakeTree>
+std::expected<void, std::string>
+LoadTreeEnsemble(StateReader &reader, std::size_t tree_count,
+                 std::string_view size_line_error, std::string_view size_label,
+                 std::string_view chunk_error, MakeTree make_tree,
+                 std::vector<Tree> &trees) {
+  trees.clear();
+  for (std::size_t index = 0; index < tree_count; ++index) {
+    auto loaded = reader.ReadLine(size_line_error)
+                      .and_then([&](std::string_view line) {
+                        return ParseNumber<std::size_t>(line, size_label);
+                      })
+                      .and_then([&](std::size_t size) {
+                        return reader.ReadChunk(size, chunk_error);
+                      })
+                      .and_then([&](std::string_view buffer)
+                                    -> std::expected<Tree, std::string> {
+                        Tree tree = make_tree();
+                        return tree.LoadState(buffer).transform(
+                            [tree = std::move(tree)]() mutable {
+                              return std::move(tree);
+                            });
+                      });
+    if (!loaded) {
+      return std::unexpected(loaded.error());
+    }
+    trees.push_back(std::move(*loaded));
+  }
+  return {};
+}
+
+template <typename Values, typename ParseValues>
+std::expected<void, std::string> LoadStoredFeatureMatrix(
+    StateReader &reader, std::string_view shape_line_error,
+    std::string_view shape_error, std::string_view row_line_error,
+    std::string_view row_error, std::string_view values_line_error,
+    std::string_view values_size_error, DenseMatrix &features, Values &values,
+    ParseValues parse_values) {
+  return reader.ReadLine(shape_line_error)
+      .and_then(
+          [&](std::string_view line) { return ParseShape(line, shape_error); })
+      .and_then([&](std::pair<std::size_t, std::size_t> shape)
+                    -> std::expected<void, std::string> {
+        const auto [rows, cols] = shape;
+        return ReadDoubleRowBlock(reader, rows, cols, row_line_error, row_error)
+            .and_then([&](std::vector<Vector> rows_data) {
+              return reader.ReadLine(values_line_error)
+                  .and_then(
+                      [&](std::string_view line) { return parse_values(line); })
+                  .and_then([rows, rows_data = std::move(rows_data),
+                             values_size_error, &features,
+                             &values](Values parsed_values) mutable
+                                -> std::expected<void, std::string> {
+                    if (parsed_values.size() != rows) {
+                      return std::unexpected(std::string(values_size_error));
+                    }
+                    return MatrixFromRows(rows_data).and_then(
+                        [&](DenseMatrix matrix)
+                            -> std::expected<void, std::string> {
+                          features = std::move(matrix);
+                          values = std::move(parsed_values);
+                          return std::expected<void, std::string>{};
+                        });
+                  });
+            });
+      });
 }
 
 DenseMatrix AddBias(const DenseMatrix &features) {
@@ -128,37 +221,29 @@ std::expected<Vector, std::string>
 NormalEquation(const DenseMatrix &features, std::span<const double> targets,
                double ridge_lambda) {
   const DenseMatrix with_bias = AddBias(features);
-  auto xt = ml::core::Transpose(with_bias);
-  if (!xt) {
-    return std::unexpected(xt.error());
-  }
-  auto xtx = ml::core::MatMul(*xt, with_bias);
-  if (!xtx) {
-    return std::unexpected(xtx.error());
-  }
-  for (std::size_t diag = 0; diag < xtx->rows(); ++diag) {
-    if (diag == 0) {
-      continue;
-    }
-    (*xtx)[diag][diag] += ridge_lambda;
-  }
-  auto inverse = ml::core::Inverse(*xtx);
-  if (!inverse) {
-    return std::unexpected(inverse.error());
-  }
-  auto xty = ml::core::MatMul(*xt, ColumnMatrix(targets));
-  if (!xty) {
-    return std::unexpected(xty.error());
-  }
-  auto beta = ml::core::MatMul(*inverse, *xty);
-  if (!beta) {
-    return std::unexpected(beta.error());
-  }
-  Vector coefficients(beta->rows(), 0.0);
-  for (std::size_t row = 0; row < beta->rows(); ++row) {
-    coefficients[row] = (*beta)[row][0];
-  }
-  return coefficients;
+  return ml::core::Transpose(with_bias)
+      .and_then([&](DenseMatrix xt) {
+        return ml::core::MatMul(xt, with_bias)
+            .and_then([&](DenseMatrix xtx) {
+              for (std::size_t diag = 1; diag < xtx.rows(); ++diag) {
+                xtx[diag][diag] += ridge_lambda;
+              }
+              return ml::core::Inverse(xtx);
+            })
+            .and_then([&](DenseMatrix inverse) {
+              return ml::core::MatMul(xt, ColumnMatrix(targets))
+                  .and_then([&](DenseMatrix xty) {
+                    return ml::core::MatMul(inverse, xty);
+                  });
+            });
+      })
+      .and_then([](DenseMatrix beta) -> std::expected<Vector, std::string> {
+        Vector coefficients(beta.rows(), 0.0);
+        for (std::size_t row = 0; row < beta.rows(); ++row) {
+          coefficients[row] = beta[row][0];
+        }
+        return coefficients;
+      });
 }
 
 Vector PredictLinear(const Vector &coefficients, const DenseMatrix &features) {
@@ -210,10 +295,15 @@ LabelVector ArgMaxLabels(const DenseMatrix &probabilities) {
   return labels;
 }
 
+std::expected<LabelVector, std::string>
+PredictArgMax(std::expected<DenseMatrix, std::string> probabilities) {
+  return probabilities.transform(
+      [](DenseMatrix probs) { return ArgMaxLabels(probs); });
+}
+
 std::vector<int> MakeClassLabels(std::size_t class_count) {
-  std::vector<int> labels(class_count, 0);
-  std::iota(labels.begin(), labels.end(), 0);
-  return labels;
+  return std::ranges::to<std::vector<int>>(
+      std::views::iota(0, static_cast<int>(class_count)));
 }
 
 template <typename Target> struct BootstrapSample {
@@ -235,12 +325,10 @@ std::expected<BootstrapSample<Target>, std::string> MakeBootstrapSample(
                               features[selected].end());
     sampled_targets.push_back(targets[selected]);
   }
-  auto matrix = MatrixFromRows(sampled_rows);
-  if (!matrix) {
-    return std::unexpected(matrix.error());
-  }
-  return BootstrapSample<Target>{std::move(*matrix),
-                                 std::move(sampled_targets)};
+  return MatrixFromRows(sampled_rows).transform([&](DenseMatrix matrix) {
+    return BootstrapSample<Target>{std::move(matrix),
+                                   std::move(sampled_targets)};
+  });
 }
 
 std::vector<std::size_t>
@@ -250,9 +338,8 @@ SampleRandomForestFeatureIndices(std::size_t feature_count,
   const std::size_t sampled_feature_count = std::max<std::size_t>(
       1, static_cast<std::size_t>(std::round(
              spec.feature_fraction * static_cast<double>(feature_count))));
-  std::vector<std::size_t> feature_indices(feature_count, 0);
-  std::iota(feature_indices.begin(), feature_indices.end(), 0);
-  std::shuffle(feature_indices.begin(), feature_indices.end(), rng);
+  auto feature_indices = IotaVector<std::size_t>(feature_count);
+  std::ranges::shuffle(feature_indices, rng);
   feature_indices.resize(sampled_feature_count);
   return feature_indices;
 }
@@ -263,12 +350,11 @@ public:
 
   std::expected<void, std::string>
   Fit(const DenseMatrix &features, std::span<const double> targets) override {
-    auto solved = NormalEquation(features, targets, 0.0);
-    if (!solved) {
-      return std::unexpected(solved.error());
-    }
-    coefficients_ = std::move(*solved);
-    return {};
+    return NormalEquation(features, targets, 0.0)
+        .and_then([this](Vector solved) {
+          coefficients_ = std::move(solved);
+          return std::expected<void, std::string>{};
+        });
   }
 
   std::expected<Vector, std::string>
@@ -283,12 +369,10 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    auto parsed = ParseDoubles(state);
-    if (!parsed) {
-      return std::unexpected(parsed.error());
-    }
-    coefficients_ = std::move(*parsed);
-    return {};
+    return ParseDoubles(state).and_then([this](Vector parsed) {
+      coefficients_ = std::move(parsed);
+      return std::expected<void, std::string>{};
+    });
   }
 
 private:
@@ -303,12 +387,11 @@ public:
 
   std::expected<void, std::string>
   Fit(const DenseMatrix &features, std::span<const double> targets) override {
-    auto solved = NormalEquation(features, targets, spec_.lambda);
-    if (!solved) {
-      return std::unexpected(solved.error());
-    }
-    coefficients_ = std::move(*solved);
-    return {};
+    return NormalEquation(features, targets, spec_.lambda)
+        .and_then([this](Vector solved) {
+          coefficients_ = std::move(solved);
+          return std::expected<void, std::string>{};
+        });
   }
 
   std::expected<Vector, std::string>
@@ -323,12 +406,10 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    auto parsed = ParseDoubles(state);
-    if (!parsed) {
-      return std::unexpected(parsed.error());
-    }
-    coefficients_ = std::move(*parsed);
-    return {};
+    return ParseDoubles(state).and_then([this](Vector parsed) {
+      coefficients_ = std::move(parsed);
+      return std::expected<void, std::string>{};
+    });
   }
 
 private:
@@ -347,7 +428,7 @@ public:
     const DenseMatrix with_bias = AddBias(features);
     const std::size_t rows = with_bias.rows();
     const std::size_t cols = with_bias.cols();
-    coefficients_.assign(cols, 0.0);
+    coefficients_ = Vector(cols, 0.0);
     Vector predictions(rows, 0.0);
 
     for (int iter = 0; iter < spec_.max_iterations; ++iter) {
@@ -411,12 +492,10 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    auto parsed = ParseDoubles(state);
-    if (!parsed) {
-      return std::unexpected(parsed.error());
-    }
-    coefficients_ = std::move(*parsed);
-    return {};
+    return ParseDoubles(state).and_then([this](Vector parsed) {
+      coefficients_ = std::move(parsed);
+      return std::expected<void, std::string>{};
+    });
   }
 
 private:
@@ -435,7 +514,7 @@ public:
     const DenseMatrix with_bias = AddBias(features);
     const std::size_t rows = with_bias.rows();
     const std::size_t cols = with_bias.cols();
-    coefficients_.assign(cols, 0.0);
+    coefficients_ = Vector(cols, 0.0);
     Vector predictions(rows, 0.0);
 
     for (int iter = 0; iter < spec_.max_iterations; ++iter) {
@@ -498,12 +577,10 @@ public:
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
-    auto parsed = ParseDoubles(state);
-    if (!parsed) {
-      return std::unexpected(parsed.error());
-    }
-    coefficients_ = std::move(*parsed);
-    return {};
+    return ParseDoubles(state).and_then([this](Vector parsed) {
+      coefficients_ = std::move(parsed);
+      return std::expected<void, std::string>{};
+    });
   }
 
 private:
@@ -520,7 +597,7 @@ public:
   std::expected<void, std::string>
   Fit(const DenseMatrix &features, std::span<const double> targets) override {
     features_ = features;
-    targets_.assign(targets.begin(), targets.end());
+    targets_ = std::ranges::to<Vector>(targets);
     return {};
   }
 
@@ -555,54 +632,22 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << features_.rows() << " " << features_.cols() << "\n";
+    std::string out =
+        std::format("{} {}\n", features_.rows(), features_.cols());
     for (std::size_t row = 0; row < features_.rows(); ++row) {
-      out << JoinFormatted(features_[row]) << "\n";
+      out += std::format("{}\n", JoinFormatted(features_[row]));
     }
-    out << JoinFormatted(targets_) << "\n";
-    return out.str();
+    out += std::format("{}\n", JoinFormatted(targets_));
+    return out;
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto shape_line = reader.ReadLine("invalid knn regressor state");
-    if (!shape_line) {
-      return std::unexpected(shape_line.error());
-    }
-    auto shape = ParseShape(*shape_line, "invalid knn regressor state");
-    if (!shape) {
-      return std::unexpected(shape.error());
-    }
-    const auto [rows, cols] = *shape;
-    std::vector<Vector> rows_data;
-    rows_data.reserve(rows);
-    for (std::size_t row = 0; row < rows; ++row) {
-      auto line = reader.ReadLine("invalid knn regressor state");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto parsed = ParseDoubles(*line);
-      if (!parsed || parsed->size() != cols) {
-        return std::unexpected("invalid knn regressor features");
-      }
-      rows_data.push_back(std::move(*parsed));
-    }
-    auto line = reader.ReadLine("invalid knn regressor targets");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto targets = ParseDoubles(*line);
-    if (!targets || targets->size() != rows) {
-      return std::unexpected("invalid knn regressor targets");
-    }
-    auto matrix = MatrixFromRows(rows_data);
-    if (!matrix) {
-      return std::unexpected(matrix.error());
-    }
-    features_ = std::move(*matrix);
-    targets_ = std::move(*targets);
-    return {};
+    return LoadStoredFeatureMatrix(
+        reader, "invalid knn regressor state", "invalid knn regressor state",
+        "invalid knn regressor state", "invalid knn regressor features",
+        "invalid knn regressor targets", "invalid knn regressor targets",
+        features_, targets_, ParseDoubles);
   }
 
 private:
@@ -637,11 +682,9 @@ public:
         feature_indices_(std::move(feature_indices)) {}
 
   void Fit(const DenseMatrix &features, std::span<const double> targets) {
-    std::vector<std::size_t> indices(features.rows(), 0);
-    std::iota(indices.begin(), indices.end(), 0);
+    std::vector<std::size_t> indices = IotaVector<std::size_t>(features.rows());
     if (feature_indices_.empty()) {
-      feature_indices_.resize(features.cols());
-      std::iota(feature_indices_.begin(), feature_indices_.end(), 0);
+      feature_indices_ = IotaVector<std::size_t>(features.cols());
     }
     root_ = Build(features, targets, indices, 0);
   }
@@ -656,49 +699,42 @@ public:
   }
 
   std::string SaveState() const {
-    std::ostringstream out;
-    out << feature_indices_.size() << "\n";
-    for (std::size_t index = 0; index < feature_indices_.size(); ++index) {
-      if (index > 0) {
-        out << ",";
-      }
-      out << feature_indices_[index];
-    }
-    out << "\n";
+    std::string out = std::format("{}\n{}\n", feature_indices_.size(),
+                                  JoinFormatted(feature_indices_));
     WriteNode(root_.get(), out);
-    return out.str();
+    return out;
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid regression tree state");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto feature_count = ParseNumber<std::size_t>(*line, "feature count");
-    if (!feature_count) {
-      return std::unexpected(feature_count.error());
-    }
-    line = reader.ReadLine("invalid regression tree feature list");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    feature_indices_.clear();
-    auto parsed_indices =
-        ParseDelimitedNumbers<std::size_t>(*line, ',', "feature index");
-    if (!parsed_indices) {
-      return std::unexpected(parsed_indices.error());
-    }
-    feature_indices_ = std::move(*parsed_indices);
-    if (feature_indices_.size() != *feature_count) {
-      return std::unexpected("regression tree feature list mismatch");
-    }
-    auto root = ReadNode(reader);
-    if (!root) {
-      return std::unexpected(root.error());
-    }
-    root_ = std::move(*root);
-    return {};
+    return reader.ReadLine("invalid regression tree state")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "feature count");
+        })
+        .and_then([this, &reader](std::size_t feature_count) {
+          return reader.ReadLine("invalid regression tree feature list")
+              .and_then([this, feature_count](std::string_view line) {
+                return ParseDelimitedNumbers<std::size_t>(line, ',',
+                                                          "feature index")
+                    .and_then([this, feature_count](
+                                  std::vector<std::size_t> parsed_indices)
+                                  -> std::expected<void, std::string> {
+                      if (parsed_indices.size() != feature_count) {
+                        return std::unexpected(
+                            "regression tree feature list mismatch");
+                      }
+                      feature_indices_ = std::move(parsed_indices);
+                      return std::expected<void, std::string>{};
+                    });
+              });
+        })
+        .and_then([this, &reader]() {
+          return ReadNode(reader).and_then(
+              [this](std::unique_ptr<RegressionTreeNode> root) {
+                root_ = std::move(root);
+                return std::expected<void, std::string>{};
+              });
+        });
   }
 
 private:
@@ -780,72 +816,79 @@ private:
     return node;
   }
 
-  static void WriteNode(const RegressionTreeNode *node, std::ostream &out) {
+  static void WriteNode(const RegressionTreeNode *node, std::string &out) {
     if (node == nullptr) {
-      out << "null\n";
+      out += "null\n";
       return;
     }
     if (node->leaf) {
-      out << "leaf " << node->value << "\n";
+      out += std::format("leaf {}\n", node->value);
       return;
     }
-    out << "split " << node->feature << " " << node->threshold << "\n";
+    out += std::format("split {} {}\n", node->feature, node->threshold);
     WriteNode(node->left.get(), out);
     WriteNode(node->right.get(), out);
   }
 
   static std::expected<std::unique_ptr<RegressionTreeNode>, std::string>
   ReadNode(StateReader &reader) {
-    auto line = reader.ReadLine("invalid regression tree node");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    if (*line == "null") {
-      return nullptr;
-    }
-    if (line->starts_with("leaf ")) {
-      auto value =
-          ParseNumber<double>(line->substr(5), "regression tree leaf value");
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      auto node = std::make_unique<RegressionTreeNode>();
-      node->value = *value;
-      return node;
-    }
-    if (!line->starts_with("split ")) {
-      return std::unexpected("invalid regression tree node");
-    }
-    const std::string_view payload = line->substr(6);
-    const auto separator = payload.find(' ');
-    if (separator == std::string_view::npos) {
-      return std::unexpected("invalid regression tree split");
-    }
-    auto feature = ParseNumber<std::size_t>(payload.substr(0, separator),
-                                            "regression tree split feature");
-    if (!feature) {
-      return std::unexpected(feature.error());
-    }
-    auto threshold = ParseNumber<double>(payload.substr(separator + 1),
-                                         "regression tree split threshold");
-    if (!threshold) {
-      return std::unexpected(threshold.error());
-    }
-    auto node = std::make_unique<RegressionTreeNode>();
-    node->leaf = false;
-    node->feature = *feature;
-    node->threshold = *threshold;
-    auto left = ReadNode(reader);
-    if (!left) {
-      return std::unexpected(left.error());
-    }
-    auto right = ReadNode(reader);
-    if (!right) {
-      return std::unexpected(right.error());
-    }
-    node->left = std::move(*left);
-    node->right = std::move(*right);
-    return node;
+    return reader.ReadLine("invalid regression tree node")
+        .and_then([&reader](std::string_view line)
+                      -> std::expected<std::unique_ptr<RegressionTreeNode>,
+                                       std::string> {
+          if (line == "null") {
+            return nullptr;
+          }
+          if (line.starts_with("leaf ")) {
+            return ParseNumber<double>(line.substr(5),
+                                       "regression tree leaf value")
+                .transform([](double value) {
+                  auto node = std::make_unique<RegressionTreeNode>();
+                  node->value = value;
+                  return node;
+                });
+          }
+          if (!line.starts_with("split ")) {
+            return std::unexpected<std::string>("invalid regression tree node");
+          }
+          const std::string_view payload = line.substr(6);
+          const auto separator = payload.find(' ');
+          if (separator == std::string_view::npos) {
+            return std::unexpected<std::string>(
+                "invalid regression tree split");
+          }
+          return ParseNumber<std::size_t>(payload.substr(0, separator),
+                                          "regression tree split feature")
+              .and_then([&](std::size_t feature) {
+                return ParseNumber<double>(payload.substr(separator + 1),
+                                           "regression tree split threshold")
+                    .and_then([&reader, feature](double threshold)
+                                  -> std::expected<
+                                      std::unique_ptr<RegressionTreeNode>,
+                                      std::string> {
+                      return ReadNode(reader).and_then(
+                          [&reader, feature, threshold](
+                              std::unique_ptr<RegressionTreeNode> left) {
+                            return ReadNode(reader).and_then(
+                                [feature, threshold, left = std::move(left)](
+                                    std::unique_ptr<RegressionTreeNode>
+                                        right) mutable
+                                    -> std::expected<
+                                        std::unique_ptr<RegressionTreeNode>,
+                                        std::string> {
+                                  auto node =
+                                      std::make_unique<RegressionTreeNode>();
+                                  node->leaf = false;
+                                  node->feature = feature;
+                                  node->threshold = threshold;
+                                  node->left = std::move(left);
+                                  node->right = std::move(right);
+                                  return node;
+                                });
+                          });
+                    });
+              });
+        });
   }
 
   int max_depth_;
@@ -911,11 +954,9 @@ public:
         feature_indices_(std::move(feature_indices)) {}
 
   void Fit(const DenseMatrix &features, std::span<const int> labels) {
-    std::vector<std::size_t> indices(features.rows(), 0);
-    std::iota(indices.begin(), indices.end(), 0);
+    std::vector<std::size_t> indices = IotaVector<std::size_t>(features.rows());
     if (feature_indices_.empty()) {
-      feature_indices_.resize(features.cols());
-      std::iota(feature_indices_.begin(), feature_indices_.end(), 0);
+      feature_indices_ = IotaVector<std::size_t>(features.cols());
     }
     root_ = Build(features, labels, indices, 0);
   }
@@ -937,60 +978,52 @@ public:
   }
 
   std::string SaveState() const {
-    std::ostringstream out;
-    out << class_count_ << "\n";
-    out << feature_indices_.size() << "\n";
-    for (std::size_t index = 0; index < feature_indices_.size(); ++index) {
-      if (index > 0) {
-        out << ",";
-      }
-      out << feature_indices_[index];
-    }
-    out << "\n";
+    std::string out =
+        std::format("{}\n{}\n{}\n", class_count_, feature_indices_.size(),
+                    JoinFormatted(feature_indices_));
     WriteNode(root_.get(), out);
-    return out.str();
+    return out;
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid classification tree class count");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto class_count =
-        ParseNumber<int>(*line, "classification tree class count");
-    if (!class_count) {
-      return std::unexpected(class_count.error());
-    }
-    class_count_ = *class_count;
-    line = reader.ReadLine("invalid classification tree feature count");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto feature_count = ParseNumber<std::size_t>(*line, "feature count");
-    if (!feature_count) {
-      return std::unexpected(feature_count.error());
-    }
-    line = reader.ReadLine("invalid classification tree feature list");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    feature_indices_.clear();
-    auto parsed_indices =
-        ParseDelimitedNumbers<std::size_t>(*line, ',', "feature index");
-    if (!parsed_indices) {
-      return std::unexpected(parsed_indices.error());
-    }
-    feature_indices_ = std::move(*parsed_indices);
-    if (feature_indices_.size() != *feature_count) {
-      return std::unexpected("invalid classification tree feature list");
-    }
-    auto root = ReadNode(reader);
-    if (!root) {
-      return std::unexpected(root.error());
-    }
-    root_ = std::move(*root);
-    return {};
+    return reader.ReadLine("invalid classification tree class count")
+        .and_then([](std::string_view line) {
+          return ParseNumber<int>(line, "classification tree class count");
+        })
+        .and_then([this, &reader](int class_count) {
+          class_count_ = class_count;
+          return reader.ReadLine("invalid classification tree feature count");
+        })
+        .and_then([this, &reader](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "feature count")
+              .and_then([this, &reader](std::size_t feature_count) {
+                return reader
+                    .ReadLine("invalid classification tree feature list")
+                    .and_then([this,
+                               feature_count](std::string_view list_line) {
+                      return ParseDelimitedNumbers<std::size_t>(list_line, ',',
+                                                                "feature index")
+                          .and_then([this, feature_count](
+                                        std::vector<std::size_t> parsed_indices)
+                                        -> std::expected<void, std::string> {
+                            if (parsed_indices.size() != feature_count) {
+                              return std::unexpected(
+                                  "invalid classification tree feature list");
+                            }
+                            feature_indices_ = std::move(parsed_indices);
+                            return std::expected<void, std::string>{};
+                          });
+                    });
+              });
+        })
+        .and_then([this, &reader]() {
+          return ReadNode(reader).and_then(
+              [this](std::unique_ptr<ClassificationTreeNode> root) {
+                root_ = std::move(root);
+                return std::expected<void, std::string>{};
+              });
+        });
   }
 
 private:
@@ -998,7 +1031,7 @@ private:
   Build(const DenseMatrix &features, std::span<const int> labels,
         const std::vector<std::size_t> &indices, int depth) const {
     auto node = std::make_unique<ClassificationTreeNode>();
-    node->probabilities.assign(static_cast<std::size_t>(class_count_), 0.0);
+    node->probabilities = Vector(static_cast<std::size_t>(class_count_), 0.0);
     for (std::size_t index : indices) {
       node->probabilities[static_cast<std::size_t>(labels[index])] += 1.0;
     }
@@ -1082,83 +1115,92 @@ private:
     return node;
   }
 
-  static void WriteNode(const ClassificationTreeNode *node, std::ostream &out) {
+  static void WriteNode(const ClassificationTreeNode *node, std::string &out) {
     if (node == nullptr) {
-      out << "null\n";
+      out += "null\n";
       return;
     }
     if (node->leaf) {
-      out << "leaf " << node->predicted_class << " "
-          << JoinFormatted(node->probabilities) << "\n";
+      out += std::format("leaf {} {}\n", node->predicted_class,
+                         JoinFormatted(node->probabilities));
       return;
     }
-    out << "split " << node->feature << " " << node->threshold << "\n";
+    out += std::format("split {} {}\n", node->feature, node->threshold);
     WriteNode(node->left.get(), out);
     WriteNode(node->right.get(), out);
   }
 
   static std::expected<std::unique_ptr<ClassificationTreeNode>, std::string>
   ReadNode(StateReader &reader) {
-    auto line = reader.ReadLine("invalid classification tree node");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    if (*line == "null") {
-      return nullptr;
-    }
-    if (line->starts_with("leaf ")) {
-      const std::string_view payload = line->substr(5);
-      const auto separator = payload.find(' ');
-      if (separator == std::string_view::npos) {
-        return std::unexpected("invalid classification tree leaf");
-      }
-      auto predicted_class = ParseNumber<int>(
-          payload.substr(0, separator), "classification tree predicted class");
-      if (!predicted_class) {
-        return std::unexpected(predicted_class.error());
-      }
-      auto probabilities = ParseDoubles(payload.substr(separator + 1));
-      if (!probabilities) {
-        return std::unexpected(probabilities.error());
-      }
-      auto node = std::make_unique<ClassificationTreeNode>();
-      node->predicted_class = *predicted_class;
-      node->probabilities = std::move(*probabilities);
-      return node;
-    }
-    if (!line->starts_with("split ")) {
-      return std::unexpected("invalid classification tree node");
-    }
-    const std::string_view payload = line->substr(6);
-    const auto separator = payload.find(' ');
-    if (separator == std::string_view::npos) {
-      return std::unexpected("invalid classification tree split");
-    }
-    auto feature = ParseNumber<std::size_t>(
-        payload.substr(0, separator), "classification tree split feature");
-    if (!feature) {
-      return std::unexpected(feature.error());
-    }
-    auto threshold = ParseNumber<double>(payload.substr(separator + 1),
-                                         "classification tree split threshold");
-    if (!threshold) {
-      return std::unexpected(threshold.error());
-    }
-    auto node = std::make_unique<ClassificationTreeNode>();
-    node->leaf = false;
-    node->feature = *feature;
-    node->threshold = *threshold;
-    auto left = ReadNode(reader);
-    if (!left) {
-      return std::unexpected(left.error());
-    }
-    auto right = ReadNode(reader);
-    if (!right) {
-      return std::unexpected(right.error());
-    }
-    node->left = std::move(*left);
-    node->right = std::move(*right);
-    return node;
+    return reader.ReadLine("invalid classification tree node")
+        .and_then([&reader](std::string_view line)
+                      -> std::expected<std::unique_ptr<ClassificationTreeNode>,
+                                       std::string> {
+          if (line == "null") {
+            return nullptr;
+          }
+          if (line.starts_with("leaf ")) {
+            const std::string_view payload = line.substr(5);
+            const auto separator = payload.find(' ');
+            if (separator == std::string_view::npos) {
+              return std::unexpected<std::string>(
+                  "invalid classification tree leaf");
+            }
+            return ParseNumber<int>(payload.substr(0, separator),
+                                    "classification tree predicted class")
+                .and_then([&](int predicted_class) {
+                  return ParseDoubles(payload.substr(separator + 1))
+                      .transform([predicted_class](Vector probabilities) {
+                        auto node = std::make_unique<ClassificationTreeNode>();
+                        node->predicted_class = predicted_class;
+                        node->probabilities = std::move(probabilities);
+                        return node;
+                      });
+                });
+          }
+          if (!line.starts_with("split ")) {
+            return std::unexpected<std::string>(
+                "invalid classification tree node");
+          }
+          const std::string_view payload = line.substr(6);
+          const auto separator = payload.find(' ');
+          if (separator == std::string_view::npos) {
+            return std::unexpected<std::string>(
+                "invalid classification tree split");
+          }
+          return ParseNumber<std::size_t>(payload.substr(0, separator),
+                                          "classification tree split feature")
+              .and_then([&](std::size_t feature) {
+                return ParseNumber<double>(
+                           payload.substr(separator + 1),
+                           "classification tree split threshold")
+                    .and_then([&reader, feature](double threshold)
+                                  -> std::expected<
+                                      std::unique_ptr<ClassificationTreeNode>,
+                                      std::string> {
+                      return ReadNode(reader).and_then(
+                          [&reader, feature, threshold](
+                              std::unique_ptr<ClassificationTreeNode> left) {
+                            return ReadNode(reader).and_then(
+                                [feature, threshold, left = std::move(left)](
+                                    std::unique_ptr<ClassificationTreeNode>
+                                        right) mutable
+                                    -> std::expected<
+                                        std::unique_ptr<ClassificationTreeNode>,
+                                        std::string> {
+                                  auto node = std::make_unique<
+                                      ClassificationTreeNode>();
+                                  node->leaf = false;
+                                  node->feature = feature;
+                                  node->threshold = threshold;
+                                  node->left = std::move(left);
+                                  node->right = std::move(right);
+                                  return node;
+                                });
+                          });
+                    });
+              });
+        });
   }
 
   int max_depth_;
@@ -1177,7 +1219,7 @@ public:
   std::expected<void, std::string> Fit(const DenseMatrix &features,
                                        std::span<const int> labels) override {
     const std::size_t feature_count = features.cols();
-    weights_.assign(feature_count, 0.0);
+    weights_ = Vector(feature_count, 0.0);
     bias_ = 0.0;
     for (int iter = 0; iter < spec_.max_iterations; ++iter) {
       Vector dw(feature_count, 0.0);
@@ -1205,15 +1247,13 @@ public:
 
   std::expected<LabelVector, std::string>
   Predict(const DenseMatrix &features) const override {
-    auto probs = PredictProba(features);
-    if (!probs) {
-      return std::unexpected(probs.error());
-    }
-    LabelVector labels(features.rows(), 0);
-    for (std::size_t row = 0; row < features.rows(); ++row) {
-      labels[row] = (*probs)[row][1] >= 0.5 ? 1 : 0;
-    }
-    return labels;
+    return PredictProba(features).transform([](DenseMatrix probs) {
+      LabelVector labels(probs.rows(), 0);
+      for (std::size_t row = 0; row < probs.rows(); ++row) {
+        labels[row] = probs[row][1] >= 0.5 ? 1 : 0;
+      }
+      return labels;
+    });
   }
 
   std::expected<DenseMatrix, std::string>
@@ -1236,32 +1276,25 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << bias_ << "\n" << JoinFormatted(weights_);
-    return out.str();
+    return std::format("{}\n{}", bias_, JoinFormatted(weights_));
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid logistic state");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto bias = ParseNumber<double>(*line, "logistic bias");
-    if (!bias) {
-      return std::unexpected(bias.error());
-    }
-    bias_ = *bias;
-    line = reader.ReadLine("invalid logistic weights");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto parsed = ParseDoubles(*line);
-    if (!parsed) {
-      return std::unexpected(parsed.error());
-    }
-    weights_ = std::move(*parsed);
-    return {};
+    return reader.ReadLine("invalid logistic state")
+        .and_then([](std::string_view line) {
+          return ParseNumber<double>(line, "logistic bias");
+        })
+        .and_then([this, &reader](double bias) {
+          bias_ = bias;
+          return reader.ReadLine("invalid logistic weights");
+        })
+        .and_then([this](std::string_view line) {
+          return ParseDoubles(line).and_then([this](Vector parsed) {
+            weights_ = std::move(parsed);
+            return std::expected<void, std::string>{};
+          });
+        });
   }
 
 private:
@@ -1281,7 +1314,7 @@ public:
     const int max_label = *std::ranges::max_element(labels);
     class_count_ = static_cast<std::size_t>(max_label) + 1;
     weights_ = DenseMatrix(features.cols(), class_count_, 0.0);
-    biases_.assign(class_count_, 0.0);
+    biases_ = Vector(class_count_, 0.0);
     for (int iter = 0; iter < spec_.max_iterations; ++iter) {
       DenseMatrix gradient(features.cols(), class_count_, 0.0);
       Vector bias_grad(class_count_, 0.0);
@@ -1319,11 +1352,7 @@ public:
 
   std::expected<LabelVector, std::string>
   Predict(const DenseMatrix &features) const override {
-    auto probs = PredictProba(features);
-    if (!probs) {
-      return std::unexpected(probs.error());
-    }
-    return ArgMaxLabels(*probs);
+    return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
@@ -1352,53 +1381,53 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << class_count_ << "\n";
-    out << JoinFormatted(biases_) << "\n";
+    std::string out =
+        std::format("{}\n{}\n", class_count_, JoinFormatted(biases_));
     for (std::size_t row = 0; row < weights_.rows(); ++row) {
-      out << JoinFormatted(weights_[row]) << "\n";
+      out += std::format("{}\n", JoinFormatted(weights_[row]));
     }
-    return out.str();
+    return out;
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid softmax class count");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto class_count = ParseNumber<std::size_t>(*line, "softmax class count");
-    if (!class_count) {
-      return std::unexpected(class_count.error());
-    }
-    class_count_ = *class_count;
-    line = reader.ReadLine("invalid softmax biases");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto biases = ParseDoubles(*line);
-    if (!biases || biases->size() != class_count_) {
-      return std::unexpected("invalid softmax biases");
-    }
-    biases_ = std::move(*biases);
-    std::vector<Vector> rows;
-    while (!reader.empty()) {
-      line = reader.ReadLine("invalid softmax weight row");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto row = ParseDoubles(*line);
-      if (!row || row->size() != class_count_) {
-        return std::unexpected("invalid softmax weight row");
-      }
-      rows.push_back(std::move(*row));
-    }
-    auto matrix = MatrixFromRows(rows);
-    if (!matrix) {
-      return std::unexpected(matrix.error());
-    }
-    weights_ = std::move(*matrix);
-    return {};
+    return reader.ReadLine("invalid softmax class count")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "softmax class count");
+        })
+        .and_then([this, &reader](std::size_t class_count) {
+          class_count_ = class_count;
+          return reader.ReadLine("invalid softmax biases");
+        })
+        .and_then(
+            [this](std::string_view line) -> std::expected<void, std::string> {
+              return ParseDoubles(line).and_then(
+                  [this](Vector biases) -> std::expected<void, std::string> {
+                    if (biases.size() != class_count_) {
+                      return std::unexpected<std::string>(
+                          "invalid softmax biases");
+                    }
+                    biases_ = std::move(biases);
+                    return std::expected<void, std::string>{};
+                  });
+            })
+        .and_then([this, &reader]() -> std::expected<void, std::string> {
+          return ReadRemainingDoubleRows(reader, "invalid softmax weight row")
+              .and_then([this](std::vector<Vector> rows)
+                            -> std::expected<void, std::string> {
+                for (const Vector &row : rows) {
+                  if (row.size() != class_count_) {
+                    return std::unexpected<std::string>(
+                        "invalid softmax weight row");
+                  }
+                }
+                return MatrixFromRows(rows).and_then(
+                    [this](DenseMatrix matrix) {
+                      weights_ = std::move(matrix);
+                      return std::expected<void, std::string>{};
+                    });
+              });
+        });
   }
 
 private:
@@ -1418,7 +1447,7 @@ public:
                                        std::span<const int> labels) override {
     const int max_label = *std::ranges::max_element(labels);
     class_count_ = static_cast<std::size_t>(max_label) + 1;
-    priors_.assign(class_count_, 0.0);
+    priors_ = Vector(class_count_, 0.0);
     means_ = DenseMatrix(class_count_, features.cols(), 0.0);
     variances_ = DenseMatrix(class_count_, features.cols(), 0.0);
     std::vector<int> counts(class_count_, 0);
@@ -1455,11 +1484,7 @@ public:
 
   std::expected<LabelVector, std::string>
   Predict(const DenseMatrix &features) const override {
-    auto probs = PredictProba(features);
-    if (!probs) {
-      return std::unexpected(probs.error());
-    }
-    return ArgMaxLabels(*probs);
+    return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
@@ -1492,76 +1517,65 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << class_count_ << "\n";
-    out << JoinFormatted(priors_) << "\n";
+    std::string out =
+        std::format("{}\n{}\n", class_count_, JoinFormatted(priors_));
     for (std::size_t row = 0; row < means_.rows(); ++row) {
-      out << JoinFormatted(means_[row]) << "\n";
+      out += std::format("{}\n", JoinFormatted(means_[row]));
     }
     for (std::size_t row = 0; row < variances_.rows(); ++row) {
-      out << JoinFormatted(variances_[row]) << "\n";
+      out += std::format("{}\n", JoinFormatted(variances_[row]));
     }
-    return out.str();
+    return out;
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid gaussian nb class count");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto class_count =
-        ParseNumber<std::size_t>(*line, "gaussian nb class count");
-    if (!class_count) {
-      return std::unexpected(class_count.error());
-    }
-    class_count_ = *class_count;
-    line = reader.ReadLine("invalid gaussian nb priors");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto priors = ParseDoubles(*line);
-    if (!priors || priors->size() != class_count_) {
-      return std::unexpected("invalid gaussian nb priors");
-    }
-    priors_ = std::move(*priors);
-    std::vector<Vector> means_rows;
-    means_rows.reserve(class_count_);
-    for (std::size_t cls = 0; cls < class_count_; ++cls) {
-      line = reader.ReadLine("invalid gaussian nb means");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto row = ParseDoubles(*line);
-      if (!row) {
-        return std::unexpected(row.error());
-      }
-      means_rows.push_back(std::move(*row));
-    }
-    std::vector<Vector> variance_rows;
-    variance_rows.reserve(class_count_);
-    for (std::size_t cls = 0; cls < class_count_; ++cls) {
-      line = reader.ReadLine("invalid gaussian nb variances");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto row = ParseDoubles(*line);
-      if (!row) {
-        return std::unexpected(row.error());
-      }
-      variance_rows.push_back(std::move(*row));
-    }
-    auto means = MatrixFromRows(means_rows);
-    if (!means) {
-      return std::unexpected(means.error());
-    }
-    auto variances = MatrixFromRows(variance_rows);
-    if (!variances) {
-      return std::unexpected(variances.error());
-    }
-    means_ = std::move(*means);
-    variances_ = std::move(*variances);
-    return {};
+    return reader.ReadLine("invalid gaussian nb class count")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "gaussian nb class count");
+        })
+        .and_then([this, &reader](std::size_t class_count) {
+          class_count_ = class_count;
+          return reader.ReadLine("invalid gaussian nb priors");
+        })
+        .and_then(
+            [this](std::string_view line) -> std::expected<void, std::string> {
+              return ParseDoubles(line).and_then(
+                  [this](Vector priors) -> std::expected<void, std::string> {
+                    if (priors.size() != class_count_) {
+                      return std::unexpected<std::string>(
+                          "invalid gaussian nb priors");
+                    }
+                    priors_ = std::move(priors);
+                    return std::expected<void, std::string>{};
+                  });
+            })
+        .and_then([this, &reader]() -> std::expected<void, std::string> {
+          return ReadDoubleLines(reader, class_count_,
+                                 "invalid gaussian nb means")
+              .and_then([&](std::vector<Vector> means_rows) {
+                return ReadDoubleLines(reader, class_count_,
+                                       "invalid gaussian nb variances")
+                    .and_then([means_rows = std::move(means_rows)](
+                                  std::vector<Vector> variance_rows) mutable {
+                      return MatrixFromRows(means_rows)
+                          .and_then([variance_rows = std::move(variance_rows)](
+                                        DenseMatrix means) mutable {
+                            return MatrixFromRows(variance_rows)
+                                .transform([means = std::move(means)](
+                                               DenseMatrix variances) {
+                                  return std::pair{std::move(means),
+                                                   std::move(variances)};
+                                });
+                          });
+                    });
+              })
+              .and_then([this](std::pair<DenseMatrix, DenseMatrix> matrices) {
+                means_ = std::move(matrices.first);
+                variances_ = std::move(matrices.second);
+                return std::expected<void, std::string>{};
+              });
+        });
   }
 
 private:
@@ -1582,17 +1596,13 @@ public:
   std::expected<void, std::string> Fit(const DenseMatrix &features,
                                        std::span<const int> labels) override {
     features_ = features;
-    labels_.assign(labels.begin(), labels.end());
+    labels_ = std::ranges::to<LabelVector>(labels);
     return {};
   }
 
   std::expected<LabelVector, std::string>
   Predict(const DenseMatrix &features) const override {
-    auto probs = PredictProba(features);
-    if (!probs) {
-      return std::unexpected(probs.error());
-    }
-    return ArgMaxLabels(*probs);
+    return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
@@ -1629,65 +1639,30 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << class_count_ << "\n";
-    out << features_.rows() << " " << features_.cols() << "\n";
+    std::string out = std::format("{}\n{} {}\n", class_count_, features_.rows(),
+                                  features_.cols());
     for (std::size_t row = 0; row < features_.rows(); ++row) {
-      out << JoinFormatted(features_[row]) << "\n";
+      out += std::format("{}\n", JoinFormatted(features_[row]));
     }
-    out << JoinFormatted(labels_) << "\n";
-    return out.str();
+    out += std::format("{}\n", JoinFormatted(labels_));
+    return out;
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid knn classifier class count");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto class_count =
-        ParseNumber<std::size_t>(*line, "knn classifier class count");
-    if (!class_count) {
-      return std::unexpected(class_count.error());
-    }
-    class_count_ = *class_count;
-    line = reader.ReadLine("invalid knn classifier state");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto shape = ParseShape(*line, "invalid knn classifier state");
-    if (!shape) {
-      return std::unexpected(shape.error());
-    }
-    const auto [rows, cols] = *shape;
-    std::vector<Vector> rows_data;
-    rows_data.reserve(rows);
-    for (std::size_t row = 0; row < rows; ++row) {
-      line = reader.ReadLine("invalid knn classifier state");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto parsed = ParseDoubles(*line);
-      if (!parsed || parsed->size() != cols) {
-        return std::unexpected("invalid knn classifier features");
-      }
-      rows_data.push_back(std::move(*parsed));
-    }
-    line = reader.ReadLine("invalid knn classifier labels");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto labels = ParseInts(*line);
-    if (!labels || labels->size() != rows) {
-      return std::unexpected("invalid knn classifier labels");
-    }
-    auto matrix = MatrixFromRows(rows_data);
-    if (!matrix) {
-      return std::unexpected(matrix.error());
-    }
-    features_ = std::move(*matrix);
-    labels_ = std::move(*labels);
-    return {};
+    return reader.ReadLine("invalid knn classifier class count")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "knn classifier class count");
+        })
+        .and_then([this, &reader](std::size_t class_count) {
+          class_count_ = class_count;
+          return LoadStoredFeatureMatrix(
+              reader, "invalid knn classifier state",
+              "invalid knn classifier state", "invalid knn classifier state",
+              "invalid knn classifier features",
+              "invalid knn classifier labels", "invalid knn classifier labels",
+              features_, labels_, ParseInts);
+        });
   }
 
 private:
@@ -1716,11 +1691,7 @@ public:
 
   std::expected<LabelVector, std::string>
   Predict(const DenseMatrix &features) const override {
-    auto probs = PredictProba(features);
-    if (!probs) {
-      return std::unexpected(probs.error());
-    }
-    return ArgMaxLabels(*probs);
+    return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
@@ -1767,15 +1738,22 @@ public:
     std::mt19937 rng(spec_.seed);
     std::uniform_int_distribution<std::size_t> row_dist(0, features.rows() - 1);
     for (int tree_index = 0; tree_index < spec_.tree_count; ++tree_index) {
-      auto sample = MakeBootstrapSample(features, targets, row_dist, rng);
-      if (!sample) {
-        return std::unexpected(sample.error());
+      if (auto status =
+              MakeBootstrapSample(features, targets, row_dist, rng)
+                  .and_then([&](BootstrapSample<double> sample)
+                                -> std::expected<void, std::string> {
+                    std::vector<std::size_t> feature_indices =
+                        SampleRandomForestFeatureIndices(features.cols(), spec_,
+                                                         rng);
+                    trees_.emplace_back(spec_.max_depth,
+                                        spec_.min_samples_split,
+                                        feature_indices);
+                    trees_.back().Fit(sample.features, sample.targets);
+                    return std::expected<void, std::string>{};
+                  });
+          !status) {
+        return std::unexpected(status.error());
       }
-      std::vector<std::size_t> feature_indices =
-          SampleRandomForestFeatureIndices(features.cols(), spec_, rng);
-      trees_.emplace_back(spec_.max_depth, spec_.min_samples_split,
-                          feature_indices);
-      trees_.back().Fit(sample->features, sample->targets);
     }
     return {};
   }
@@ -1800,50 +1778,32 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << trees_.size() << "\n";
+    std::string out = std::format("{}\n", trees_.size());
     for (const auto &tree : trees_) {
       const std::string state = tree.SaveState();
-      out << state.size() << "\n" << state;
+      out += std::format("{}\n{}", state.size(), state);
     }
-    return out.str();
+    return out;
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid random forest regressor state");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto tree_count =
-        ParseNumber<std::size_t>(*line, "random forest regressor tree count");
-    if (!tree_count) {
-      return std::unexpected(tree_count.error());
-    }
-    trees_.clear();
-    for (std::size_t index = 0; index < *tree_count; ++index) {
-      line = reader.ReadLine("invalid random forest regressor size");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto size =
-          ParseNumber<std::size_t>(*line, "random forest regressor size");
-      if (!size) {
-        return std::unexpected(size.error());
-      }
-      auto buffer =
-          reader.ReadChunk(*size, "invalid random forest regressor state");
-      if (!buffer) {
-        return std::unexpected(buffer.error());
-      }
-      RegressionTree tree(spec_.max_depth, spec_.min_samples_split, {});
-      auto status = tree.LoadState(*buffer);
-      if (!status) {
-        return std::unexpected(status.error());
-      }
-      trees_.push_back(std::move(tree));
-    }
-    return {};
+    return reader.ReadLine("invalid random forest regressor state")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(line,
+                                          "random forest regressor tree count");
+        })
+        .and_then([this, &reader](std::size_t tree_count) {
+          return LoadTreeEnsemble(
+              reader, tree_count, "invalid random forest regressor size",
+              "random forest regressor size",
+              "invalid random forest regressor state",
+              [this] {
+                return RegressionTree(spec_.max_depth, spec_.min_samples_split,
+                                      {});
+              },
+              trees_);
+        });
   }
 
 private:
@@ -1864,26 +1824,29 @@ public:
     std::mt19937 rng(spec_.seed);
     std::uniform_int_distribution<std::size_t> row_dist(0, features.rows() - 1);
     for (int tree_index = 0; tree_index < spec_.tree_count; ++tree_index) {
-      auto sample = MakeBootstrapSample(features, labels, row_dist, rng);
-      if (!sample) {
-        return std::unexpected(sample.error());
+      if (auto status =
+              MakeBootstrapSample(features, labels, row_dist, rng)
+                  .and_then([&](BootstrapSample<int> sample)
+                                -> std::expected<void, std::string> {
+                    std::vector<std::size_t> feature_indices =
+                        SampleRandomForestFeatureIndices(features.cols(), spec_,
+                                                         rng);
+                    trees_.emplace_back(
+                        spec_.max_depth, spec_.min_samples_split,
+                        static_cast<int>(class_count_), feature_indices);
+                    trees_.back().Fit(sample.features, sample.targets);
+                    return std::expected<void, std::string>{};
+                  });
+          !status) {
+        return std::unexpected(status.error());
       }
-      std::vector<std::size_t> feature_indices =
-          SampleRandomForestFeatureIndices(features.cols(), spec_, rng);
-      trees_.emplace_back(spec_.max_depth, spec_.min_samples_split,
-                          static_cast<int>(class_count_), feature_indices);
-      trees_.back().Fit(sample->features, sample->targets);
     }
     return {};
   }
 
   std::expected<LabelVector, std::string>
   Predict(const DenseMatrix &features) const override {
-    auto probs = PredictProba(features);
-    if (!probs) {
-      return std::unexpected(probs.error());
-    }
-    return ArgMaxLabels(*probs);
+    return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
@@ -1915,62 +1878,41 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::ostringstream out;
-    out << class_count_ << "\n";
-    out << trees_.size() << "\n";
+    std::string out = std::format("{}\n{}\n", class_count_, trees_.size());
     for (const auto &tree : trees_) {
       const std::string state = tree.SaveState();
-      out << state.size() << "\n" << state;
+      out += std::format("{}\n{}", state.size(), state);
     }
-    return out.str();
+    return out;
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto line = reader.ReadLine("invalid random forest classifier class count");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto class_count =
-        ParseNumber<std::size_t>(*line, "random forest classifier class count");
-    if (!class_count) {
-      return std::unexpected(class_count.error());
-    }
-    class_count_ = *class_count;
-    line = reader.ReadLine("invalid random forest classifier tree count");
-    if (!line) {
-      return std::unexpected(line.error());
-    }
-    auto tree_count =
-        ParseNumber<std::size_t>(*line, "random forest classifier tree count");
-    if (!tree_count) {
-      return std::unexpected(tree_count.error());
-    }
-    trees_.clear();
-    for (std::size_t index = 0; index < *tree_count; ++index) {
-      line = reader.ReadLine("invalid random forest classifier size");
-      if (!line) {
-        return std::unexpected(line.error());
-      }
-      auto size =
-          ParseNumber<std::size_t>(*line, "random forest classifier size");
-      if (!size) {
-        return std::unexpected(size.error());
-      }
-      auto buffer =
-          reader.ReadChunk(*size, "invalid random forest classifier state");
-      if (!buffer) {
-        return std::unexpected(buffer.error());
-      }
-      ClassificationTree tree(spec_.max_depth, spec_.min_samples_split,
-                              static_cast<int>(class_count_), {});
-      auto status = tree.LoadState(*buffer);
-      if (!status) {
-        return std::unexpected(status.error());
-      }
-      trees_.push_back(std::move(tree));
-    }
-    return {};
+    return reader.ReadLine("invalid random forest classifier class count")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(
+              line, "random forest classifier class count");
+        })
+        .and_then([this, &reader](std::size_t class_count) {
+          class_count_ = class_count;
+          return reader.ReadLine("invalid random forest classifier tree count");
+        })
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(
+              line, "random forest classifier tree count");
+        })
+        .and_then([this, &reader](std::size_t tree_count) {
+          return LoadTreeEnsemble(
+              reader, tree_count, "invalid random forest classifier size",
+              "random forest classifier size",
+              "invalid random forest classifier state",
+              [this] {
+                return ClassificationTree(spec_.max_depth,
+                                          spec_.min_samples_split,
+                                          static_cast<int>(class_count_), {});
+              },
+              trees_);
+        });
   }
 
 private:

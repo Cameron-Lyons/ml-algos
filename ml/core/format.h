@@ -2,6 +2,7 @@
 #define ML_CORE_FORMAT_H_
 
 #include <format>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -36,18 +37,32 @@ std::string JoinFormatted(std::span<const T> values, char delimiter = ',') {
   if (values.empty()) {
     return {};
   }
-  std::string result = std::format("{}", values[0]);
-  for (std::size_t index = 1; index < values.size(); ++index) {
-    result += delimiter;
-    result += std::format("{}", values[index]);
-  }
-  return result;
+  const std::string_view delimiter_view(&delimiter, 1);
+  return std::ranges::to<std::string>(values |
+                                      std::views::transform([](const T &value) {
+                                        return std::format("{}", value);
+                                      }) |
+                                      std::views::join_with(delimiter_view));
 }
 
 template <typename T>
 std::string JoinFormatted(const std::vector<T> &values, char delimiter = ',') {
   return JoinFormatted(std::span<const T>(values.data(), values.size()),
                        delimiter);
+}
+
+template <typename T>
+std::string JoinFormattedLines(std::span<const T> values) {
+  return std::ranges::to<std::string>(values |
+                                      std::views::transform([](const T &value) {
+                                        return std::format("{}\n", value);
+                                      }) |
+                                      std::views::join);
+}
+
+template <typename T>
+std::string JoinFormattedLines(const std::vector<T> &values) {
+  return JoinFormattedLines(std::span<const T>(values.data(), values.size()));
 }
 
 } // namespace ml::core
