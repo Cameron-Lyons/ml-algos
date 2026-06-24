@@ -115,14 +115,12 @@ struct StackingClassifierSpec {
   unsigned int seed = 42;
 };
 
-using EstimatorSpec =
-    std::variant<LinearSpec, RidgeSpec, LassoSpec, ElasticNetSpec, KnnSpec,
-                 DecisionTreeSpec, RandomForestSpec, GradientBoostingSpec,
-                 AdaBoostSpec, LinearSvrSpec, SgdRegressionSpec, LogisticSpec,
-                 OneVsRestLogisticSpec, SoftmaxSpec, GaussianNbSpec,
-                 LinearSvmSpec, SgdClassificationSpec, VotingRegressorSpec,
-                 VotingClassifierSpec, StackingRegressorSpec,
-                 StackingClassifierSpec>;
+using EstimatorSpec = std::variant<
+    LinearSpec, RidgeSpec, LassoSpec, ElasticNetSpec, KnnSpec, DecisionTreeSpec,
+    RandomForestSpec, GradientBoostingSpec, AdaBoostSpec, LinearSvrSpec,
+    SgdRegressionSpec, LogisticSpec, OneVsRestLogisticSpec, SoftmaxSpec,
+    GaussianNbSpec, LinearSvmSpec, SgdClassificationSpec, VotingRegressorSpec,
+    VotingClassifierSpec, StackingRegressorSpec, StackingClassifierSpec>;
 
 bool IsEnsembleSpec(const EstimatorSpec &spec);
 std::string SerializeBaseEstimatorSpec(const BaseEstimatorSpec &spec);

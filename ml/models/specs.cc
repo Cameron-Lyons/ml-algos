@@ -31,39 +31,39 @@ std::string SerializeBaseEstimatorSpec(const BaseEstimatorSpec &spec) {
 
 std::expected<BaseEstimatorSpec, std::string>
 ParseBaseEstimatorSpec(std::string_view text) {
-  return ParseEstimatorSpec(text).and_then([](EstimatorSpec spec)
-                                               -> std::expected<BaseEstimatorSpec,
-                                                               std::string> {
-    if (IsEnsembleSpec(spec)) {
-      return std::unexpected("ensemble specs cannot be used as base estimators");
-    }
-    return std::visit(
-        Overload{[](const auto &value) -> std::expected<BaseEstimatorSpec,
-                                                        std::string> {
-                   return BaseEstimatorSpec(value);
-                 },
-                 [](const VotingRegressorSpec &)
-                     -> std::expected<BaseEstimatorSpec, std::string> {
-                   return std::unexpected(
-                       "ensemble specs cannot be used as base estimators");
-                 },
-                 [](const VotingClassifierSpec &)
-                     -> std::expected<BaseEstimatorSpec, std::string> {
-                   return std::unexpected(
-                       "ensemble specs cannot be used as base estimators");
-                 },
-                 [](const StackingRegressorSpec &)
-                     -> std::expected<BaseEstimatorSpec, std::string> {
-                   return std::unexpected(
-                       "ensemble specs cannot be used as base estimators");
-                 },
-                 [](const StackingClassifierSpec &)
-                     -> std::expected<BaseEstimatorSpec, std::string> {
-                   return std::unexpected(
-                       "ensemble specs cannot be used as base estimators");
-                 }},
-        spec);
-  });
+  return ParseEstimatorSpec(text).and_then(
+      [](EstimatorSpec spec) -> std::expected<BaseEstimatorSpec, std::string> {
+        if (IsEnsembleSpec(spec)) {
+          return std::unexpected(
+              "ensemble specs cannot be used as base estimators");
+        }
+        return std::visit(
+            Overload{[](const auto &value)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return BaseEstimatorSpec(value);
+                     },
+                     [](const VotingRegressorSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "ensemble specs cannot be used as base estimators");
+                     },
+                     [](const VotingClassifierSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "ensemble specs cannot be used as base estimators");
+                     },
+                     [](const StackingRegressorSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "ensemble specs cannot be used as base estimators");
+                     },
+                     [](const StackingClassifierSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "ensemble specs cannot be used as base estimators");
+                     }},
+            spec);
+      });
 }
 
 namespace {
@@ -117,7 +117,9 @@ std::string_view EstimatorId(const EstimatorSpec &spec) {
             return "gradient_boosting";
           },
           [](const AdaBoostSpec &) -> std::string_view { return "adaboost"; },
-          [](const LinearSvrSpec &) -> std::string_view { return "linear_svr"; },
+          [](const LinearSvrSpec &) -> std::string_view {
+            return "linear_svr";
+          },
           [](const SgdRegressionSpec &) -> std::string_view {
             return "sgd_regression";
           },
@@ -129,7 +131,9 @@ std::string_view EstimatorId(const EstimatorSpec &spec) {
           [](const GaussianNbSpec &) -> std::string_view {
             return "gaussian_nb";
           },
-          [](const LinearSvmSpec &) -> std::string_view { return "linear_svm"; },
+          [](const LinearSvmSpec &) -> std::string_view {
+            return "linear_svm";
+          },
           [](const SgdClassificationSpec &) -> std::string_view {
             return "sgd_classification";
           },
@@ -190,7 +194,8 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
           [](const AdaBoostSpec &value) {
             return std::format(
                 "adaboost|estimator_count={};max_depth={};min_samples_split={}",
-                value.estimator_count, value.max_depth, value.min_samples_split);
+                value.estimator_count, value.max_depth,
+                value.min_samples_split);
           },
           [](const LinearSvrSpec &value) {
             return std::format(
@@ -221,14 +226,15 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
                                value.variance_smoothing);
           },
           [](const LinearSvmSpec &value) {
-            return std::format("linear_svm|C={};learning_rate={};max_iterations={}",
-                               value.C, value.learning_rate,
-                               value.max_iterations);
+            return std::format(
+                "linear_svm|C={};learning_rate={};max_iterations={}", value.C,
+                value.learning_rate, value.max_iterations);
           },
           [](const SgdClassificationSpec &value) {
-            return std::format(
-                "sgd_classification|learning_rate={};max_iterations={};alpha={}",
-                value.learning_rate, value.max_iterations, value.alpha);
+            return std::format("sgd_classification|learning_rate={};max_"
+                               "iterations={};alpha={}",
+                               value.learning_rate, value.max_iterations,
+                               value.alpha);
           },
           [](const VotingRegressorSpec &value) {
             return std::format("voting_regressor|estimators={}",
@@ -248,7 +254,8 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
           },
           [](const StackingClassifierSpec &value) {
             return std::format(
-                "stacking_classifier|cv_folds={};seed={};final={};estimators={}",
+                "stacking_classifier|cv_folds={};seed={};final={};estimators={"
+                "}",
                 value.cv_folds, value.seed,
                 SerializeBaseEstimatorSpec(value.final_estimator),
                 SerializeEstimatorList(value.estimators));
@@ -470,7 +477,8 @@ ParseEstimatorSpec(std::string_view text) {
       return std::unexpected("voting regressor requires estimators");
     }
     return ParseEstimatorList(estimators->second).transform([](auto parsed) {
-      return EstimatorSpec(VotingRegressorSpec{.estimators = std::move(parsed)});
+      return EstimatorSpec(
+          VotingRegressorSpec{.estimators = std::move(parsed)});
     });
   }
   if (id == "voting_classifier") {
@@ -503,8 +511,10 @@ ParseEstimatorSpec(std::string_view text) {
     }
     StackingRegressorSpec spec;
     return AssignFieldIfPresent(spec.cv_folds, values, "cv_folds")
-        .and_then([&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })
-        .and_then([&] { return ParseBaseEstimatorSpec(final_estimator->second); })
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })
+        .and_then(
+            [&] { return ParseBaseEstimatorSpec(final_estimator->second); })
         .and_then([&](BaseEstimatorSpec parsed) {
           spec.final_estimator = std::move(parsed);
           return ParseEstimatorList(estimators->second);
@@ -525,8 +535,10 @@ ParseEstimatorSpec(std::string_view text) {
     }
     StackingClassifierSpec spec;
     return AssignFieldIfPresent(spec.cv_folds, values, "cv_folds")
-        .and_then([&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })
-        .and_then([&] { return ParseBaseEstimatorSpec(final_estimator->second); })
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })
+        .and_then(
+            [&] { return ParseBaseEstimatorSpec(final_estimator->second); })
         .and_then([&](BaseEstimatorSpec parsed) {
           spec.final_estimator = std::move(parsed);
           return ParseEstimatorList(estimators->second);
