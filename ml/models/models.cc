@@ -357,9 +357,9 @@ double Mean(std::span<const double> values) {
 }
 
 template <typename Target>
-std::expected<BootstrapSample<Target>, std::string> MakeSubsample(
-    const DenseMatrix &features, std::span<const Target> targets,
-    double fraction, std::mt19937 &rng) {
+std::expected<BootstrapSample<Target>, std::string>
+MakeSubsample(const DenseMatrix &features, std::span<const Target> targets,
+              double fraction, std::mt19937 &rng) {
   if (fraction >= 1.0) {
     return BootstrapSample<Target>{
         features, std::vector<Target>(targets.begin(), targets.end())};
@@ -762,9 +762,8 @@ public:
         }
         const double error = prediction - targets[row];
         for (std::size_t col = 0; col < feature_count; ++col) {
-          weights_[col] -= spec_.learning_rate *
-                           (error * features[row][col] +
-                            spec_.alpha * weights_[col]);
+          weights_[col] -= spec_.learning_rate * (error * features[row][col] +
+                                                  spec_.alpha * weights_[col]);
         }
         bias_ -= spec_.learning_rate * error;
       }
@@ -1369,7 +1368,8 @@ private:
     node->leaf = false;
     node->feature = best_feature;
     node->threshold = best_threshold;
-    node->left = Build(features, labels, sample_weights, left_indices, depth + 1);
+    node->left =
+        Build(features, labels, sample_weights, left_indices, depth + 1);
     node->right =
         Build(features, labels, sample_weights, right_indices, depth + 1);
     return node;
@@ -1921,7 +1921,8 @@ public:
     StateReader reader(state);
     return reader.ReadLine("invalid sgd classification class count")
         .and_then([](std::string_view line) {
-          return ParseNumber<std::size_t>(line, "sgd classification class count");
+          return ParseNumber<std::size_t>(line,
+                                          "sgd classification class count");
         })
         .and_then([this, &reader](std::size_t class_count) {
           class_count_ = class_count;
@@ -1940,8 +1941,8 @@ public:
                   });
             })
         .and_then([this, &reader]() -> std::expected<void, std::string> {
-          return ReadRemainingDoubleRows(reader,
-                                         "invalid sgd classification weight row")
+          return ReadRemainingDoubleRows(
+                     reader, "invalid sgd classification weight row")
               .and_then([this](std::vector<Vector> rows)
                             -> std::expected<void, std::string> {
                 for (const Vector &row : rows) {
@@ -2222,7 +2223,8 @@ public:
                   });
             })
         .and_then([this, &reader]() -> std::expected<void, std::string> {
-          return ReadRemainingDoubleRows(reader, "invalid linear svm weight row")
+          return ReadRemainingDoubleRows(reader,
+                                         "invalid linear svm weight row")
               .and_then([this](std::vector<Vector> rows)
                             -> std::expected<void, std::string> {
                 for (const Vector &row : rows) {
@@ -2605,7 +2607,8 @@ public:
                             spec_.subsample, rng)
                   .and_then([&](BootstrapSample<double> sample)
                                 -> std::expected<void, std::string> {
-                    trees_.emplace_back(spec_.max_depth, spec_.min_samples_split,
+                    trees_.emplace_back(spec_.max_depth,
+                                        spec_.min_samples_split,
                                         std::vector<std::size_t>{});
                     trees_.back().Fit(sample.features, sample.targets);
                     return std::expected<void, std::string>{};
@@ -2647,8 +2650,7 @@ public:
     StateReader reader(state);
     return reader.ReadLine("invalid gradient boosting regressor bias")
         .and_then([](std::string_view line) {
-          return ParseNumber<double>(line,
-                                     "gradient boosting regressor bias");
+          return ParseNumber<double>(line, "gradient boosting regressor bias");
         })
         .and_then([this, &reader](double bias) {
           bias_ = bias;
@@ -2661,8 +2663,7 @@ public:
         })
         .and_then([this, &reader](std::size_t tree_count) {
           return LoadTreeEnsemble(
-              reader, tree_count,
-              "invalid gradient boosting regressor size",
+              reader, tree_count, "invalid gradient boosting regressor size",
               "gradient boosting regressor size",
               "invalid gradient boosting regressor state",
               [this] {
@@ -2714,9 +2715,9 @@ public:
                               spec_.subsample, rng)
                     .and_then([&](BootstrapSample<double> sample)
                                   -> std::expected<void, std::string> {
-                      stage_trees.emplace_back(
-                          spec_.max_depth, spec_.min_samples_split,
-                          std::vector<std::size_t>{});
+                      stage_trees.emplace_back(spec_.max_depth,
+                                               spec_.min_samples_split,
+                                               std::vector<std::size_t>{});
                       stage_trees.back().Fit(sample.features, sample.targets);
                       return std::expected<void, std::string>{};
                     });
@@ -2724,8 +2725,8 @@ public:
           return std::unexpected(status.error());
         }
         for (std::size_t row = 0; row < features.rows(); ++row) {
-          scores[row][cls] += spec_.learning_rate *
-                              stage_trees.back().Predict(features[row]);
+          scores[row][cls] +=
+              spec_.learning_rate * stage_trees.back().Predict(features[row]);
         }
       }
       stages_.push_back(std::move(stage_trees));
@@ -2778,39 +2779,37 @@ public:
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto class_count = reader.ReadLine(
-                           "invalid gradient boosting classifier class count")
-                           .and_then([](std::string_view line) {
-                             return ParseNumber<std::size_t>(
-                                 line,
-                                 "gradient boosting classifier class count");
-                           });
+    auto class_count =
+        reader.ReadLine("invalid gradient boosting classifier class count")
+            .and_then([](std::string_view line) {
+              return ParseNumber<std::size_t>(
+                  line, "gradient boosting classifier class count");
+            });
     if (!class_count) {
       return std::unexpected(class_count.error());
     }
     class_count_ = *class_count;
 
-    auto biases = reader.ReadLine("invalid gradient boosting classifier biases")
-                      .and_then([this](std::string_view line) {
-                        return ParseDoubles(line).and_then(
-                            [this](Vector parsed)
-                                -> std::expected<Vector, std::string> {
-                              if (parsed.size() != class_count_) {
-                                return std::unexpected(
-                                    "gradient boosting classifier bias count "
-                                    "mismatch");
-                              }
-                              return parsed;
-                            });
-                      });
+    auto biases =
+        reader.ReadLine("invalid gradient boosting classifier biases")
+            .and_then([this](std::string_view line) {
+              return ParseDoubles(line).and_then(
+                  [this](Vector parsed) -> std::expected<Vector, std::string> {
+                    if (parsed.size() != class_count_) {
+                      return std::unexpected(
+                          "gradient boosting classifier bias count "
+                          "mismatch");
+                    }
+                    return parsed;
+                  });
+            });
     if (!biases) {
       return std::unexpected(biases.error());
     }
     biases_ = std::move(*biases);
 
     auto stage_count =
-        reader
-            .ReadLine("invalid gradient boosting classifier stage count")
+        reader.ReadLine("invalid gradient boosting classifier stage count")
             .and_then([](std::string_view line) {
               return ParseNumber<std::size_t>(
                   line, "gradient boosting classifier stage count");
@@ -2833,8 +2832,7 @@ public:
       }
       std::vector<RegressionTree> stage_trees;
       if (auto status = LoadTreeEnsemble(
-              reader, *tree_count,
-              "invalid gradient boosting classifier size",
+              reader, *tree_count, "invalid gradient boosting classifier size",
               "gradient boosting classifier size",
               "invalid gradient boosting classifier state",
               [this] {
@@ -2892,15 +2890,13 @@ public:
         break;
       }
 
-      const double max_error =
-          1.0 - (1.0 / static_cast<double>(class_count_));
+      const double max_error = 1.0 - (1.0 / static_cast<double>(class_count_));
       if (error >= max_error) {
         break;
       }
 
-      const double alpha =
-          std::log((1.0 - error) / error) +
-          std::log(static_cast<double>(class_count_) - 1.0);
+      const double alpha = std::log((1.0 - error) / error) +
+                           std::log(static_cast<double>(class_count_) - 1.0);
       alphas_.push_back(alpha);
 
       double weight_sum = 0.0;
@@ -2967,20 +2963,20 @@ public:
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    auto class_count = reader.ReadLine("invalid adaboost classifier class count")
-                           .and_then([](std::string_view line) {
-                             return ParseNumber<std::size_t>(
-                                 line, "adaboost classifier class count");
-                           });
+    auto class_count =
+        reader.ReadLine("invalid adaboost classifier class count")
+            .and_then([](std::string_view line) {
+              return ParseNumber<std::size_t>(
+                  line, "adaboost classifier class count");
+            });
     if (!class_count) {
       return std::unexpected(class_count.error());
     }
     class_count_ = *class_count;
 
-    auto alphas = reader.ReadLine("invalid adaboost classifier alphas")
-                      .and_then([](std::string_view line) {
-                        return ParseDoubles(line);
-                      });
+    auto alphas =
+        reader.ReadLine("invalid adaboost classifier alphas")
+            .and_then([](std::string_view line) { return ParseDoubles(line); });
     if (!alphas) {
       return std::unexpected(alphas.error());
     }
@@ -3045,8 +3041,7 @@ Vector SelectTargets(std::span<const double> targets,
 std::expected<std::vector<IndexFold>, std::string>
 MakeStratifiedFolds(std::span<const int> labels, int fold_count,
                     unsigned int seed) {
-  if (fold_count < 2 ||
-      labels.size() < static_cast<std::size_t>(fold_count)) {
+  if (fold_count < 2 || labels.size() < static_cast<std::size_t>(fold_count)) {
     return std::unexpected("invalid fold count");
   }
   std::vector<std::vector<std::size_t>> test_indices(
@@ -3114,8 +3109,8 @@ MakeKFoldIndices(std::size_t row_count, int fold_count, unsigned int seed) {
 std::expected<std::unique_ptr<Regressor>, std::string>
 MakeBaseRegressor(const BaseEstimatorSpec &spec) {
   return std::visit(
-      [&](const auto &value) -> std::expected<std::unique_ptr<Regressor>,
-                                              std::string> {
+      [&](const auto &value)
+          -> std::expected<std::unique_ptr<Regressor>, std::string> {
         return MakeRegressor(EstimatorSpec(value));
       },
       spec);
@@ -3124,8 +3119,8 @@ MakeBaseRegressor(const BaseEstimatorSpec &spec) {
 std::expected<std::unique_ptr<Classifier>, std::string>
 MakeBaseClassifier(const BaseEstimatorSpec &spec, std::size_t class_count) {
   return std::visit(
-      [&](const auto &value) -> std::expected<std::unique_ptr<Classifier>,
-                                              std::string> {
+      [&](const auto &value)
+          -> std::expected<std::unique_ptr<Classifier>, std::string> {
         return MakeClassifier(EstimatorSpec(value), class_count);
       },
       spec);
@@ -3166,8 +3161,8 @@ MakeBaseClassifiers(std::span<const BaseEstimatorSpec> specs,
   return models;
 }
 
-std::string SaveRegressorStates(
-    const std::vector<std::unique_ptr<Regressor>> &models) {
+std::string
+SaveRegressorStates(const std::vector<std::unique_ptr<Regressor>> &models) {
   std::string out = std::format("{}\n", models.size());
   for (const auto &model : models) {
     const auto state = model->SaveState();
@@ -3189,19 +3184,18 @@ LoadRegressorStates(StateReader &reader,
           return std::unexpected("ensemble regressor count mismatch");
         }
         for (const auto &model : models) {
-          auto loaded =
-              reader.ReadLine("invalid ensemble regressor state size")
-                  .and_then([&](std::string_view line) {
-                    return ParseNumber<std::size_t>(
-                        line, "ensemble regressor state size");
-                  })
-                  .and_then([&](std::size_t size) {
-                    return reader.ReadChunk(size,
-                                            "invalid ensemble regressor state");
-                  })
-                  .and_then([&](std::string_view buffer) {
-                    return model->LoadState(buffer);
-                  });
+          auto loaded = reader.ReadLine("invalid ensemble regressor state size")
+                            .and_then([&](std::string_view line) {
+                              return ParseNumber<std::size_t>(
+                                  line, "ensemble regressor state size");
+                            })
+                            .and_then([&](std::size_t size) {
+                              return reader.ReadChunk(
+                                  size, "invalid ensemble regressor state");
+                            })
+                            .and_then([&](std::string_view buffer) {
+                              return model->LoadState(buffer);
+                            });
           if (!loaded) {
             return std::unexpected(loaded.error());
           }
@@ -3210,8 +3204,8 @@ LoadRegressorStates(StateReader &reader,
       });
 }
 
-std::string SaveClassifierStates(
-    const std::vector<std::unique_ptr<Classifier>> &models) {
+std::string
+SaveClassifierStates(const std::vector<std::unique_ptr<Classifier>> &models) {
   std::string out = std::format("{}\n", models.size());
   for (const auto &model : models) {
     const auto state = model->SaveState();
@@ -3240,8 +3234,8 @@ LoadClassifierStates(StateReader &reader,
                         line, "ensemble classifier state size");
                   })
                   .and_then([&](std::size_t size) {
-                    return reader.ReadChunk(size,
-                                            "invalid ensemble classifier state");
+                    return reader.ReadChunk(
+                        size, "invalid ensemble classifier state");
                   })
                   .and_then([&](std::string_view buffer) {
                     return model->LoadState(buffer);
@@ -3328,8 +3322,8 @@ public:
 
   std::string_view name() const override { return "voting_classifier"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const int> labels) override {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const int> labels) override {
     auto models = MakeBaseClassifiers(spec_.estimators, class_count_);
     if (!models) {
       return std::unexpected(models.error());
@@ -3361,8 +3355,8 @@ public:
         }
         ++votes[static_cast<std::size_t>((*predicted)[row])];
       }
-      predictions[row] = static_cast<int>(
-          std::ranges::max_element(votes) - votes.begin());
+      predictions[row] =
+          static_cast<int>(std::ranges::max_element(votes) - votes.begin());
     }
     return predictions;
   }
@@ -3390,8 +3384,7 @@ public:
     }
     for (std::size_t row = 0; row < features.rows(); ++row) {
       for (std::size_t cls = 0; cls < class_count_; ++cls) {
-        probabilities[row][cls] /=
-            static_cast<double>(estimators_.size());
+        probabilities[row][cls] /= static_cast<double>(estimators_.size());
       }
     }
     return probabilities;
@@ -3412,7 +3405,8 @@ public:
     StateReader reader(state);
     return reader.ReadLine("invalid voting classifier class count")
         .and_then([](std::string_view line) {
-          return ParseNumber<std::size_t>(line, "voting classifier class count");
+          return ParseNumber<std::size_t>(line,
+                                          "voting classifier class count");
         })
         .and_then([this, &reader](std::size_t class_count)
                       -> std::expected<void, std::string> {
@@ -3513,8 +3507,8 @@ public:
       return std::unexpected("stacking regressor is not fitted");
     }
     DenseMatrix meta(features.rows(), estimators_.size(), 0.0);
-    for (std::size_t estimator_index = 0;
-         estimator_index < estimators_.size(); ++estimator_index) {
+    for (std::size_t estimator_index = 0; estimator_index < estimators_.size();
+         ++estimator_index) {
       auto predictions = estimators_[estimator_index]->Predict(features);
       if (!predictions) {
         return std::unexpected(predictions.error());
@@ -3553,11 +3547,12 @@ public:
           return reader.ReadLine("invalid stacking regressor final state size");
         })
         .and_then([&](std::string_view line) {
-          return ParseNumber<std::size_t>(line,
-                                          "stacking regressor final state size");
+          return ParseNumber<std::size_t>(
+              line, "stacking regressor final state size");
         })
         .and_then([&](std::size_t size) {
-          return reader.ReadChunk(size, "invalid stacking regressor final state");
+          return reader.ReadChunk(size,
+                                  "invalid stacking regressor final state");
         })
         .and_then([&](std::string_view buffer) {
           return final_estimator_->LoadState(buffer);
@@ -3577,8 +3572,8 @@ public:
 
   std::string_view name() const override { return "stacking_classifier"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const int> labels) override {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const int> labels) override {
     auto base_models = MakeBaseClassifiers(spec_.estimators, class_count_);
     if (!base_models) {
       return std::unexpected(base_models.error());
@@ -3600,8 +3595,8 @@ public:
     for (std::size_t estimator_index = 0;
          estimator_index < spec_.estimators.size(); ++estimator_index) {
       for (const auto &fold : *folds) {
-        auto model = MakeBaseClassifier(spec_.estimators[estimator_index],
-                                      class_count_);
+        auto model =
+            MakeBaseClassifier(spec_.estimators[estimator_index], class_count_);
         if (!model) {
           return std::unexpected(model.error());
         }
@@ -3651,8 +3646,8 @@ public:
       return std::unexpected("stacking classifier is not fitted");
     }
     DenseMatrix meta(features.rows(), estimators_.size() * class_count_, 0.0);
-    for (std::size_t estimator_index = 0;
-         estimator_index < estimators_.size(); ++estimator_index) {
+    for (std::size_t estimator_index = 0; estimator_index < estimators_.size();
+         ++estimator_index) {
       auto probabilities = estimators_[estimator_index]->PredictProba(features);
       if (!probabilities) {
         return std::unexpected(probabilities.error());
@@ -3674,8 +3669,8 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    return std::format("{}\n", class_count_) + SaveClassifierStates(estimators_) +
-           [&] {
+    return std::format("{}\n", class_count_) +
+           SaveClassifierStates(estimators_) + [&] {
              const auto final_state = final_estimator_->SaveState();
              const std::string payload = final_state ? *final_state : "";
              return std::format("{}\n{}", payload.size(), payload);
@@ -3692,11 +3687,13 @@ public:
         .and_then([this, &reader](std::size_t class_count)
                       -> std::expected<void, std::string> {
           class_count_ = class_count;
-          auto base_models = MakeBaseClassifiers(spec_.estimators, class_count_);
+          auto base_models =
+              MakeBaseClassifiers(spec_.estimators, class_count_);
           if (!base_models) {
             return std::unexpected(base_models.error());
           }
-          auto final_model = MakeBaseClassifier(spec_.final_estimator, class_count_);
+          auto final_model =
+              MakeBaseClassifier(spec_.final_estimator, class_count_);
           if (!final_model) {
             return std::unexpected(final_model.error());
           }
@@ -3713,7 +3710,8 @@ public:
               line, "stacking classifier final state size");
         })
         .and_then([&](std::size_t size) {
-          return reader.ReadChunk(size, "invalid stacking classifier final state");
+          return reader.ReadChunk(size,
+                                  "invalid stacking classifier final state");
         })
         .and_then([&](std::string_view buffer) {
           return final_estimator_->LoadState(buffer);
@@ -3788,7 +3786,8 @@ MakeRegressor(const EstimatorSpec &spec) {
                   "stacking regressor requires at least one base estimator");
             }
             if (value.cv_folds < 2) {
-              return std::unexpected("stacking regressor requires cv_folds >= 2");
+              return std::unexpected(
+                  "stacking regressor requires cv_folds >= 2");
             }
             return std::make_unique<StackingRegressorModel>(value);
           },
@@ -3814,8 +3813,8 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
           },
           [&](const OneVsRestLogisticSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
-            return std::make_unique<OneVsRestLogisticClassifierModel>(value,
-                                                                      class_count);
+            return std::make_unique<OneVsRestLogisticClassifierModel>(
+                value, class_count);
           },
           [&](const SoftmaxSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
@@ -3831,7 +3830,8 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
           },
           [&](const LinearSvmSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
-            return std::make_unique<LinearSvmClassifierModel>(value, class_count);
+            return std::make_unique<LinearSvmClassifierModel>(value,
+                                                              class_count);
           },
           [&](const KnnSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
@@ -3849,12 +3849,13 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
           },
           [&](const GradientBoostingSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
-            return std::make_unique<GradientBoostingClassifierModel>(value,
-                                                                     class_count);
+            return std::make_unique<GradientBoostingClassifierModel>(
+                value, class_count);
           },
           [&](const AdaBoostSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
-            return std::make_unique<AdaBoostClassifierModel>(value, class_count);
+            return std::make_unique<AdaBoostClassifierModel>(value,
+                                                             class_count);
           },
           [&](const VotingClassifierSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
@@ -3874,7 +3875,8 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
               return std::unexpected(
                   "stacking classifier requires cv_folds >= 2");
             }
-            return std::make_unique<StackingClassifierModel>(value, class_count);
+            return std::make_unique<StackingClassifierModel>(value,
+                                                             class_count);
           },
           [&](const auto &)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {

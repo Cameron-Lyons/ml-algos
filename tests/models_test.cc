@@ -33,10 +33,12 @@ int main() {
       ml::models::RidgeSpec{},
       ml::models::LassoSpec{},
       ml::models::ElasticNetSpec{},
-      ml::models::LinearSvrSpec{.C = 1.0, .epsilon = 0.1, .learning_rate = 0.05,
+      ml::models::LinearSvrSpec{.C = 1.0,
+                                .epsilon = 0.1,
+                                .learning_rate = 0.05,
                                 .max_iterations = 2000},
-      ml::models::SgdRegressionSpec{.learning_rate = 0.05, .max_iterations = 2000,
-                                    .alpha = 0.001},
+      ml::models::SgdRegressionSpec{
+          .learning_rate = 0.05, .max_iterations = 2000, .alpha = 0.001},
       ml::models::KnnSpec{},
       ml::models::DecisionTreeSpec{},
       ml::models::RandomForestSpec{.tree_count = 8, .max_depth = 6},
@@ -58,11 +60,13 @@ int main() {
   const std::vector<ml::models::EstimatorSpec> regression_ensembles = {
       ml::models::VotingRegressorSpec{.estimators = regression_bases},
       ml::models::StackingRegressorSpec{.estimators = regression_bases,
-                                        .final_estimator = ml::models::RidgeSpec{},
+                                        .final_estimator =
+                                            ml::models::RidgeSpec{},
                                         .cv_folds = 4}};
   for (const auto &spec : regression_ensembles) {
     auto model = ml::models::MakeRegressor(spec);
-    ML_EXPECT_TRUE(model.has_value(), "regression ensemble factory should succeed");
+    ML_EXPECT_TRUE(model.has_value(),
+                   "regression ensemble factory should succeed");
     auto fit = (*model)->Fit(regression_features, regression_targets);
     ML_EXPECT_TRUE(fit.has_value(), "regression ensemble fit should succeed");
     auto predicted = (*model)->Predict(regression_features);
@@ -78,10 +82,10 @@ int main() {
                                         .max_iterations = 2000},
       ml::models::SoftmaxSpec{.learning_rate = 0.1, .max_iterations = 2000},
       ml::models::GaussianNbSpec{},
-      ml::models::LinearSvmSpec{.C = 1.0, .learning_rate = 0.05,
-                                .max_iterations = 2000},
-      ml::models::SgdClassificationSpec{.learning_rate = 0.05,
-                                        .max_iterations = 2000, .alpha = 0.001},
+      ml::models::LinearSvmSpec{
+          .C = 1.0, .learning_rate = 0.05, .max_iterations = 2000},
+      ml::models::SgdClassificationSpec{
+          .learning_rate = 0.05, .max_iterations = 2000, .alpha = 0.001},
       ml::models::KnnSpec{},
       ml::models::DecisionTreeSpec{},
       ml::models::RandomForestSpec{.tree_count = 8, .max_depth = 6},
@@ -102,8 +106,7 @@ int main() {
   }
 
   const std::vector<ml::models::BaseEstimatorSpec> classification_bases = {
-      ml::models::KnnSpec{.k = 3},
-      ml::models::DecisionTreeSpec{.max_depth = 4},
+      ml::models::KnnSpec{.k = 3}, ml::models::DecisionTreeSpec{.max_depth = 4},
       ml::models::GaussianNbSpec{}};
   const std::vector<ml::models::EstimatorSpec> classification_ensembles = {
       ml::models::VotingClassifierSpec{.estimators = classification_bases,
@@ -118,7 +121,8 @@ int main() {
     ML_EXPECT_TRUE(model.has_value(),
                    "classification ensemble factory should succeed");
     auto fit = (*model)->Fit(classification_features, classification_labels);
-    ML_EXPECT_TRUE(fit.has_value(), "classification ensemble fit should succeed");
+    ML_EXPECT_TRUE(fit.has_value(),
+                   "classification ensemble fit should succeed");
     auto predicted = (*model)->Predict(classification_features);
     ML_EXPECT_TRUE(predicted.has_value(),
                    "classification ensemble predict should succeed");
