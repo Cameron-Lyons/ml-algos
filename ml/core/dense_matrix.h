@@ -25,7 +25,6 @@ public:
   [[nodiscard]] bool empty() const { return rows_ == 0; }
 
   void ReserveRows(std::size_t rows);
-  void Clear();
 
   [[nodiscard]] Row operator[](std::size_t row);
   [[nodiscard]] ConstRow operator[](std::size_t row) const;
@@ -36,7 +35,6 @@ public:
   std::expected<void, std::string> AppendRow(std::span<const double> row);
   [[nodiscard]] DenseMatrix
   SliceRows(std::span<const std::size_t> indices) const;
-  [[nodiscard]] std::vector<Vector> ToRows() const;
 
   static std::expected<DenseMatrix, std::string>
   FromRows(std::span<const Vector> rows);

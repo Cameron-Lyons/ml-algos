@@ -73,6 +73,7 @@ Commands support `--json` for machine-readable output.
 - `elasticnet`
 - `linear_svr`
 - `sgd_regression`
+- `mlp`
 - `knn`
 - `kernel_knn`
 - `decision_tree`
@@ -96,6 +97,7 @@ Predictions return anomaly scores in `[0, 1]` where higher values indicate more 
 - `linear_svm`
 - `rbf_svm`
 - `sgd_classification`
+- `mlp`
 - `knn`
 - `kernel_knn`
 - `decision_tree`

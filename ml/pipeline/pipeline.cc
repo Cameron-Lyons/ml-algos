@@ -9,6 +9,7 @@
 
 #include "ml/core/metrics.h"
 #include "ml/core/parse.h"
+#include "ml/pipeline/splits.h"
 
 namespace ml {
 
@@ -629,50 +630,29 @@ std::expected<FoldSet, std::string> MakeKFoldSet(const TabularDataset &dataset,
       dataset.features.rows() < static_cast<std::size_t>(fold_count)) {
     return std::unexpected("invalid fold count");
   }
-  std::vector<std::vector<std::size_t>> test_indices(
-      static_cast<std::size_t>(fold_count));
 
+  std::expected<std::vector<IndexFold>, std::string> index_folds;
   if (task == Task::kClassification) {
     auto labels = ToIntLabels(dataset.targets);
     if (!labels) {
       return std::unexpected(labels.error());
     }
-    std::map<int, std::vector<std::size_t>> groups;
-    for (std::size_t index = 0; index < labels->size(); ++index) {
-      groups[(*labels)[index]].push_back(index);
-    }
-    std::mt19937 rng(seed);
-    for (auto &[label, indices] : groups) {
-      (void)label;
-      std::ranges::shuffle(indices, rng);
-      for (std::size_t index = 0; index < indices.size(); ++index) {
-        test_indices[index % test_indices.size()].push_back(indices[index]);
-      }
-    }
+    index_folds = MakeStratifiedFoldIndices(*labels, fold_count, seed);
   } else {
-    auto order = std::ranges::to<std::vector<std::size_t>>(
-        std::views::iota(0uz, dataset.features.rows()));
-    std::mt19937 rng(seed);
-    std::ranges::shuffle(order, rng);
-    for (std::size_t index = 0; index < order.size(); ++index) {
-      test_indices[index % test_indices.size()].push_back(order[index]);
-    }
+    index_folds =
+        MakeKFoldIndices(dataset.features.rows(), fold_count, seed);
+  }
+  if (!index_folds) {
+    return std::unexpected(index_folds.error());
   }
 
   FoldSet folds;
   folds.task = task;
   folds.seed = seed;
-  for (std::size_t fold_index = 0; fold_index < test_indices.size();
-       ++fold_index) {
+  for (const IndexFold &index_fold : *index_folds) {
     Fold fold;
-    fold.test_indices = test_indices[fold_index];
-    for (std::size_t other = 0; other < test_indices.size(); ++other) {
-      if (other != fold_index) {
-        fold.train_indices.insert(fold.train_indices.end(),
-                                  test_indices[other].begin(),
-                                  test_indices[other].end());
-      }
-    }
+    fold.test_indices = index_fold.test;
+    fold.train_indices = index_fold.train;
     fold.train = SliceDataset(dataset, fold.train_indices);
     fold.test = SliceDataset(dataset, fold.test_indices);
     folds.folds.push_back(std::move(fold));

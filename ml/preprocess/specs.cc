@@ -1,7 +1,6 @@
 #include "ml/preprocess/specs.h"
 
 #include <format>
-#include <map>
 #include <string>
 
 #include "ml/core/parse.h"
@@ -12,19 +11,8 @@ namespace {
 
 using ml::core::AssignFieldIfPresent;
 using ml::core::Overload;
+using ml::core::ParseKeyedFields;
 using ml::core::Split;
-
-std::map<std::string_view, std::string_view>
-ParseKeyedFields(std::string_view text) {
-  std::map<std::string_view, std::string_view> values;
-  for (const auto token : Split(text, ';', true)) {
-    const auto parts = Split(token, '=', true);
-    if (parts.size() == 2) {
-      values[parts[0]] = parts[1];
-    }
-  }
-  return values;
-}
 
 } // namespace
 

@@ -1,7 +1,6 @@
 #include "ml/models/specs.h"
 
 #include <format>
-#include <map>
 #include <span>
 #include <string>
 
@@ -16,6 +15,7 @@ using ml::core::AssignFieldIfPresent;
 using ml::core::JoinFormatted;
 using ml::core::Overload;
 using ml::core::ParseDelimitedNumbers;
+using ml::core::ParseKeyedFields;
 using ml::core::Split;
 
 } // namespace
@@ -312,19 +312,7 @@ ParseEstimatorSpec(std::string_view text) {
       pipe == std::string_view::npos ? text : text.substr(0, pipe);
   const std::string_view payload =
       pipe == std::string_view::npos ? "" : text.substr(pipe + 1);
-
-  std::map<std::string_view, std::string_view> values;
-  for (const auto &token : Split(payload, ';')) {
-    if (token.empty()) {
-      continue;
-    }
-    const auto eq = token.find('=');
-    if (eq == std::string_view::npos) {
-      return std::unexpected("invalid estimator payload: " +
-                             std::string(token));
-    }
-    values[token.substr(0, eq)] = token.substr(eq + 1);
-  }
+  const auto values = ParseKeyedFields(payload);
 
   if (id == "linear") {
     return EstimatorSpec(LinearSpec{});

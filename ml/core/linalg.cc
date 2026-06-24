@@ -39,20 +39,6 @@ std::expected<DenseMatrix, std::string> MatMul(const DenseMatrix &lhs,
   return out;
 }
 
-std::expected<DenseMatrix, std::string> Add(const DenseMatrix &lhs,
-                                            const DenseMatrix &rhs) {
-  if (lhs.rows() != rhs.rows() || lhs.cols() != rhs.cols()) {
-    return std::unexpected("matrix add shape mismatch");
-  }
-  DenseMatrix out(lhs.rows(), lhs.cols(), 0.0);
-  for (std::size_t row = 0; row < lhs.rows(); ++row) {
-    for (std::size_t col = 0; col < lhs.cols(); ++col) {
-      out[row][col] = lhs[row][col] + rhs[row][col];
-    }
-  }
-  return out;
-}
-
 std::expected<DenseMatrix, std::string> Inverse(const DenseMatrix &matrix) {
   if (matrix.rows() == 0 || matrix.rows() != matrix.cols()) {
     return std::unexpected("matrix inverse requires a non-empty square matrix");

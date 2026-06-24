@@ -26,6 +26,16 @@ expect_contains "${list_output}" "linear"
 eval_json="$("${BIN}" eval --task regression --algorithm ridge --data "${DATA}/regression.csv" --target target --json)"
 expect_contains "${eval_json}" "\"regression\""
 
+regression_model="${TMP}/ridge.bundle"
+fit_regression="$("${BIN}" fit --task regression --algorithm ridge --data "${DATA}/regression.csv" --target target --model "${regression_model}")"
+expect_contains "${fit_regression}" "Model saved"
+
+predict_regression="$("${BIN}" predict --model "${regression_model}" --input "${DATA}/regression_features.csv" --json)"
+expect_contains "${predict_regression}" "\"predictions\""
+
+anomaly_json="$("${BIN}" eval --task anomaly --algorithm isolation_forest --data "${DATA}/regression.csv" --target target --json)"
+expect_contains "${anomaly_json}" "\"anomaly\""
+
 model_path="${TMP}/offset.bundle"
 fit_output="$("${BIN}" fit --task classification --algorithm logistic --data "${DATA}/classification_offset.csv" --target label --transformers standard_scaler --model "${model_path}")"
 expect_contains "${fit_output}" "Model saved"

@@ -16,6 +16,7 @@ cc_test(
     name = "io_test",
     srcs = [
         "io_test.cc",
+        "support/test_paths.h",
         "support/test_support.h",
     ],
     data = [
@@ -56,6 +57,7 @@ cc_test(
     name = "pipeline_test",
     srcs = [
         "pipeline_test.cc",
+        "support/test_paths.h",
         "support/test_support.h",
     ],
     data = [
@@ -81,5 +83,6 @@ sh_test(
         "//data/v3:classification_offset.csv",
         "//data/v3:prediction_features.csv",
         "//data/v3:regression.csv",
+        "//data/v3:regression_features.csv",
     ],
 )

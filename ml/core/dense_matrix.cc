@@ -13,12 +13,6 @@ void DenseMatrix::ReserveRows(std::size_t rows) {
   values_.reserve(rows * cols_);
 }
 
-void DenseMatrix::Clear() {
-  rows_ = 0;
-  cols_ = 0;
-  values_.clear();
-}
-
 DenseMatrix::Row DenseMatrix::operator[](std::size_t row) {
   return Row(values_.data() + (row * cols_), cols_);
 }
@@ -50,16 +44,6 @@ DenseMatrix DenseMatrix::SliceRows(std::span<const std::size_t> indices) const {
     out.values_.insert(out.values_.end(), row.begin(), row.end());
   }
   return out;
-}
-
-std::vector<Vector> DenseMatrix::ToRows() const {
-  std::vector<Vector> rows;
-  rows.reserve(rows_);
-  for (std::size_t row = 0; row < rows_; ++row) {
-    const auto view = (*this)[row];
-    rows.emplace_back(view.begin(), view.end());
-  }
-  return rows;
 }
 
 std::expected<DenseMatrix, std::string>

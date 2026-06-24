@@ -6,23 +6,11 @@
 #include "ml/models/specs.h"
 #include "ml/pipeline/pipeline.h"
 #include "tests/support/test_support.h"
-
-namespace {
-
-std::string TestDataPath(const std::string &relative) {
-  return std::string(std::getenv("TEST_SRCDIR")) + "/" +
-         std::string(std::getenv("TEST_WORKSPACE")) + "/data/v3/" + relative;
-}
-
-std::string TempPath(const std::string &relative) {
-  return std::string(std::getenv("TEST_TMPDIR")) + "/" + relative;
-}
-
-} // namespace
+#include "tests/support/test_paths.h"
 
 int main() {
   auto dataset = ml::io::ReadDatasetCsv(
-      TestDataPath("classification_offset.csv"), "label");
+      ml::test::TestDataPath("classification_offset.csv"), "label");
   ML_EXPECT_TRUE(dataset.has_value(), "classification dataset should load");
 
   ml::SplitOptions options;
@@ -40,7 +28,7 @@ int main() {
   ML_EXPECT_TRUE(fit.has_value(), "fit split should succeed");
   ML_EXPECT_TRUE(fit->bundle.class_labels.size() == 2, "bundle class labels");
 
-  const std::string bundle_path = TempPath("offset.bundle");
+  const std::string bundle_path = ml::test::TempPath("offset.bundle");
   auto saved = ml::io::SaveModelBundle(fit->bundle, bundle_path);
   ML_EXPECT_TRUE(saved.has_value(), "bundle save should succeed");
   auto loaded = ml::io::LoadModelBundle(bundle_path);
@@ -49,7 +37,7 @@ int main() {
   ML_EXPECT_TRUE(pipeline.has_value(), "pipeline load should succeed");
 
   auto features =
-      ml::io::ReadNumericCsv(TestDataPath("prediction_features.csv"));
+      ml::io::ReadNumericCsv(ml::test::TestDataPath("prediction_features.csv"));
   ML_EXPECT_TRUE(features.has_value(), "prediction features should load");
   auto selected =
       ml::io::SelectFeatureColumns(*features, loaded->schema.feature_names);
