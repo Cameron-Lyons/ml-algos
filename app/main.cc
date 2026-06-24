@@ -129,10 +129,24 @@ ParseTransformers(const CommandArgs &args) {
 std::vector<std::string> AlgorithmsForTask(Task task) {
   if (task == Task::kRegression) {
     return {"linear", "ridge",         "lasso",        "elasticnet",
-            "knn",    "decision_tree", "random_forest"};
+            "linear_svr", "sgd_regression", "knn",       "decision_tree",
+            "random_forest", "gradient_boosting", "voting", "stacking"};
   }
-  return {"logistic", "softmax",       "gaussian_nb",
-          "knn",      "decision_tree", "random_forest"};
+  return {"logistic", "one_vs_rest_logistic", "softmax", "gaussian_nb",
+          "linear_svm", "sgd_classification", "knn", "decision_tree",
+          "random_forest", "gradient_boosting", "adaboost", "voting",
+          "stacking"};
+}
+
+std::vector<ml::models::BaseEstimatorSpec> DefaultRegressionBases() {
+  return {ml::models::RidgeSpec{}, ml::models::KnnSpec{.k = 5},
+          ml::models::DecisionTreeSpec{.max_depth = 6}};
+}
+
+std::vector<ml::models::BaseEstimatorSpec> DefaultClassificationBases() {
+  return {ml::models::KnnSpec{.k = 5},
+          ml::models::DecisionTreeSpec{.max_depth = 6},
+          ml::models::GaussianNbSpec{}};
 }
 
 std::expected<ml::models::EstimatorSpec, std::string>
@@ -150,15 +164,30 @@ MakeDefaultSpec(Task task, const std::string &algorithm) {
     if (algorithm == "elasticnet") {
       return ml::models::ElasticNetSpec{};
     }
+    if (algorithm == "linear_svr") {
+      return ml::models::LinearSvrSpec{};
+    }
+    if (algorithm == "sgd_regression") {
+      return ml::models::SgdRegressionSpec{};
+    }
   } else {
     if (algorithm == "logistic") {
       return ml::models::LogisticSpec{};
+    }
+    if (algorithm == "one_vs_rest_logistic") {
+      return ml::models::OneVsRestLogisticSpec{};
     }
     if (algorithm == "softmax") {
       return ml::models::SoftmaxSpec{};
     }
     if (algorithm == "gaussian_nb") {
       return ml::models::GaussianNbSpec{};
+    }
+    if (algorithm == "linear_svm") {
+      return ml::models::LinearSvmSpec{};
+    }
+    if (algorithm == "sgd_classification") {
+      return ml::models::SgdClassificationSpec{};
     }
   }
   if (algorithm == "knn") {
@@ -169,6 +198,30 @@ MakeDefaultSpec(Task task, const std::string &algorithm) {
   }
   if (algorithm == "random_forest") {
     return ml::models::RandomForestSpec{};
+  }
+  if (algorithm == "gradient_boosting") {
+    return ml::models::GradientBoostingSpec{};
+  }
+  if (algorithm == "adaboost") {
+    return ml::models::AdaBoostSpec{};
+  }
+  if (algorithm == "voting") {
+    if (task == Task::kRegression) {
+      return ml::models::VotingRegressorSpec{
+          .estimators = DefaultRegressionBases()};
+    }
+    return ml::models::VotingClassifierSpec{
+        .estimators = DefaultClassificationBases()};
+  }
+  if (algorithm == "stacking") {
+    if (task == Task::kRegression) {
+      return ml::models::StackingRegressorSpec{
+          .estimators = DefaultRegressionBases(),
+          .final_estimator = ml::models::RidgeSpec{}};
+    }
+    return ml::models::StackingClassifierSpec{
+        .estimators = DefaultClassificationBases(),
+        .final_estimator = ml::models::OneVsRestLogisticSpec{}};
   }
   return std::unexpected("unsupported algorithm: " + algorithm);
 }
@@ -196,6 +249,24 @@ BuildGrid(Task task, const std::string &algorithm) {
         ml::models::ElasticNetSpec{.alpha = 0.1, .l1_ratio = 0.5},
         ml::models::ElasticNetSpec{.alpha = 0.2, .l1_ratio = 0.7}};
   }
+  if (task == Task::kRegression && algorithm == "linear_svr") {
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::LinearSvrSpec{.C = 0.1, .epsilon = 0.1,
+                                  .learning_rate = 0.01, .max_iterations = 1500},
+        ml::models::LinearSvrSpec{.C = 1.0, .epsilon = 0.1,
+                                  .learning_rate = 0.01, .max_iterations = 2000},
+        ml::models::LinearSvrSpec{.C = 10.0, .epsilon = 0.05,
+                                  .learning_rate = 0.05, .max_iterations = 2500}};
+  }
+  if (task == Task::kRegression && algorithm == "sgd_regression") {
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::SgdRegressionSpec{.learning_rate = 0.01, .max_iterations = 1500,
+                                      .alpha = 0.0001},
+        ml::models::SgdRegressionSpec{.learning_rate = 0.05, .max_iterations = 2000,
+                                      .alpha = 0.001},
+        ml::models::SgdRegressionSpec{.learning_rate = 0.1, .max_iterations = 2500,
+                                      .alpha = 0.01}};
+  }
   if (algorithm == "knn") {
     return std::vector<ml::models::EstimatorSpec>{
         ml::models::KnnSpec{.k = 1}, ml::models::KnnSpec{.k = 3},
@@ -213,11 +284,35 @@ BuildGrid(Task task, const std::string &algorithm) {
         ml::models::RandomForestSpec{.tree_count = 20, .max_depth = 6},
         ml::models::RandomForestSpec{.tree_count = 30, .max_depth = 8}};
   }
+  if (algorithm == "gradient_boosting") {
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::GradientBoostingSpec{.tree_count = 25, .learning_rate = 0.1,
+                                         .max_depth = 2},
+        ml::models::GradientBoostingSpec{.tree_count = 50, .learning_rate = 0.1,
+                                         .max_depth = 3},
+        ml::models::GradientBoostingSpec{.tree_count = 75, .learning_rate = 0.05,
+                                         .max_depth = 4}};
+  }
+  if (task == Task::kClassification && algorithm == "adaboost") {
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::AdaBoostSpec{.estimator_count = 25, .max_depth = 1},
+        ml::models::AdaBoostSpec{.estimator_count = 50, .max_depth = 1},
+        ml::models::AdaBoostSpec{.estimator_count = 75, .max_depth = 2}};
+  }
   if (task == Task::kClassification && algorithm == "logistic") {
     return std::vector<ml::models::EstimatorSpec>{
         ml::models::LogisticSpec{.learning_rate = 0.01, .max_iterations = 1500},
         ml::models::LogisticSpec{.learning_rate = 0.05, .max_iterations = 2000},
         ml::models::LogisticSpec{.learning_rate = 0.1, .max_iterations = 2500}};
+  }
+  if (task == Task::kClassification && algorithm == "one_vs_rest_logistic") {
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::OneVsRestLogisticSpec{.learning_rate = 0.01,
+                                          .max_iterations = 1500},
+        ml::models::OneVsRestLogisticSpec{.learning_rate = 0.05,
+                                          .max_iterations = 2000},
+        ml::models::OneVsRestLogisticSpec{.learning_rate = 0.1,
+                                          .max_iterations = 2500}};
   }
   if (task == Task::kClassification && algorithm == "softmax") {
     return std::vector<ml::models::EstimatorSpec>{
@@ -230,6 +325,58 @@ BuildGrid(Task task, const std::string &algorithm) {
         ml::models::GaussianNbSpec{.variance_smoothing = 1e-9},
         ml::models::GaussianNbSpec{.variance_smoothing = 1e-6},
         ml::models::GaussianNbSpec{.variance_smoothing = 1e-3}};
+  }
+  if (task == Task::kClassification && algorithm == "linear_svm") {
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::LinearSvmSpec{.C = 0.1, .learning_rate = 0.01,
+                                  .max_iterations = 1500},
+        ml::models::LinearSvmSpec{.C = 1.0, .learning_rate = 0.01,
+                                  .max_iterations = 2000},
+        ml::models::LinearSvmSpec{.C = 10.0, .learning_rate = 0.05,
+                                  .max_iterations = 2500}};
+  }
+  if (task == Task::kClassification && algorithm == "sgd_classification") {
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::SgdClassificationSpec{.learning_rate = 0.01,
+                                            .max_iterations = 1500,
+                                            .alpha = 0.0001},
+        ml::models::SgdClassificationSpec{.learning_rate = 0.05,
+                                            .max_iterations = 2000,
+                                            .alpha = 0.001},
+        ml::models::SgdClassificationSpec{.learning_rate = 0.1,
+                                            .max_iterations = 2500,
+                                            .alpha = 0.01}};
+  }
+  if (algorithm == "voting") {
+    if (task == Task::kRegression) {
+      return std::vector<ml::models::EstimatorSpec>{
+          ml::models::VotingRegressorSpec{.estimators = DefaultRegressionBases()}};
+    }
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::VotingClassifierSpec{.estimators = DefaultClassificationBases(),
+                                         .use_proba = false},
+        ml::models::VotingClassifierSpec{.estimators = DefaultClassificationBases(),
+                                         .use_proba = true}};
+  }
+  if (algorithm == "stacking") {
+    if (task == Task::kRegression) {
+      return std::vector<ml::models::EstimatorSpec>{
+          ml::models::StackingRegressorSpec{.estimators = DefaultRegressionBases(),
+                                            .final_estimator = ml::models::RidgeSpec{},
+                                            .cv_folds = 3},
+          ml::models::StackingRegressorSpec{.estimators = DefaultRegressionBases(),
+                                            .final_estimator = ml::models::RidgeSpec{},
+                                            .cv_folds = 5}};
+    }
+    return std::vector<ml::models::EstimatorSpec>{
+        ml::models::StackingClassifierSpec{
+            .estimators = DefaultClassificationBases(),
+            .final_estimator = ml::models::OneVsRestLogisticSpec{},
+            .cv_folds = 3},
+        ml::models::StackingClassifierSpec{
+            .estimators = DefaultClassificationBases(),
+            .final_estimator = ml::models::OneVsRestLogisticSpec{},
+            .cv_folds = 5}};
   }
   return std::unexpected("unsupported tuning grid for algorithm: " + algorithm);
 }
@@ -421,10 +568,13 @@ int HandleList(const CommandArgs &args) {
 
   if (args.json) {
     std::println(
-        "{{\"regression\":[\"linear\",\"ridge\",\"lasso\",\"elasticnet\","
-        "\"knn\",\"decision_tree\",\"random_forest\"],"
-        "\"classification\":[\"logistic\",\"softmax\",\"gaussian_nb\","
-        "\"knn\",\"decision_tree\",\"random_forest\"],"
+        "{{\"regression\":[\"linear\",\"ridge\",\"lasso\",\"elasticnet\",\"linear_svr\","
+        "\"sgd_regression\",\"knn\",\"decision_tree\",\"random_forest\","
+        "\"gradient_boosting\",\"voting\",\"stacking\"],"
+        "\"classification\":[\"logistic\",\"one_vs_rest_logistic\",\"softmax\","
+        "\"gaussian_nb\",\"linear_svm\","
+        "\"sgd_classification\",\"knn\",\"decision_tree\",\"random_forest\","
+        "\"gradient_boosting\",\"adaboost\",\"voting\",\"stacking\"],"
         "\"transformers\":[\"standard_scaler\",\"minmax_scaler\"]}}");
     return 0;
   }
