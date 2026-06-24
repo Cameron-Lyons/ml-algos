@@ -63,18 +63,30 @@ Commands support `--json` for machine-readable output.
 - `ridge`
 - `lasso`
 - `elasticnet`
+- `linear_svr`
+- `sgd_regression`
 - `knn`
 - `decision_tree`
 - `random_forest`
+- `gradient_boosting`
+- `voting`
+- `stacking`
 
 ### Classification
 
 - `logistic`
+- `one_vs_rest_logistic`
 - `softmax`
 - `gaussian_nb`
+- `linear_svm`
+- `sgd_classification`
 - `knn`
 - `decision_tree`
 - `random_forest`
+- `gradient_boosting`
+- `adaboost`
+- `voting`
+- `stacking`
 
 ### Transformers
 
