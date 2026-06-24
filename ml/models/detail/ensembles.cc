@@ -1,5 +1,5 @@
-#include "ml/models/detail/model_context.h"
 #include "ml/models/detail/factory_hooks.h"
+#include "ml/models/detail/model_context.h"
 #include "ml/models/interfaces.h"
 
 namespace ml::models::detail {
@@ -351,7 +351,8 @@ public:
     if (!final_model) {
       return std::unexpected(final_model.error());
     }
-    auto folds = ml::MakeKFoldIndices(features.rows(), spec_.cv_folds, spec_.seed);
+    auto folds =
+        ml::MakeKFoldIndices(features.rows(), spec_.cv_folds, spec_.seed);
     if (!folds) {
       return std::unexpected(folds.error());
     }
@@ -479,7 +480,8 @@ public:
     if (!final_model) {
       return std::unexpected(final_model.error());
     }
-    auto folds = ml::MakeStratifiedFoldIndices(labels, spec_.cv_folds, spec_.seed);
+    auto folds =
+        ml::MakeStratifiedFoldIndices(labels, spec_.cv_folds, spec_.seed);
     if (!folds) {
       return std::unexpected(folds.error());
     }
@@ -638,8 +640,7 @@ MakeStackingRegressorModel(const StackingRegressorSpec &spec) {
         "stacking regressor requires at least one base estimator");
   }
   if (spec.cv_folds < 2) {
-    return std::unexpected(
-        "stacking regressor requires cv_folds >= 2");
+    return std::unexpected("stacking regressor requires cv_folds >= 2");
   }
   return std::make_unique<StackingRegressorModel>(spec);
 }
@@ -662,8 +663,7 @@ MakeStackingClassifierModel(const StackingClassifierSpec &spec,
         "stacking classifier requires at least one base estimator");
   }
   if (spec.cv_folds < 2) {
-    return std::unexpected(
-        "stacking classifier requires cv_folds >= 2");
+    return std::unexpected("stacking classifier requires cv_folds >= 2");
   }
   return std::make_unique<StackingClassifierModel>(spec, class_count);
 }

@@ -123,7 +123,8 @@ DefaultEstimatorSpec(Task task, std::string_view algorithm) {
   }
   if (algorithm == "voting") {
     if (task == Task::kRegression) {
-      return models::VotingRegressorSpec{.estimators = DefaultRegressionBases()};
+      return models::VotingRegressorSpec{.estimators =
+                                             DefaultRegressionBases()};
     }
     return models::VotingClassifierSpec{.estimators =
                                             DefaultClassificationBases()};
@@ -158,9 +159,9 @@ TuneGrid(Task task, std::string_view algorithm) {
         models::RidgeSpec{.lambda = 10.0}};
   }
   if (task == Task::kRegression && algorithm == "lasso") {
-    return std::vector<models::EstimatorSpec>{
-        models::LassoSpec{.lambda = 0.01}, models::LassoSpec{.lambda = 0.1},
-        models::LassoSpec{.lambda = 1.0}};
+    return std::vector<models::EstimatorSpec>{models::LassoSpec{.lambda = 0.01},
+                                              models::LassoSpec{.lambda = 0.1},
+                                              models::LassoSpec{.lambda = 1.0}};
   }
   if (task == Task::kRegression && algorithm == "elasticnet") {
     return std::vector<models::EstimatorSpec>{
@@ -312,22 +313,20 @@ TuneGrid(Task task, std::string_view algorithm) {
           models::VotingRegressorSpec{.estimators = DefaultRegressionBases()}};
     }
     return std::vector<models::EstimatorSpec>{
-        models::VotingClassifierSpec{
-            .estimators = DefaultClassificationBases(), .use_proba = false},
-        models::VotingClassifierSpec{
-            .estimators = DefaultClassificationBases(), .use_proba = true}};
+        models::VotingClassifierSpec{.estimators = DefaultClassificationBases(),
+                                     .use_proba = false},
+        models::VotingClassifierSpec{.estimators = DefaultClassificationBases(),
+                                     .use_proba = true}};
   }
   if (algorithm == "stacking") {
     if (task == Task::kRegression) {
       return std::vector<models::EstimatorSpec>{
-          models::StackingRegressorSpec{
-              .estimators = DefaultRegressionBases(),
-              .final_estimator = models::RidgeSpec{},
-              .cv_folds = 3},
-          models::StackingRegressorSpec{
-              .estimators = DefaultRegressionBases(),
-              .final_estimator = models::RidgeSpec{},
-              .cv_folds = 5}};
+          models::StackingRegressorSpec{.estimators = DefaultRegressionBases(),
+                                        .final_estimator = models::RidgeSpec{},
+                                        .cv_folds = 3},
+          models::StackingRegressorSpec{.estimators = DefaultRegressionBases(),
+                                        .final_estimator = models::RidgeSpec{},
+                                        .cv_folds = 5}};
     }
     return std::vector<models::EstimatorSpec>{
         models::StackingClassifierSpec{
@@ -340,7 +339,7 @@ TuneGrid(Task task, std::string_view algorithm) {
             .cv_folds = 5}};
   }
   return std::unexpected("unsupported tuning grid for algorithm: " +
-                           std::string(algorithm));
+                         std::string(algorithm));
 }
 
 } // namespace ml

@@ -1,5 +1,5 @@
-#include "ml/models/detail/model_context.h"
 #include "ml/models/detail/factory_hooks.h"
+#include "ml/models/detail/model_context.h"
 #include "ml/models/interfaces.h"
 
 namespace ml::models::detail {
@@ -1045,22 +1045,18 @@ private:
   DenseMatrix alphas_;
 };
 
-
 std::expected<std::unique_ptr<Classifier>, std::string>
-MakeLogisticClassifierModel(const LogisticSpec &spec,
-                              std::size_t class_count) {
+MakeLogisticClassifierModel(const LogisticSpec &spec, std::size_t class_count) {
   if (class_count != 2) {
-    return std::unexpected(
-        "logistic regression requires exactly two classes");
+    return std::unexpected("logistic regression requires exactly two classes");
   }
   return std::make_unique<LogisticClassifierModel>(spec);
 }
 
 std::expected<std::unique_ptr<Classifier>, std::string>
 MakeOneVsRestLogisticClassifierModel(const OneVsRestLogisticSpec &spec,
-                                       std::size_t class_count) {
-  return std::make_unique<OneVsRestLogisticClassifierModel>(spec,
-                                                            class_count);
+                                     std::size_t class_count) {
+  return std::make_unique<OneVsRestLogisticClassifierModel>(spec, class_count);
 }
 
 std::expected<std::unique_ptr<Classifier>, std::string>
@@ -1090,8 +1086,7 @@ MakeLinearSvmClassifierModel(const LinearSvmSpec &spec,
 }
 
 std::expected<std::unique_ptr<Classifier>, std::string>
-MakeRbfSvmClassifierModel(const RbfSvmSpec &spec,
-                          std::size_t class_count) {
+MakeRbfSvmClassifierModel(const RbfSvmSpec &spec, std::size_t class_count) {
   return std::make_unique<RbfSvmClassifierModel>(spec, class_count);
 }
 

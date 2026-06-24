@@ -34,9 +34,8 @@ MakeIndexFoldsFromTestPartitions(
 
 std::expected<std::vector<IndexFold>, std::string>
 MakeStratifiedFoldIndices(std::span<const int> labels, int fold_count,
-                            unsigned int seed) {
-  if (fold_count < 2 ||
-      labels.size() < static_cast<std::size_t>(fold_count)) {
+                          unsigned int seed) {
+  if (fold_count < 2 || labels.size() < static_cast<std::size_t>(fold_count)) {
     return std::unexpected("invalid fold count");
   }
   std::vector<std::vector<std::size_t>> test_indices(

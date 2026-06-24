@@ -30,8 +30,10 @@ double ResolveGamma(double gamma, std::size_t feature_count);
 std::expected<std::pair<std::size_t, std::size_t>, std::string>
 ParseShape(std::string_view text, std::string_view error);
 
-std::expected<ml::core::Vector, std::string> ParseDoubles(std::string_view text);
-std::expected<ml::core::LabelVector, std::string> ParseInts(std::string_view text);
+std::expected<ml::core::Vector, std::string>
+ParseDoubles(std::string_view text);
+std::expected<ml::core::LabelVector, std::string>
+ParseInts(std::string_view text);
 
 std::expected<ml::core::DenseMatrix, std::string>
 MatrixFromRows(const std::vector<ml::core::Vector> &rows);
@@ -39,8 +41,7 @@ MatrixFromRows(const std::vector<ml::core::Vector> &rows);
 template <std::integral T>
 std::vector<T> IotaVector(std::size_t count, T start);
 
-template <std::integral T>
-std::vector<T> IotaVector(std::size_t count);
+template <std::integral T> std::vector<T> IotaVector(std::size_t count);
 
 std::expected<std::vector<ml::core::Vector>, std::string>
 ReadDoubleRowBlock(ml::core::StateReader &reader, std::size_t row_count,
@@ -52,7 +53,8 @@ ReadDoubleLines(ml::core::StateReader &reader, std::size_t line_count,
                 std::string_view line_error);
 
 std::expected<std::vector<ml::core::Vector>, std::string>
-ReadRemainingDoubleRows(ml::core::StateReader &reader, std::string_view line_error);
+ReadRemainingDoubleRows(ml::core::StateReader &reader,
+                        std::string_view line_error);
 
 template <typename Tree, typename MakeTree>
 std::expected<void, std::string>
@@ -105,8 +107,10 @@ MlpForwardPass ForwardMlp(const ml::core::Vector &input,
                           const std::vector<MlpLayer> &layers,
                           bool classification_output);
 
-void BackwardMlpSample(const MlpForwardPass &cache, const ml::core::Vector &input,
-                       const std::vector<MlpLayer> &layers, ml::core::Vector delta,
+void BackwardMlpSample(const MlpForwardPass &cache,
+                       const ml::core::Vector &input,
+                       const std::vector<MlpLayer> &layers,
+                       ml::core::Vector delta,
                        std::vector<ml::core::DenseMatrix> &weight_grads,
                        std::vector<ml::core::Vector> &bias_grads);
 
@@ -119,7 +123,8 @@ std::expected<std::string, std::string>
 SerializeMlpLayers(const std::vector<MlpLayer> &layers);
 
 std::expected<std::vector<MlpLayer>, std::string>
-LoadMlpLayers(ml::core::StateReader &reader, std::string_view layer_count_error);
+LoadMlpLayers(ml::core::StateReader &reader,
+              std::string_view layer_count_error);
 
 ml::core::LabelVector ArgMaxLabels(const ml::core::DenseMatrix &probabilities);
 
@@ -128,8 +133,7 @@ PredictArgMax(std::expected<ml::core::DenseMatrix, std::string> probabilities);
 
 std::vector<int> MakeClassLabels(std::size_t class_count);
 
-template <typename Target>
-struct BootstrapSample {
+template <typename Target> struct BootstrapSample {
   ml::core::DenseMatrix features;
   std::vector<Target> targets;
 };
@@ -139,10 +143,8 @@ std::expected<BootstrapSample<Target>, std::string> MakeBootstrapSample(
     const ml::core::DenseMatrix &features, std::span<const Target> targets,
     std::uniform_int_distribution<std::size_t> &row_dist, std::mt19937 &rng);
 
-std::vector<std::size_t>
-SampleRandomForestFeatureIndices(std::size_t feature_count,
-                                 const RandomForestSpec &spec,
-                                 std::mt19937 &rng);
+std::vector<std::size_t> SampleRandomForestFeatureIndices(
+    std::size_t feature_count, const RandomForestSpec &spec, std::mt19937 &rng);
 
 double Mean(std::span<const double> values);
 
@@ -167,33 +169,37 @@ struct CoordinateDescentPenalty {
   double l2 = 0.0;
 };
 
-std::expected<void, std::string> FitCoordinateDescent(
-    const ml::core::DenseMatrix &features, std::span<const double> targets,
-    ml::core::Vector &coefficients, int max_iterations, double tolerance,
-    CoordinateDescentPenalty penalty);
+std::expected<void, std::string>
+FitCoordinateDescent(const ml::core::DenseMatrix &features,
+                     std::span<const double> targets,
+                     ml::core::Vector &coefficients, int max_iterations,
+                     double tolerance, CoordinateDescentPenalty penalty);
 
 std::string SerializeFeatureRows(const ml::core::DenseMatrix &features);
 
-std::string SerializeStoredRegressionState(const ml::core::DenseMatrix &features,
-                                           const ml::core::Vector &targets);
+std::string
+SerializeStoredRegressionState(const ml::core::DenseMatrix &features,
+                               const ml::core::Vector &targets);
 
-std::string SerializeStoredKernelRegressionState(
-    double gamma, const ml::core::DenseMatrix &features,
-    const ml::core::Vector &targets);
+std::string
+SerializeStoredKernelRegressionState(double gamma,
+                                     const ml::core::DenseMatrix &features,
+                                     const ml::core::Vector &targets);
 
-std::string SerializeStoredClassificationState(
-    std::size_t class_count, const ml::core::DenseMatrix &features,
-    const ml::core::LabelVector &labels);
+std::string
+SerializeStoredClassificationState(std::size_t class_count,
+                                   const ml::core::DenseMatrix &features,
+                                   const ml::core::LabelVector &labels);
 
-std::string SerializeStoredKernelClassificationState(
-    std::size_t class_count, double gamma, const ml::core::DenseMatrix &features,
-    const ml::core::LabelVector &labels);
+std::string
+SerializeStoredKernelClassificationState(std::size_t class_count, double gamma,
+                                         const ml::core::DenseMatrix &features,
+                                         const ml::core::LabelVector &labels);
 
 template <typename Row, typename TargetRange, typename ScoreFn>
-inline double PredictKnnMean(const Row &query,
-                             const ml::core::DenseMatrix &train_features,
-                             const TargetRange &targets, int k,
-                             ScoreFn score_fn) {
+inline double
+PredictKnnMean(const Row &query, const ml::core::DenseMatrix &train_features,
+               const TargetRange &targets, int k, ScoreFn score_fn) {
   using Target = std::ranges::range_value_t<TargetRange>;
   std::vector<std::pair<double, Target>> scores;
   scores.reserve(train_features.rows());
@@ -214,7 +220,8 @@ inline double PredictKnnMean(const Row &query,
   return total / static_cast<double>(neighbor_k);
 }
 
-template <typename Row, typename TargetRange, typename ScoreFn, typename Compare>
+template <typename Row, typename TargetRange, typename ScoreFn,
+          typename Compare>
 inline double PredictKernelKnnMean(const Row &query,
                                    const ml::core::DenseMatrix &train_features,
                                    const TargetRange &targets, int k,
@@ -235,17 +242,19 @@ inline double PredictKernelKnnMean(const Row &query,
   double weighted_total = 0.0;
   double weight_sum = 0.0;
   for (std::size_t index = 0; index < neighbor_k; ++index) {
-    weighted_total += scores[index].first * static_cast<double>(scores[index].second);
+    weighted_total +=
+        scores[index].first * static_cast<double>(scores[index].second);
     weight_sum += scores[index].first;
   }
   return weight_sum == 0.0 ? 0.0 : weighted_total / weight_sum;
 }
 
 template <typename TargetRange, typename ScoreFn>
-inline ml::core::DenseMatrix PredictKnnProba(
-    const ml::core::DenseMatrix &features,
-    const ml::core::DenseMatrix &train_features, const TargetRange &targets,
-    std::size_t class_count, int k, ScoreFn score_fn) {
+inline ml::core::DenseMatrix
+PredictKnnProba(const ml::core::DenseMatrix &features,
+                const ml::core::DenseMatrix &train_features,
+                const TargetRange &targets, std::size_t class_count, int k,
+                ScoreFn score_fn) {
   using Target = std::ranges::range_value_t<TargetRange>;
   ml::core::DenseMatrix probabilities(features.rows(), class_count, 0.0);
   for (std::size_t row = 0; row < features.rows(); ++row) {
@@ -271,10 +280,11 @@ inline ml::core::DenseMatrix PredictKnnProba(
 }
 
 template <typename TargetRange, typename ScoreFn, typename Compare>
-inline ml::core::DenseMatrix PredictKernelKnnProba(
-    const ml::core::DenseMatrix &features,
-    const ml::core::DenseMatrix &train_features, const TargetRange &targets,
-    std::size_t class_count, int k, ScoreFn score_fn, Compare compare) {
+inline ml::core::DenseMatrix
+PredictKernelKnnProba(const ml::core::DenseMatrix &features,
+                      const ml::core::DenseMatrix &train_features,
+                      const TargetRange &targets, std::size_t class_count,
+                      int k, ScoreFn score_fn, Compare compare) {
   using Target = std::ranges::range_value_t<TargetRange>;
   ml::core::DenseMatrix probabilities(features.rows(), class_count, 0.0);
   for (std::size_t row = 0; row < features.rows(); ++row) {
@@ -312,8 +322,7 @@ inline std::vector<T> IotaVector(std::size_t count, T start) {
       std::views::iota(start, start + static_cast<T>(count)));
 }
 
-template <std::integral T>
-inline std::vector<T> IotaVector(std::size_t count) {
+template <std::integral T> inline std::vector<T> IotaVector(std::size_t count) {
   return IotaVector(count, T{});
 }
 
@@ -325,22 +334,22 @@ LoadTreeEnsemble(ml::core::StateReader &reader, std::size_t tree_count,
                  std::vector<Tree> &trees) {
   trees.clear();
   for (std::size_t index = 0; index < tree_count; ++index) {
-    auto loaded = reader.ReadLine(size_line_error)
-                      .and_then([&](std::string_view line) {
-                        return ml::core::ParseNumber<std::size_t>(line,
-                                                                size_label);
-                      })
-                      .and_then([&](std::size_t size) {
-                        return reader.ReadChunk(size, chunk_error);
-                      })
-                      .and_then([&](std::string_view buffer)
-                                    -> std::expected<Tree, std::string> {
-                        Tree tree = make_tree();
-                        return tree.LoadState(buffer).transform(
-                            [tree = std::move(tree)]() mutable {
-                              return std::move(tree);
-                            });
-                      });
+    auto loaded =
+        reader.ReadLine(size_line_error)
+            .and_then([&](std::string_view line) {
+              return ml::core::ParseNumber<std::size_t>(line, size_label);
+            })
+            .and_then([&](std::size_t size) {
+              return reader.ReadChunk(size, chunk_error);
+            })
+            .and_then([&](std::string_view buffer)
+                          -> std::expected<Tree, std::string> {
+              Tree tree = make_tree();
+              return tree.LoadState(buffer).transform(
+                  [tree = std::move(tree)]() mutable {
+                    return std::move(tree);
+                  });
+            });
     if (!loaded) {
       return std::unexpected(loaded.error());
     }
@@ -400,10 +409,11 @@ inline std::expected<BootstrapSample<Target>, std::string> MakeBootstrapSample(
                               features[selected].end());
     sampled_targets.push_back(targets[selected]);
   }
-  return MatrixFromRows(sampled_rows).transform([&](ml::core::DenseMatrix matrix) {
-    return BootstrapSample<Target>{std::move(matrix),
-                                   std::move(sampled_targets)};
-  });
+  return MatrixFromRows(sampled_rows)
+      .transform([&](ml::core::DenseMatrix matrix) {
+        return BootstrapSample<Target>{std::move(matrix),
+                                       std::move(sampled_targets)};
+      });
 }
 
 template <typename Target>
@@ -431,10 +441,11 @@ MakeSubsample(const ml::core::DenseMatrix &features,
     sampled_rows.emplace_back(row.begin(), row.end());
     sampled_targets.push_back(targets[index]);
   }
-  return MatrixFromRows(sampled_rows).transform([&](ml::core::DenseMatrix matrix) {
-    return BootstrapSample<Target>{std::move(matrix),
-                                   std::move(sampled_targets)};
-  });
+  return MatrixFromRows(sampled_rows)
+      .transform([&](ml::core::DenseMatrix matrix) {
+        return BootstrapSample<Target>{std::move(matrix),
+                                       std::move(sampled_targets)};
+      });
 }
 
 } // namespace ml::models::detail

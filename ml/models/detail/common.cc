@@ -493,10 +493,11 @@ Vector SelectTargets(std::span<const double> targets,
   return selected;
 }
 
-std::expected<void, std::string> FitCoordinateDescent(
-    const DenseMatrix &features, std::span<const double> targets,
-    Vector &coefficients, int max_iterations, double tolerance,
-    CoordinateDescentPenalty penalty) {
+std::expected<void, std::string>
+FitCoordinateDescent(const DenseMatrix &features,
+                     std::span<const double> targets, Vector &coefficients,
+                     int max_iterations, double tolerance,
+                     CoordinateDescentPenalty penalty) {
   const DenseMatrix with_bias = AddBias(features);
   const std::size_t rows = with_bias.rows();
   const std::size_t cols = with_bias.cols();
@@ -550,8 +551,7 @@ std::expected<void, std::string> FitCoordinateDescent(
 }
 
 std::string SerializeFeatureRows(const DenseMatrix &features) {
-  std::string out =
-      std::format("{} {}\n", features.rows(), features.cols());
+  std::string out = std::format("{} {}\n", features.rows(), features.cols());
   for (std::size_t row = 0; row < features.rows(); ++row) {
     out += std::format("{}\n", ml::core::JoinFormatted(features[row]));
   }
@@ -564,22 +564,24 @@ std::string SerializeStoredRegressionState(const DenseMatrix &features,
          std::format("{}\n", ml::core::JoinFormatted(targets));
 }
 
-std::string SerializeStoredKernelRegressionState(
-    double gamma, const DenseMatrix &features, const Vector &targets) {
+std::string SerializeStoredKernelRegressionState(double gamma,
+                                                 const DenseMatrix &features,
+                                                 const Vector &targets) {
   return std::format("{}\n", gamma) +
          SerializeStoredRegressionState(features, targets);
 }
 
-std::string SerializeStoredClassificationState(
-    std::size_t class_count, const DenseMatrix &features,
-    const LabelVector &labels) {
+std::string SerializeStoredClassificationState(std::size_t class_count,
+                                               const DenseMatrix &features,
+                                               const LabelVector &labels) {
   return std::format("{}\n", class_count) + SerializeFeatureRows(features) +
          std::format("{}\n", ml::core::JoinFormatted(labels));
 }
 
-std::string SerializeStoredKernelClassificationState(
-    std::size_t class_count, double gamma, const DenseMatrix &features,
-    const LabelVector &labels) {
+std::string
+SerializeStoredKernelClassificationState(std::size_t class_count, double gamma,
+                                         const DenseMatrix &features,
+                                         const LabelVector &labels) {
   return std::format("{}\n{}\n", class_count, gamma) +
          SerializeFeatureRows(features) +
          std::format("{}\n", ml::core::JoinFormatted(labels));

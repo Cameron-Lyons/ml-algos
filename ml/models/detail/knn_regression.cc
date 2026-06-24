@@ -1,5 +1,5 @@
-#include "ml/models/detail/model_context.h"
 #include "ml/models/detail/factory_hooks.h"
+#include "ml/models/detail/model_context.h"
 #include "ml/models/interfaces.h"
 
 namespace ml::models::detail {
@@ -21,12 +21,11 @@ public:
   Predict(const DenseMatrix &features) const override {
     Vector predictions(features.rows(), 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
-      predictions[row] =
-          PredictKnnMean(features[row], features_, targets_, spec_.k,
-                         [](auto query, auto train) {
-                           return ml::core::SquaredEuclideanDistance(query,
-                                                                     train);
-                         });
+      predictions[row] = PredictKnnMean(
+          features[row], features_, targets_, spec_.k,
+          [](auto query, auto train) {
+            return ml::core::SquaredEuclideanDistance(query, train);
+          });
     }
     return predictions;
   }

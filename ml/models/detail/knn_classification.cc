@@ -1,5 +1,5 @@
-#include "ml/models/detail/model_context.h"
 #include "ml/models/detail/factory_hooks.h"
+#include "ml/models/detail/model_context.h"
 #include "ml/models/interfaces.h"
 
 namespace ml::models::detail {
@@ -39,8 +39,7 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    return SerializeStoredClassificationState(class_count_, features_,
-                                              labels_);
+    return SerializeStoredClassificationState(class_count_, features_, labels_);
   }
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
@@ -94,7 +93,8 @@ public:
         [this](auto query, auto train) {
           return ml::core::RbfKernel(query, train, gamma_);
         },
-        [](const std::pair<double, int> &lhs, const std::pair<double, int> &rhs) {
+        [](const std::pair<double, int> &lhs,
+           const std::pair<double, int> &rhs) {
           return lhs.first > rhs.first;
         });
   }
@@ -146,7 +146,6 @@ private:
   DenseMatrix features_;
   LabelVector labels_;
 };
-
 
 std::expected<std::unique_ptr<Classifier>, std::string>
 MakeKnnClassifierModel(const KnnSpec &spec, std::size_t class_count) {
