@@ -5,8 +5,8 @@
 #include "ml/io/model_bundle.h"
 #include "ml/models/specs.h"
 #include "ml/pipeline/pipeline.h"
-#include "tests/support/test_support.h"
 #include "tests/support/test_paths.h"
+#include "tests/support/test_support.h"
 
 int main() {
   auto dataset = ml::io::ReadDatasetCsv(

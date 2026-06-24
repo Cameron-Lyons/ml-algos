@@ -1,5 +1,5 @@
-#include "ml/models/detail/model_context.h"
 #include "ml/models/detail/factory_hooks.h"
+#include "ml/models/detail/model_context.h"
 #include "ml/models/interfaces.h"
 
 namespace ml::models::detail {
@@ -71,11 +71,10 @@ public:
 
   std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
-    return LoadFeatureIndices(reader, "invalid isolation tree state",
-                              "feature count",
-                              "invalid isolation tree feature list",
-                              "feature index",
-                              "isolation tree feature list mismatch")
+    return LoadFeatureIndices(
+               reader, "invalid isolation tree state", "feature count",
+               "invalid isolation tree feature list", "feature index",
+               "isolation tree feature list mismatch")
         .and_then([this](std::vector<std::size_t> parsed_indices) {
           feature_indices_ = std::move(parsed_indices);
           return std::expected<void, std::string>{};
@@ -190,10 +189,10 @@ private:
           if (!line.starts_with("split ")) {
             return std::unexpected<std::string>("invalid isolation tree node");
           }
-          return ParseTreeSplitPayload(
-                     line.substr(6), "invalid isolation tree split",
-                     "isolation tree split feature",
-                     "isolation tree split threshold")
+          return ParseTreeSplitPayload(line.substr(6),
+                                       "invalid isolation tree split",
+                                       "isolation tree split feature",
+                                       "isolation tree split threshold")
               .and_then([&reader](std::pair<std::size_t, double> split) {
                 return ReadTreeSplitChildren<IsolationTreeNode>(
                     reader, split.first, split.second,

@@ -1,5 +1,5 @@
-#include "ml/models/detail/model_context.h"
 #include "ml/models/detail/factory_hooks.h"
+#include "ml/models/detail/model_context.h"
 #include "ml/models/interfaces.h"
 
 namespace ml::models::detail {
@@ -375,7 +375,6 @@ private:
   MlpSpec spec_;
   std::vector<MlpLayer> layers_;
 };
-
 
 std::expected<std::unique_ptr<Regressor>, std::string>
 MakeLinearRegressionModel() {

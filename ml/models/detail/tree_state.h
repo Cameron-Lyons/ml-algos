@@ -22,13 +22,10 @@ inline std::string FormatFeatureIndices(std::span<const std::size_t> indices) {
                      ml::core::JoinFormatted(indices));
 }
 
-inline std::expected<std::vector<std::size_t>, std::string>
-LoadFeatureIndices(ml::core::StateReader &reader,
-                   std::string_view count_line_error,
-                   std::string_view count_label,
-                   std::string_view list_line_error,
-                   std::string_view index_label,
-                   std::string_view mismatch_error) {
+inline std::expected<std::vector<std::size_t>, std::string> LoadFeatureIndices(
+    ml::core::StateReader &reader, std::string_view count_line_error,
+    std::string_view count_label, std::string_view list_line_error,
+    std::string_view index_label, std::string_view mismatch_error) {
   return reader.ReadLine(count_line_error)
       .and_then([&](std::string_view line) {
         return ml::core::ParseNumber<std::size_t>(line, count_label);
@@ -36,17 +33,17 @@ LoadFeatureIndices(ml::core::StateReader &reader,
       .and_then([&](std::size_t count) {
         return reader.ReadLine(list_line_error)
             .and_then([&](std::string_view line) {
-              return ml::core::ParseDelimitedNumbers<std::size_t>(
-                  line, ',', index_label);
+              return ml::core::ParseDelimitedNumbers<std::size_t>(line, ',',
+                                                                  index_label);
             })
-            .and_then([count, mismatch_error](std::vector<std::size_t> indices)
-                          -> std::expected<std::vector<std::size_t>,
-                                           std::string> {
-              if (indices.size() != count) {
-                return std::unexpected(std::string(mismatch_error));
-              }
-              return indices;
-            });
+            .and_then(
+                [count, mismatch_error](std::vector<std::size_t> indices)
+                    -> std::expected<std::vector<std::size_t>, std::string> {
+                  if (indices.size() != count) {
+                    return std::unexpected(std::string(mismatch_error));
+                  }
+                  return indices;
+                });
       });
 }
 
@@ -82,8 +79,8 @@ ReadTreeSplitChildren(ml::core::StateReader &reader, std::size_t feature,
                       double threshold, ReadNodeFn read_node) {
   return read_node(reader).and_then([&](std::unique_ptr<Node> left) {
     return read_node(reader).and_then(
-        [feature, threshold, left = std::move(left)](
-            std::unique_ptr<Node> right) mutable
+        [feature, threshold,
+         left = std::move(left)](std::unique_ptr<Node> right) mutable
             -> std::expected<std::unique_ptr<Node>, std::string> {
           auto node = std::make_unique<Node>();
           node->leaf = false;
@@ -96,8 +93,9 @@ ReadTreeSplitChildren(ml::core::StateReader &reader, std::size_t feature,
   });
 }
 
-inline std::string FormatClassificationTreeHeader(
-    int class_count, std::span<const std::size_t> indices) {
+inline std::string
+FormatClassificationTreeHeader(int class_count,
+                               std::span<const std::size_t> indices) {
   return std::format("{}\n{}", class_count, FormatFeatureIndices(indices));
 }
 

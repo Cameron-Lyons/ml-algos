@@ -1,5 +1,5 @@
-#include "ml/models/detail/model_context.h"
 #include "ml/models/detail/factory_hooks.h"
+#include "ml/models/detail/model_context.h"
 #include "ml/models/interfaces.h"
 
 namespace ml::models::detail {
@@ -54,11 +54,10 @@ public:
 
   std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
-    return LoadFeatureIndices(reader, "invalid regression tree state",
-                              "feature count",
-                              "invalid regression tree feature list",
-                              "feature index",
-                              "regression tree feature list mismatch")
+    return LoadFeatureIndices(
+               reader, "invalid regression tree state", "feature count",
+               "invalid regression tree feature list", "feature index",
+               "regression tree feature list mismatch")
         .and_then([this](std::vector<std::size_t> parsed_indices) {
           feature_indices_ = std::move(parsed_indices);
           return std::expected<void, std::string>{};
@@ -186,10 +185,10 @@ private:
           if (!line.starts_with("split ")) {
             return std::unexpected<std::string>("invalid regression tree node");
           }
-          return ParseTreeSplitPayload(
-                     line.substr(6), "invalid regression tree split",
-                     "regression tree split feature",
-                     "regression tree split threshold")
+          return ParseTreeSplitPayload(line.substr(6),
+                                       "invalid regression tree split",
+                                       "regression tree split feature",
+                                       "regression tree split threshold")
               .and_then([&reader](std::pair<std::size_t, double> split) {
                 return ReadTreeSplitChildren<RegressionTreeNode>(
                     reader, split.first, split.second,
@@ -289,8 +288,8 @@ public:
   }
 
   std::string SaveState() const {
-    std::string out = FormatClassificationTreeHeader(class_count_,
-                                                     feature_indices_);
+    std::string out =
+        FormatClassificationTreeHeader(class_count_, feature_indices_);
     WriteNode(root_.get(), out);
     return out;
   }
@@ -485,10 +484,10 @@ private:
             return std::unexpected<std::string>(
                 "invalid classification tree node");
           }
-          return ParseTreeSplitPayload(
-                     line.substr(6), "invalid classification tree split",
-                     "classification tree split feature",
-                     "classification tree split threshold")
+          return ParseTreeSplitPayload(line.substr(6),
+                                       "invalid classification tree split",
+                                       "classification tree split feature",
+                                       "classification tree split threshold")
               .and_then([&reader](std::pair<std::size_t, double> split) {
                 return ReadTreeSplitChildren<ClassificationTreeNode>(
                     reader, split.first, split.second,
@@ -556,7 +555,6 @@ private:
   ClassificationTree tree_;
   std::size_t class_count_;
 };
-
 
 class RandomForestRegressorModel final : public Regressor {
 public:
@@ -1201,13 +1199,11 @@ MakeRandomForestClassifierModel(const RandomForestSpec &spec,
 std::expected<std::unique_ptr<Classifier>, std::string>
 MakeGradientBoostingClassifierModel(const GradientBoostingSpec &spec,
                                     std::size_t class_count) {
-  return std::make_unique<GradientBoostingClassifierModel>(spec,
-                                                           class_count);
+  return std::make_unique<GradientBoostingClassifierModel>(spec, class_count);
 }
 
 std::expected<std::unique_ptr<Classifier>, std::string>
-MakeAdaBoostClassifierModel(const AdaBoostSpec &spec,
-                            std::size_t class_count) {
+MakeAdaBoostClassifierModel(const AdaBoostSpec &spec, std::size_t class_count) {
   return std::make_unique<AdaBoostClassifierModel>(spec, class_count);
 }
 

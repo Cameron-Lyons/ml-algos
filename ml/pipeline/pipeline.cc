@@ -639,8 +639,7 @@ std::expected<FoldSet, std::string> MakeKFoldSet(const TabularDataset &dataset,
     }
     index_folds = MakeStratifiedFoldIndices(*labels, fold_count, seed);
   } else {
-    index_folds =
-        MakeKFoldIndices(dataset.features.rows(), fold_count, seed);
+    index_folds = MakeKFoldIndices(dataset.features.rows(), fold_count, seed);
   }
   if (!index_folds) {
     return std::unexpected(index_folds.error());

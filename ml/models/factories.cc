@@ -51,7 +51,8 @@ MakeRegressor(const EstimatorSpec &spec) {
           [](const StackingRegressorSpec &value) {
             return detail::MakeStackingRegressorModel(value);
           },
-          [](const auto &) -> std::expected<std::unique_ptr<Regressor>, std::string> {
+          [](const auto &)
+              -> std::expected<std::unique_ptr<Regressor>, std::string> {
             return std::unexpected("estimator spec is not a regressor");
           },
       },
@@ -66,7 +67,8 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
             return detail::MakeLogisticClassifierModel(value, class_count);
           },
           [&](const OneVsRestLogisticSpec &value) {
-            return detail::MakeOneVsRestLogisticClassifierModel(value, class_count);
+            return detail::MakeOneVsRestLogisticClassifierModel(value,
+                                                                class_count);
           },
           [&](const SoftmaxSpec &value) {
             return detail::MakeSoftmaxClassifierModel(value);
@@ -100,7 +102,7 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
           },
           [&](const GradientBoostingSpec &value) {
             return detail::MakeGradientBoostingClassifierModel(value,
-                                                                 class_count);
+                                                               class_count);
           },
           [&](const AdaBoostSpec &value) {
             return detail::MakeAdaBoostClassifierModel(value, class_count);
@@ -111,7 +113,8 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
           [&](const StackingClassifierSpec &value) {
             return detail::MakeStackingClassifierModel(value, class_count);
           },
-          [&](const auto &) -> std::expected<std::unique_ptr<Classifier>, std::string> {
+          [&](const auto &)
+              -> std::expected<std::unique_ptr<Classifier>, std::string> {
             return std::unexpected("estimator spec is not a classifier");
           },
       },
@@ -125,7 +128,8 @@ MakeAnomalyDetector(const EstimatorSpec &spec) {
           [](const IsolationForestSpec &value) {
             return detail::MakeIsolationForestModel(value);
           },
-          [](const auto &) -> std::expected<std::unique_ptr<AnomalyDetector>, std::string> {
+          [](const auto &)
+              -> std::expected<std::unique_ptr<AnomalyDetector>, std::string> {
             return std::unexpected("estimator spec is not an anomaly detector");
           },
       },
