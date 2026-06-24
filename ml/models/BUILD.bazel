@@ -5,12 +5,27 @@ package(default_visibility = ["//visibility:public"])
 cc_library(
     name = "models",
     srcs = [
-        "models.cc",
+        "detail/anomaly.cc",
+        "detail/classification.cc",
+        "detail/common.cc",
+        "detail/ensembles.cc",
+        "detail/knn_classification.cc",
+        "detail/knn_regression.cc",
+        "detail/linear_regression.cc",
+        "detail/trees.cc",
+        "factories.cc",
         "specs.cc",
     ],
     hdrs = [
+        "detail/common.h",
+        "detail/factory_hooks.h",
+        "detail/model_context.h",
+        "detail/tree_state.h",
         "interfaces.h",
         "specs.h",
     ],
-    deps = ["//ml/core"],
+    deps = [
+        "//ml/core",
+        "//ml/pipeline:splits",
+    ],
 )

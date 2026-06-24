@@ -3,19 +3,11 @@
 
 #include "ml/io/csv.h"
 #include "tests/support/test_support.h"
-
-namespace {
-
-std::string TestDataPath(const std::string &relative) {
-  return std::string(std::getenv("TEST_SRCDIR")) + "/" +
-         std::string(std::getenv("TEST_WORKSPACE")) + "/data/v3/" + relative;
-}
-
-} // namespace
+#include "tests/support/test_paths.h"
 
 int main() {
   auto dataset =
-      ml::io::ReadDatasetCsv(TestDataPath("regression.csv"), "target");
+      ml::io::ReadDatasetCsv(ml::test::TestDataPath("regression.csv"), "target");
   ML_EXPECT_TRUE(dataset.has_value(), "dataset csv should load");
   ML_EXPECT_TRUE(dataset->schema.feature_names.size() == 2,
                  "dataset should have two features");
@@ -23,7 +15,7 @@ int main() {
   ML_EXPECT_NEAR(dataset->targets[0], 8.0, 1e-9, "first target");
 
   auto table =
-      ml::io::ReadNumericCsv(TestDataPath("classification_binary.csv"));
+      ml::io::ReadNumericCsv(ml::test::TestDataPath("classification_binary.csv"));
   ML_EXPECT_TRUE(table.has_value(), "numeric table should load");
   auto selected = ml::io::SelectFeatureColumns(*table, {"f2", "f1"});
   ML_EXPECT_TRUE(selected.has_value(), "column selection should work");

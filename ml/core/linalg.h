@@ -16,8 +16,6 @@ struct SymmetricEighResult {
 std::expected<DenseMatrix, std::string> Transpose(const DenseMatrix &matrix);
 std::expected<DenseMatrix, std::string> MatMul(const DenseMatrix &lhs,
                                                const DenseMatrix &rhs);
-std::expected<DenseMatrix, std::string> Add(const DenseMatrix &lhs,
-                                            const DenseMatrix &rhs);
 std::expected<DenseMatrix, std::string> Inverse(const DenseMatrix &matrix);
 std::expected<SymmetricEighResult, std::string>
 SymmetricEigh(const DenseMatrix &matrix);

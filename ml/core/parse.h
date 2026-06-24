@@ -4,6 +4,7 @@
 #include <charconv>
 #include <concepts>
 #include <expected>
+#include <map>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -59,6 +60,18 @@ Split(std::string_view text, char delimiter, bool skip_empty = false) {
 inline std::vector<std::string_view>
 SplitCommaSeparated(std::string_view text) {
   return Split(text, ',', true);
+}
+
+inline std::map<std::string_view, std::string_view>
+ParseKeyedFields(std::string_view text) {
+  std::map<std::string_view, std::string_view> values;
+  for (const auto token : Split(text, ';', true)) {
+    const auto parts = Split(token, '=', true);
+    if (parts.size() == 2) {
+      values[parts[0]] = parts[1];
+    }
+  }
+  return values;
 }
 
 template <ParsedNumber T>
