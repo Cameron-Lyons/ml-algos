@@ -25,8 +25,8 @@ bool IsIntegerLike(double value) {
   return std::fabs(value - std::round(value)) <= kIntegerTolerance;
 }
 
-std::expected<void, std::string>
-ValidateDataset(const TabularDataset &dataset, Task task) {
+std::expected<void, std::string> ValidateDataset(const TabularDataset &dataset,
+                                                 Task task) {
   if (dataset.features.rows() == 0) {
     return std::unexpected("dataset has no rows");
   }
@@ -156,14 +156,12 @@ BinaryScores ComputeBinaryScores(std::span<const int> actual,
     }
   }
   if (true_positive + false_positive > 0) {
-    scores.precision =
-        static_cast<double>(true_positive) /
-        static_cast<double>(true_positive + false_positive);
+    scores.precision = static_cast<double>(true_positive) /
+                       static_cast<double>(true_positive + false_positive);
   }
   if (true_positive + false_negative > 0) {
-    scores.recall =
-        static_cast<double>(true_positive) /
-        static_cast<double>(true_positive + false_negative);
+    scores.recall = static_cast<double>(true_positive) /
+                    static_cast<double>(true_positive + false_negative);
   }
   if (scores.precision + scores.recall > 0.0) {
     scores.f1 = 2.0 * scores.precision * scores.recall /
@@ -546,11 +544,10 @@ Pipeline::ExportModel(const DatasetSchema &schema) const {
     }
     bundle.transformer_states.push_back(std::move(*state));
   }
-  auto estimator_state =
-      task_ == Task::kRegression
-          ? regressor_->SaveState()
-          : task_ == Task::kAnomalyDetection ? anomaly_detector_->SaveState()
-                                             : classifier_->SaveState();
+  auto estimator_state = task_ == Task::kRegression ? regressor_->SaveState()
+                         : task_ == Task::kAnomalyDetection
+                             ? anomaly_detector_->SaveState()
+                             : classifier_->SaveState();
   if (!estimator_state) {
     return std::unexpected(estimator_state.error());
   }
@@ -577,12 +574,12 @@ Pipeline::FromModelBundle(const ModelBundle &bundle) {
       return std::unexpected(status.error());
     }
   }
-  auto status = bundle.task == Task::kRegression
-                    ? pipeline.regressor_->LoadState(bundle.estimator_state)
-                : bundle.task == Task::kAnomalyDetection
-                    ? pipeline.anomaly_detector_->LoadState(
-                          bundle.estimator_state)
-                    : pipeline.classifier_->LoadState(bundle.estimator_state);
+  auto status =
+      bundle.task == Task::kRegression
+          ? pipeline.regressor_->LoadState(bundle.estimator_state)
+      : bundle.task == Task::kAnomalyDetection
+          ? pipeline.anomaly_detector_->LoadState(bundle.estimator_state)
+          : pipeline.classifier_->LoadState(bundle.estimator_state);
   if (!status) {
     return std::unexpected(status.error());
   }
@@ -750,7 +747,7 @@ GridSearch(const FoldSet &folds, Task task,
            std::span<const models::EstimatorSpec> candidates) {
   TuneReport report;
   report.task = task;
-  report.objective_name = task == Task::kRegression    ? "r2"
+  report.objective_name = task == Task::kRegression       ? "r2"
                           : task == Task::kClassification ? "accuracy"
                                                           : "f1";
   report.best_score = -std::numeric_limits<double>::infinity();

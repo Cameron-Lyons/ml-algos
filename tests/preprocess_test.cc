@@ -15,18 +15,17 @@ int main() {
                  "pca n_components");
 
   auto serialized = ml::preprocess::SerializeTransformerSpec(*spec);
-  ML_EXPECT_TRUE(serialized == "pca|n_components=1", "pca spec should serialize");
+  ML_EXPECT_TRUE(serialized == "pca|n_components=1",
+                 "pca spec should serialize");
 
-  auto matrix = ml::core::DenseMatrix::FromRows(
-      std::vector<ml::core::Vector>{{0.0, 0.0},
-                                    {1.0, 1.0},
-                                    {2.0, 2.0},
-                                    {3.0, 3.0}});
+  auto matrix = ml::core::DenseMatrix::FromRows(std::vector<ml::core::Vector>{
+      {0.0, 0.0}, {1.0, 1.0}, {2.0, 2.0}, {3.0, 3.0}});
   ML_EXPECT_TRUE(matrix.has_value(), "matrix should build from rows");
 
   auto transformer = ml::preprocess::MakeTransformer(*spec);
   ML_EXPECT_TRUE(transformer.has_value(), "pca transformer should build");
-  ML_EXPECT_TRUE((*transformer)->Fit(*matrix).has_value(), "pca fit should succeed");
+  ML_EXPECT_TRUE((*transformer)->Fit(*matrix).has_value(),
+                 "pca fit should succeed");
 
   auto transformed = (*transformer)->Transform(*matrix);
   ML_EXPECT_TRUE(transformed.has_value(), "pca transform should succeed");

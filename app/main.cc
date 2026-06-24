@@ -29,24 +29,24 @@ struct CommandArgs {
 };
 
 void PrintUsage(const char *program) {
-  std::cout << "Usage:\n"
-            << "  " << program
-            << " fit --task <regression|classification|anomaly> --algorithm <name> "
-               "--data <csv> --target <column> [--transformers a,b] "
-               "[--test-ratio <r>] [--seed <n>] [--model <path>] [--json]\n"
-            << "  " << program
-            << " eval --task <regression|classification|anomaly> --algorithm <name> "
-               "--data <csv> --target <column> [--transformers a,b] "
-               "[--test-ratio <r>] [--seed <n>] [--json]\n"
-            << "  " << program
-            << " tune --task <regression|classification|anomaly> --algorithm <name> "
-               "--data <csv> --target <column> [--transformers a,b] "
-               "[--cv-folds <k>] [--seed <n>] [--json]\n"
-            << "  " << program
-            << " predict --model <bundle> --input <csv> [--json]\n"
-            << "  " << program << " inspect --model <bundle> [--json]\n"
-            << "  " << program
-            << " list [--task <regression|classification|anomaly>] [--json]\n";
+  std::cout
+      << "Usage:\n"
+      << "  " << program
+      << " fit --task <regression|classification|anomaly> --algorithm <name> "
+         "--data <csv> --target <column> [--transformers a,b] "
+         "[--test-ratio <r>] [--seed <n>] [--model <path>] [--json]\n"
+      << "  " << program
+      << " eval --task <regression|classification|anomaly> --algorithm <name> "
+         "--data <csv> --target <column> [--transformers a,b] "
+         "[--test-ratio <r>] [--seed <n>] [--json]\n"
+      << "  " << program
+      << " tune --task <regression|classification|anomaly> --algorithm <name> "
+         "--data <csv> --target <column> [--transformers a,b] "
+         "[--cv-folds <k>] [--seed <n>] [--json]\n"
+      << "  " << program << " predict --model <bundle> --input <csv> [--json]\n"
+      << "  " << program << " inspect --model <bundle> [--json]\n"
+      << "  " << program
+      << " list [--task <regression|classification|anomaly>] [--json]\n";
 }
 
 std::expected<CommandArgs, std::string> ParseOptions(int argc, char *argv[],
@@ -134,19 +134,28 @@ std::vector<std::string> AlgorithmsForTask(Task task) {
     return {"isolation_forest"};
   }
   if (task == Task::kRegression) {
-    return {"linear",        "ridge",
-            "lasso",         "elasticnet",
-            "linear_svr",    "sgd_regression",
-            "mlp",           "knn",
-            "kernel_knn",    "decision_tree",
-            "random_forest", "gradient_boosting",
+    return {"linear",        "ridge",         "lasso",
+            "elasticnet",    "linear_svr",    "sgd_regression",
+            "mlp",           "knn",           "kernel_knn",
+            "decision_tree", "random_forest", "gradient_boosting",
             "voting",        "stacking"};
   }
-  return {"logistic",      "one_vs_rest_logistic", "softmax",  "gaussian_nb",
-          "linear_svm",    "rbf_svm",              "sgd_classification",
-          "mlp",           "knn",                  "kernel_knn",
-          "decision_tree", "random_forest",        "gradient_boosting",
-          "adaboost",      "voting",               "stacking"};
+  return {"logistic",
+          "one_vs_rest_logistic",
+          "softmax",
+          "gaussian_nb",
+          "linear_svm",
+          "rbf_svm",
+          "sgd_classification",
+          "mlp",
+          "knn",
+          "kernel_knn",
+          "decision_tree",
+          "random_forest",
+          "gradient_boosting",
+          "adaboost",
+          "voting",
+          "stacking"};
 }
 
 std::vector<ml::models::BaseEstimatorSpec> DefaultRegressionBases() {
@@ -400,12 +409,18 @@ BuildGrid(Task task, const std::string &algorithm) {
   }
   if (task == Task::kClassification && algorithm == "rbf_svm") {
     return std::vector<ml::models::EstimatorSpec>{
-        ml::models::RbfSvmSpec{
-            .C = 0.1, .gamma = 0.5, .learning_rate = 0.01, .max_iterations = 1500},
-        ml::models::RbfSvmSpec{
-            .C = 1.0, .gamma = 1.0, .learning_rate = 0.01, .max_iterations = 2000},
-        ml::models::RbfSvmSpec{
-            .C = 10.0, .gamma = 0.0, .learning_rate = 0.05, .max_iterations = 2500}};
+        ml::models::RbfSvmSpec{.C = 0.1,
+                               .gamma = 0.5,
+                               .learning_rate = 0.01,
+                               .max_iterations = 1500},
+        ml::models::RbfSvmSpec{.C = 1.0,
+                               .gamma = 1.0,
+                               .learning_rate = 0.01,
+                               .max_iterations = 2000},
+        ml::models::RbfSvmSpec{.C = 10.0,
+                               .gamma = 0.0,
+                               .learning_rate = 0.05,
+                               .max_iterations = 2500}};
   }
   if (task == Task::kClassification && algorithm == "sgd_classification") {
     return std::vector<ml::models::EstimatorSpec>{
@@ -495,7 +510,7 @@ std::string FormatMetricsJson(const ml::EvaluationMetrics &metrics) {
           [](const ml::AnomalySummary &summary) {
             const std::string precision =
                 summary.precision ? std::format("{}", *summary.precision)
-                                : "null";
+                                  : "null";
             const std::string recall =
                 summary.recall ? std::format("{}", *summary.recall) : "null";
             const std::string f1 =
@@ -649,10 +664,11 @@ int HandleList(const CommandArgs &args) {
       return 1;
     }
     if (args.json) {
-      std::println("{{\"task\":\"{}\",\"algorithms\":[{}],"
-                   "\"transformers\":[\"standard_scaler\",\"minmax_scaler\",\"pca\"]}}",
-                   ml::TaskName(*task),
-                   FormatAlgorithmListJson(AlgorithmsForTask(*task)));
+      std::println(
+          "{{\"task\":\"{}\",\"algorithms\":[{}],"
+          "\"transformers\":[\"standard_scaler\",\"minmax_scaler\",\"pca\"]}}",
+          ml::TaskName(*task),
+          FormatAlgorithmListJson(AlgorithmsForTask(*task)));
       return 0;
     }
     std::println("Task: {}", ml::TaskName(*task));
@@ -668,11 +684,13 @@ int HandleList(const CommandArgs &args) {
     std::println(
         "{{\"regression\":[\"linear\",\"ridge\",\"lasso\",\"elasticnet\","
         "\"linear_svr\","
-        "\"sgd_regression\",\"mlp\",\"knn\",\"kernel_knn\",\"decision_tree\",\"random_forest\","
+        "\"sgd_regression\",\"mlp\",\"knn\",\"kernel_knn\",\"decision_tree\","
+        "\"random_forest\","
         "\"gradient_boosting\",\"voting\",\"stacking\"],"
         "\"classification\":[\"logistic\",\"one_vs_rest_logistic\",\"softmax\","
         "\"gaussian_nb\",\"linear_svm\",\"rbf_svm\","
-        "\"sgd_classification\",\"mlp\",\"knn\",\"kernel_knn\",\"decision_tree\",\"random_forest\","
+        "\"sgd_classification\",\"mlp\",\"knn\",\"kernel_knn\",\"decision_"
+        "tree\",\"random_forest\","
         "\"gradient_boosting\",\"adaboost\",\"voting\",\"stacking\"],"
         "\"anomaly\":[\"isolation_forest\"],"
         "\"transformers\":[\"standard_scaler\",\"minmax_scaler\",\"pca\"]}}");

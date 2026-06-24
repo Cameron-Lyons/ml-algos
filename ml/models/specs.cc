@@ -115,7 +115,9 @@ std::string_view EstimatorId(const EstimatorSpec &spec) {
             return "elasticnet";
           },
           [](const KnnSpec &) -> std::string_view { return "knn"; },
-          [](const KernelKnnSpec &) -> std::string_view { return "kernel_knn"; },
+          [](const KernelKnnSpec &) -> std::string_view {
+            return "kernel_knn";
+          },
           [](const DecisionTreeSpec &) -> std::string_view {
             return "decision_tree";
           },
@@ -187,7 +189,8 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
           },
           [](const KnnSpec &value) { return std::format("knn|k={}", value.k); },
           [](const KernelKnnSpec &value) {
-            return std::format("kernel_knn|k={};gamma={}", value.k, value.gamma);
+            return std::format("kernel_knn|k={};gamma={}", value.k,
+                               value.gamma);
           },
           [](const DecisionTreeSpec &value) {
             return std::format(
@@ -226,10 +229,11 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
                 value.learning_rate, value.max_iterations, value.alpha);
           },
           [](const MlpSpec &value) {
-            return std::format(
-                "mlp|hidden_sizes={};learning_rate={};max_iterations={};alpha={}",
-                JoinFormatted(value.hidden_sizes), value.learning_rate,
-                value.max_iterations, value.alpha);
+            return std::format("mlp|hidden_sizes={};learning_rate={};max_"
+                               "iterations={};alpha={}",
+                               JoinFormatted(value.hidden_sizes),
+                               value.learning_rate, value.max_iterations,
+                               value.alpha);
           },
           [](const LogisticSpec &value) {
             return std::format("logistic|learning_rate={};max_iterations={}",
@@ -256,7 +260,8 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
           [](const RbfSvmSpec &value) {
             return std::format(
                 "rbf_svm|C={};gamma={};learning_rate={};max_iterations={}",
-                value.C, value.gamma, value.learning_rate, value.max_iterations);
+                value.C, value.gamma, value.learning_rate,
+                value.max_iterations);
           },
           [](const SgdClassificationSpec &value) {
             return std::format("sgd_classification|learning_rate={};max_"
@@ -265,11 +270,12 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
                                value.alpha);
           },
           [](const IsolationForestSpec &value) {
-            return std::format(
-                "isolation_forest|tree_count={};max_samples={};feature_fraction="
-                "{};contamination={};seed={}",
-                value.tree_count, value.max_samples, value.feature_fraction,
-                value.contamination, value.seed);
+            return std::format("isolation_forest|tree_count={};max_samples={};"
+                               "feature_fraction="
+                               "{};contamination={};seed={}",
+                               value.tree_count, value.max_samples,
+                               value.feature_fraction, value.contamination,
+                               value.seed);
           },
           [](const VotingRegressorSpec &value) {
             return std::format("voting_regressor|estimators={}",
@@ -528,7 +534,8 @@ ParseEstimatorSpec(std::string_view text) {
   if (id == "rbf_svm") {
     RbfSvmSpec spec;
     return AssignFieldIfPresent(spec.C, values, "C")
-        .and_then([&] { return AssignFieldIfPresent(spec.gamma, values, "gamma"); })
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.gamma, values, "gamma"); })
         .and_then([&] {
           return AssignFieldIfPresent(spec.learning_rate, values,
                                       "learning_rate");

@@ -38,8 +38,7 @@ double ResolveGamma(double gamma, std::size_t feature_count) {
   if (gamma > 0.0) {
     return gamma;
   }
-  return feature_count == 0 ? 1.0
-                            : 1.0 / static_cast<double>(feature_count);
+  return feature_count == 0 ? 1.0 : 1.0 / static_cast<double>(feature_count);
 }
 
 std::expected<std::pair<std::size_t, std::size_t>, std::string>
@@ -334,7 +333,8 @@ std::vector<MlpLayer> InitializeMlpLayers(const std::vector<std::size_t> &sizes,
     mlp_layer.weights = DenseMatrix(input_dim, output_dim, 0.0);
     mlp_layer.bias = Vector(output_dim, 0.0);
     const double scale =
-        0.5 / std::sqrt(static_cast<double>(std::max(input_dim, std::size_t{1})));
+        0.5 /
+        std::sqrt(static_cast<double>(std::max(input_dim, std::size_t{1})));
     std::uniform_real_distribution<double> dist(-scale, scale);
     for (std::size_t input = 0; input < input_dim; ++input) {
       for (std::size_t output = 0; output < output_dim; ++output) {
@@ -385,7 +385,8 @@ void BackwardMlpSample(const MlpForwardPass &cache, const Vector &input,
                        std::vector<Vector> &bias_grads) {
   for (int layer = static_cast<int>(layers.size()) - 1; layer >= 0; --layer) {
     const Vector &layer_input =
-        layer == 0 ? input : cache.activation[static_cast<std::size_t>(layer - 1)];
+        layer == 0 ? input
+                   : cache.activation[static_cast<std::size_t>(layer - 1)];
     const MlpLayer &mlp_layer = layers[static_cast<std::size_t>(layer)];
     for (std::size_t output = 0; output < delta.size(); ++output) {
       bias_grads[static_cast<std::size_t>(layer)][output] += delta[output];
@@ -403,15 +404,15 @@ void BackwardMlpSample(const MlpForwardPass &cache, const Vector &input,
          ++input_index) {
       for (std::size_t output = 0; output < delta.size(); ++output) {
         previous_delta[input_index] +=
-            delta[output] *
-            mlp_layer.weights[input_index][output];
+            delta[output] * mlp_layer.weights[input_index][output];
       }
     }
     const Vector &pre_activation =
         cache.pre_activation[static_cast<std::size_t>(layer - 1)];
     for (std::size_t input_index = 0; input_index < previous_delta.size();
          ++input_index) {
-      previous_delta[input_index] *= ReLUDerivative(pre_activation[input_index]);
+      previous_delta[input_index] *=
+          ReLUDerivative(pre_activation[input_index]);
     }
     delta = std::move(previous_delta);
   }
@@ -473,8 +474,7 @@ LoadMlpLayers(StateReader &reader, std::string_view layer_count_error) {
             return std::unexpected(bias_line.error());
           }
           auto parsed_bias = ParseDoubles(*bias_line);
-          if (!parsed_bias ||
-              parsed_bias->size() != parsed_shape->second) {
+          if (!parsed_bias || parsed_bias->size() != parsed_shape->second) {
             return std::unexpected("invalid mlp layer bias");
           }
           auto weight_rows = ReadDoubleRowBlock(
@@ -1075,8 +1075,8 @@ public:
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    return LoadMlpLayers(reader, "invalid mlp layer count").and_then(
-        [this](std::vector<MlpLayer> layers) {
+    return LoadMlpLayers(reader, "invalid mlp layer count")
+        .and_then([this](std::vector<MlpLayer> layers) {
           layers_ = std::move(layers);
           return std::expected<void, std::string>{};
         });
@@ -1184,24 +1184,22 @@ public:
           static_cast<std::size_t>(std::max(spec_.k, 1));
       const std::size_t k = std::min(requested_k, similarities.size());
       if (k < similarities.size()) {
-        std::nth_element(
-            similarities.begin(),
-            similarities.begin() + static_cast<std::ptrdiff_t>(k),
-            similarities.end(),
-            [](const std::pair<double, double> &lhs,
-               const std::pair<double, double> &rhs) {
-              return lhs.first > rhs.first;
-            });
+        std::nth_element(similarities.begin(),
+                         similarities.begin() + static_cast<std::ptrdiff_t>(k),
+                         similarities.end(),
+                         [](const std::pair<double, double> &lhs,
+                            const std::pair<double, double> &rhs) {
+                           return lhs.first > rhs.first;
+                         });
       }
       double weighted_total = 0.0;
       double weight_sum = 0.0;
       for (std::size_t index = 0; index < k; ++index) {
-        weighted_total += similarities[index].first * similarities[index].second;
+        weighted_total +=
+            similarities[index].first * similarities[index].second;
         weight_sum += similarities[index].first;
       }
-      predictions[row] = weight_sum == 0.0
-                             ? 0.0
-                             : weighted_total / weight_sum;
+      predictions[row] = weight_sum == 0.0 ? 0.0 : weighted_total / weight_sum;
     }
     return predictions;
   }
@@ -1209,8 +1207,8 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::string out = std::format("{}\n{} {}\n", gamma_, features_.rows(),
-                                  features_.cols());
+    std::string out =
+        std::format("{}\n{} {}\n", gamma_, features_.rows(), features_.cols());
     for (std::size_t row = 0; row < features_.rows(); ++row) {
       out += std::format("{}\n", JoinFormatted(features_[row]));
     }
@@ -2283,8 +2281,8 @@ public:
         .and_then([this, &reader](std::size_t class_count)
                       -> std::expected<void, std::string> {
           class_count_ = class_count;
-          return LoadMlpLayers(reader, "invalid mlp layer count").and_then(
-              [this](std::vector<MlpLayer> layers) {
+          return LoadMlpLayers(reader, "invalid mlp layer count")
+              .and_then([this](std::vector<MlpLayer> layers) {
                 layers_ = std::move(layers);
                 return std::expected<void, std::string>{};
               });
@@ -2733,9 +2731,9 @@ public:
           for (std::size_t train = 0; train < features.rows(); ++train) {
             const double train_label =
                 labels_[train] == static_cast<int>(cls) ? 1.0 : -1.0;
-            decision += alphas[train] * train_label *
-                        ml::core::RbfKernel(features_[train], features[row],
-                                            gamma_);
+            decision +=
+                alphas[train] * train_label *
+                ml::core::RbfKernel(features_[train], features[row], gamma_);
           }
           if (signed_label * decision < 1.0) {
             alphas[row] += spec_.learning_rate * spec_.C;
@@ -2781,8 +2779,8 @@ public:
   EstimatorSpec spec() const override { return spec_; }
 
   std::expected<std::string, std::string> SaveState() const override {
-    std::string out =
-        std::format("{}\n{}\n{}\n", class_count_, gamma_, JoinFormatted(biases_));
+    std::string out = std::format("{}\n{}\n{}\n", class_count_, gamma_,
+                                  JoinFormatted(biases_));
     for (std::size_t cls = 0; cls < class_count_; ++cls) {
       Vector alpha_row(features_.rows(), 0.0);
       for (std::size_t train = 0; train < features_.rows(); ++train) {
@@ -2996,14 +2994,13 @@ public:
           static_cast<std::size_t>(std::max(spec_.k, 1));
       const std::size_t k = std::min(requested_k, similarities.size());
       if (k < similarities.size()) {
-        std::nth_element(
-            similarities.begin(),
-            similarities.begin() + static_cast<std::ptrdiff_t>(k),
-            similarities.end(),
-            [](const std::pair<double, int> &lhs,
-               const std::pair<double, int> &rhs) {
-              return lhs.first > rhs.first;
-            });
+        std::nth_element(similarities.begin(),
+                         similarities.begin() + static_cast<std::ptrdiff_t>(k),
+                         similarities.end(),
+                         [](const std::pair<double, int> &lhs,
+                            const std::pair<double, int> &rhs) {
+                           return lhs.first > rhs.first;
+                         });
       }
       double weight_sum = 0.0;
       for (std::size_t index = 0; index < k; ++index) {
@@ -3014,7 +3011,7 @@ public:
       }
       for (std::size_t index = 0; index < k; ++index) {
         probabilities[row]
-            [static_cast<std::size_t>(similarities[index].second)] +=
+                     [static_cast<std::size_t>(similarities[index].second)] +=
             similarities[index].first / weight_sum;
       }
     }
@@ -3041,7 +3038,8 @@ public:
     StateReader reader(state);
     return reader.ReadLine("invalid kernel knn classifier class count")
         .and_then([this](std::string_view line) {
-          return ParseNumber<std::size_t>(line, "kernel knn classifier class count")
+          return ParseNumber<std::size_t>(line,
+                                          "kernel knn classifier class count")
               .transform([this](std::size_t class_count) {
                 class_count_ = class_count;
               });
@@ -4470,8 +4468,7 @@ double AveragePathLength(double sample_count) {
   if (sample_count == 2.0) {
     return 1.0;
   }
-  const double harmonic =
-      std::log(sample_count - 1.0) + 0.5772156649015329;
+  const double harmonic = std::log(sample_count - 1.0) + 0.5772156649015329;
   return 2.0 * harmonic - 2.0 * (sample_count - 1.0) / sample_count;
 }
 
@@ -4512,8 +4509,7 @@ struct IsolationTreeNode {
 class IsolationTree {
 public:
   IsolationTree(int max_depth, std::vector<std::size_t> feature_indices)
-      : max_depth_(max_depth),
-        feature_indices_(std::move(feature_indices)) {}
+      : max_depth_(max_depth), feature_indices_(std::move(feature_indices)) {}
 
   void Fit(const DenseMatrix &features, std::span<const std::size_t> indices,
            std::mt19937 &rng) {
@@ -4581,9 +4577,9 @@ private:
     return PathLength(node->right.get(), row, depth + 1.0);
   }
 
-  std::unique_ptr<IsolationTreeNode>
-  Build(const DenseMatrix &features, std::span<const std::size_t> indices,
-        int depth, std::mt19937 &rng) const {
+  std::unique_ptr<IsolationTreeNode> Build(const DenseMatrix &features,
+                                           std::span<const std::size_t> indices,
+                                           int depth, std::mt19937 &rng) const {
     auto node = std::make_unique<IsolationTreeNode>();
     node->sample_count = indices.size();
     if (depth >= max_depth_ || indices.size() <= 1) {
@@ -4674,31 +4670,32 @@ private:
               .and_then([&](std::size_t feature) {
                 return ParseNumber<double>(payload.substr(separator + 1),
                                            "isolation tree split threshold")
-                    .and_then([&reader, feature](double threshold)
-                                  -> std::expected<
-                                      std::unique_ptr<IsolationTreeNode>,
-                                      std::string> {
-                      return ReadNode(reader).and_then(
-                          [&reader, feature, threshold](
-                              std::unique_ptr<IsolationTreeNode> left) {
-                            return ReadNode(reader).and_then(
-                                [feature, threshold, left = std::move(left)](
-                                    std::unique_ptr<IsolationTreeNode>
-                                        right) mutable
-                                    -> std::expected<
-                                        std::unique_ptr<IsolationTreeNode>,
-                                        std::string> {
-                                  auto node =
-                                      std::make_unique<IsolationTreeNode>();
-                                  node->leaf = false;
-                                  node->feature = feature;
-                                  node->threshold = threshold;
-                                  node->left = std::move(left);
-                                  node->right = std::move(right);
-                                  return node;
-                                });
-                          });
-                    });
+                    .and_then(
+                        [&reader, feature](double threshold)
+                            -> std::expected<std::unique_ptr<IsolationTreeNode>,
+                                             std::string> {
+                          return ReadNode(reader).and_then(
+                              [&reader, feature, threshold](
+                                  std::unique_ptr<IsolationTreeNode> left) {
+                                return ReadNode(reader).and_then(
+                                    [feature, threshold,
+                                     left = std::move(left)](
+                                        std::unique_ptr<IsolationTreeNode>
+                                            right) mutable
+                                        -> std::expected<
+                                            std::unique_ptr<IsolationTreeNode>,
+                                            std::string> {
+                                      auto node =
+                                          std::make_unique<IsolationTreeNode>();
+                                      node->leaf = false;
+                                      node->feature = feature;
+                                      node->threshold = threshold;
+                                      node->left = std::move(left);
+                                      node->right = std::move(right);
+                                      return node;
+                                    });
+                              });
+                        });
               });
         });
   }
@@ -4714,8 +4711,7 @@ public:
 
   std::string_view name() const override { return "isolation_forest"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features) override {
+  std::expected<void, std::string> Fit(const DenseMatrix &features) override {
     if (features.rows() == 0) {
       return std::unexpected("isolation forest requires at least one row");
     }
@@ -4748,8 +4744,8 @@ public:
         total_path += tree.PathLength(features[row]);
       }
       const double avg_path = total_path / static_cast<double>(trees_.size());
-      scores[row] =
-          AnomalyScoreFromPathLength(avg_path, static_cast<double>(sample_size_));
+      scores[row] = AnomalyScoreFromPathLength(
+          avg_path, static_cast<double>(sample_size_));
     }
     return scores;
   }
@@ -4829,10 +4825,9 @@ private:
     }
     std::vector<double> sorted(scores->begin(), scores->end());
     std::ranges::sort(sorted);
-    const double contamination =
-        std::clamp(spec_.contamination, 0.0, 0.5);
-    const std::size_t index = static_cast<std::size_t>(std::floor(
-        (1.0 - contamination) * static_cast<double>(sorted.size())));
+    const double contamination = std::clamp(spec_.contamination, 0.0, 0.5);
+    const std::size_t index = static_cast<std::size_t>(
+        std::floor((1.0 - contamination) * static_cast<double>(sorted.size())));
     threshold_ = sorted[std::min(index, sorted.size() - 1)];
     return {};
   }
