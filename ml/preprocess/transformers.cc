@@ -39,8 +39,8 @@ std::string FormatMatrixBlock(std::span<const double> means,
 
 std::expected<std::pair<ml::core::Vector, ml::core::DenseMatrix>, std::string>
 LoadMatrixBlock(StateReader &reader, std::string_view count_line_error,
-                std::string_view count_label,
-                std::string_view mean_line_error, std::string_view mean_label,
+                std::string_view count_label, std::string_view mean_line_error,
+                std::string_view mean_label,
                 std::string_view component_count_line_error,
                 std::string_view component_count_label,
                 std::string_view component_line_error,
@@ -53,8 +53,7 @@ LoadMatrixBlock(StateReader &reader, std::string_view count_line_error,
         return ml::core::ReadScalarLines(reader, feature_count, mean_line_error,
                                          mean_label)
             .and_then([&](ml::core::Vector means) {
-              return reader
-                  .ReadLine(component_count_line_error)
+              return reader.ReadLine(component_count_line_error)
                   .and_then([&](std::string_view line) {
                     return ml::core::ParseNumber<std::size_t>(
                         line, component_count_label);
@@ -97,8 +96,8 @@ LoadMatrixBlock(StateReader &reader, std::string_view count_line_error,
 
 int ResolveComponentCount(int requested, std::size_t row_count,
                           std::size_t feature_count) {
-  const int max_components = static_cast<int>(
-      std::min(row_count, feature_count));
+  const int max_components =
+      static_cast<int>(std::min(row_count, feature_count));
   if (requested <= 0) {
     return max_components;
   }
@@ -272,8 +271,7 @@ public:
     if (!covariance) {
       return std::unexpected(covariance.error());
     }
-    const double scale =
-        1.0 / static_cast<double>(matrix.rows() - 1);
+    const double scale = 1.0 / static_cast<double>(matrix.rows() - 1);
     for (std::size_t row = 0; row < covariance->rows(); ++row) {
       for (std::size_t col = 0; col < covariance->cols(); ++col) {
         (*covariance)[row][col] *= scale;
@@ -290,15 +288,13 @@ public:
       order[index] = index;
     }
     std::ranges::sort(order, [&](std::size_t lhs, std::size_t rhs) {
-      return decomposition->eigenvalues[lhs] >
-             decomposition->eigenvalues[rhs];
+      return decomposition->eigenvalues[lhs] > decomposition->eigenvalues[rhs];
     });
 
-    const int component_count = ResolveComponentCount(
-        spec_.n_components, matrix.rows(), matrix.cols());
-    components_ =
-        ml::core::DenseMatrix(static_cast<std::size_t>(component_count),
-                              matrix.cols(), 0.0);
+    const int component_count =
+        ResolveComponentCount(spec_.n_components, matrix.rows(), matrix.cols());
+    components_ = ml::core::DenseMatrix(
+        static_cast<std::size_t>(component_count), matrix.cols(), 0.0);
     for (int component = 0; component < component_count; ++component) {
       const std::size_t source = order[static_cast<std::size_t>(component)];
       for (std::size_t feature = 0; feature < matrix.cols(); ++feature) {
@@ -341,16 +337,16 @@ public:
 
   std::expected<void, std::string> LoadState(std::string_view state) override {
     StateReader reader(state);
-    return LoadMatrixBlock(
-               reader, "invalid pca state", "pca feature count",
-               "invalid pca means", "pca mean", "invalid pca component count",
-               "pca component count", "invalid pca components", "pca component")
-        .and_then([this](std::pair<ml::core::Vector, ml::core::DenseMatrix>
-                              values) {
-          means_ = std::move(values.first);
-          components_ = std::move(values.second);
-          return std::expected<void, std::string>{};
-        });
+    return LoadMatrixBlock(reader, "invalid pca state", "pca feature count",
+                           "invalid pca means", "pca mean",
+                           "invalid pca component count", "pca component count",
+                           "invalid pca components", "pca component")
+        .and_then(
+            [this](std::pair<ml::core::Vector, ml::core::DenseMatrix> values) {
+              means_ = std::move(values.first);
+              components_ = std::move(values.second);
+              return std::expected<void, std::string>{};
+            });
   }
 
 private:

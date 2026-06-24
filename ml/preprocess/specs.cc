@@ -41,29 +41,28 @@ std::string_view TransformerId(const TransformerSpec &spec) {
 }
 
 std::string SerializeTransformerSpec(const TransformerSpec &spec) {
-  return std::visit(
-      Overload{
-          [](const StandardScalerSpec &) -> std::string {
-            return "standard_scaler";
-          },
-          [](const MinMaxScalerSpec &) -> std::string {
-            return "minmax_scaler";
-          },
-          [](const PcaSpec &value) -> std::string {
-            if (value.n_components == 0) {
-              return "pca";
-            }
-            return std::format("pca|n_components={}", value.n_components);
-          }},
-      spec);
+  return std::visit(Overload{[](const StandardScalerSpec &) -> std::string {
+                               return "standard_scaler";
+                             },
+                             [](const MinMaxScalerSpec &) -> std::string {
+                               return "minmax_scaler";
+                             },
+                             [](const PcaSpec &value) -> std::string {
+                               if (value.n_components == 0) {
+                                 return "pca";
+                               }
+                               return std::format("pca|n_components={}",
+                                                  value.n_components);
+                             }},
+                    spec);
 }
 
 std::expected<TransformerSpec, std::string>
 ParseTransformerSpec(std::string_view text) {
   const auto parts = Split(text, '|');
   const std::string_view id = parts[0];
-  const auto values =
-      parts.size() > 1 ? ParseKeyedFields(parts[1]) : decltype(ParseKeyedFields(parts[0])){};
+  const auto values = parts.size() > 1 ? ParseKeyedFields(parts[1])
+                                       : decltype(ParseKeyedFields(parts[0])){};
 
   if (id == "standard_scaler") {
     return TransformerSpec(StandardScalerSpec{});

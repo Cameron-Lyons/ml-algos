@@ -162,12 +162,12 @@ SymmetricEigh(const DenseMatrix &matrix) {
         const double cosine = std::cos(phi);
         const double sine = std::sin(phi);
 
-        working[pivot][pivot] =
-            cosine * cosine * pivot_value + sine * sine * col_value -
-            2.0 * sine * cosine * value;
-        working[col][col] =
-            sine * sine * pivot_value + cosine * cosine * col_value +
-            2.0 * sine * cosine * value;
+        working[pivot][pivot] = cosine * cosine * pivot_value +
+                                sine * sine * col_value -
+                                2.0 * sine * cosine * value;
+        working[col][col] = sine * sine * pivot_value +
+                            cosine * cosine * col_value +
+                            2.0 * sine * cosine * value;
         working[pivot][col] = 0.0;
         working[col][pivot] = 0.0;
 

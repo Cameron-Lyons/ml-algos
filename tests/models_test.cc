@@ -89,8 +89,10 @@ int main() {
       ml::models::GaussianNbSpec{},
       ml::models::LinearSvmSpec{
           .C = 1.0, .learning_rate = 0.05, .max_iterations = 2000},
-      ml::models::RbfSvmSpec{
-          .C = 1.0, .gamma = 1.0, .learning_rate = 0.05, .max_iterations = 2000},
+      ml::models::RbfSvmSpec{.C = 1.0,
+                             .gamma = 1.0,
+                             .learning_rate = 0.05,
+                             .max_iterations = 2000},
       ml::models::SgdClassificationSpec{
           .learning_rate = 0.05, .max_iterations = 2000, .alpha = 0.001},
       ml::models::MlpSpec{.hidden_sizes = {8, 4},
@@ -143,9 +145,9 @@ int main() {
                    "classification ensemble probability output should succeed");
   }
 
-  const auto anomaly_features = ml::core::DenseMatrix::FromRows(
-      std::vector<ml::core::Vector>{{0, 0}, {0, 1}, {1, 0}, {1, 1}, {2, 2},
-                                    {10, 10}, {11, 9}, {9, 11}});
+  const auto anomaly_features =
+      ml::core::DenseMatrix::FromRows(std::vector<ml::core::Vector>{
+          {0, 0}, {0, 1}, {1, 0}, {1, 1}, {2, 2}, {10, 10}, {11, 9}, {9, 11}});
   ML_EXPECT_TRUE(anomaly_features.has_value(),
                  "anomaly feature matrix should build");
   const ml::models::IsolationForestSpec anomaly_spec{
@@ -154,7 +156,8 @@ int main() {
   ML_EXPECT_TRUE(anomaly_model.has_value(),
                  "anomaly detector factory should succeed");
   auto anomaly_fit = (*anomaly_model)->Fit(*anomaly_features);
-  ML_EXPECT_TRUE(anomaly_fit.has_value(), "anomaly detector fit should succeed");
+  ML_EXPECT_TRUE(anomaly_fit.has_value(),
+                 "anomaly detector fit should succeed");
   auto anomaly_scores = (*anomaly_model)->Score(*anomaly_features);
   ML_EXPECT_TRUE(anomaly_scores.has_value(),
                  "anomaly detector score should succeed");

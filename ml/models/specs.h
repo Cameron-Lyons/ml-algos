@@ -115,9 +115,9 @@ using BaseEstimatorSpec =
     std::variant<LinearSpec, RidgeSpec, LassoSpec, ElasticNetSpec, KnnSpec,
                  KernelKnnSpec, DecisionTreeSpec, RandomForestSpec,
                  GradientBoostingSpec, AdaBoostSpec, LinearSvrSpec,
-                 SgdRegressionSpec, MlpSpec, LogisticSpec, OneVsRestLogisticSpec,
-                 SoftmaxSpec, GaussianNbSpec, LinearSvmSpec, RbfSvmSpec,
-                 SgdClassificationSpec>;
+                 SgdRegressionSpec, MlpSpec, LogisticSpec,
+                 OneVsRestLogisticSpec, SoftmaxSpec, GaussianNbSpec,
+                 LinearSvmSpec, RbfSvmSpec, SgdClassificationSpec>;
 
 struct VotingRegressorSpec {
   std::vector<BaseEstimatorSpec> estimators;

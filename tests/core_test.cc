@@ -38,10 +38,8 @@ int main() {
   ML_EXPECT_TRUE(symmetric.has_value(), "symmetric matrix should build");
   auto eigh = ml::core::SymmetricEigh(*symmetric);
   ML_EXPECT_TRUE(eigh.has_value(), "symmetric eigh should succeed");
-  const double largest =
-      std::max(eigh->eigenvalues[0], eigh->eigenvalues[1]);
-  const double smallest =
-      std::min(eigh->eigenvalues[0], eigh->eigenvalues[1]);
+  const double largest = std::max(eigh->eigenvalues[0], eigh->eigenvalues[1]);
+  const double smallest = std::min(eigh->eigenvalues[0], eigh->eigenvalues[1]);
   ML_EXPECT_NEAR(largest, 3.0, 1e-6, "largest eigenvalue");
   ML_EXPECT_NEAR(smallest, 1.0, 1e-6, "smallest eigenvalue");
 
