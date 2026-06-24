@@ -34,6 +34,14 @@ using ml::core::Vector;
 
 constexpr double kProbabilityFloor = 1e-12;
 
+double ResolveGamma(double gamma, std::size_t feature_count) {
+  if (gamma > 0.0) {
+    return gamma;
+  }
+  return feature_count == 0 ? 1.0
+                            : 1.0 / static_cast<double>(feature_count);
+}
+
 std::expected<std::pair<std::size_t, std::size_t>, std::string>
 ParseShape(std::string_view text, std::string_view error) {
   const auto separator = text.find(' ');
@@ -284,6 +292,206 @@ Vector Softmax(const Vector &logits) {
     probability /= sum;
   }
   return probabilities;
+}
+
+double ReLU(double value) { return value > 0.0 ? value : 0.0; }
+
+double ReLUDerivative(double pre_activation) {
+  return pre_activation > 0.0 ? 1.0 : 0.0;
+}
+
+struct MlpLayer {
+  DenseMatrix weights;
+  Vector bias;
+};
+
+struct MlpForwardPass {
+  std::vector<Vector> pre_activation;
+  std::vector<Vector> activation;
+};
+
+std::vector<std::size_t> MlpLayerSizes(std::size_t input_dim,
+                                       const std::vector<int> &hidden_sizes,
+                                       std::size_t output_dim) {
+  std::vector<std::size_t> sizes;
+  sizes.reserve(hidden_sizes.size() + 2);
+  sizes.push_back(input_dim);
+  for (int hidden : hidden_sizes) {
+    sizes.push_back(static_cast<std::size_t>(std::max(hidden, 1)));
+  }
+  sizes.push_back(output_dim);
+  return sizes;
+}
+
+std::vector<MlpLayer> InitializeMlpLayers(const std::vector<std::size_t> &sizes,
+                                          std::mt19937 &rng) {
+  std::vector<MlpLayer> layers;
+  layers.reserve(sizes.size() - 1);
+  for (std::size_t layer = 0; layer + 1 < sizes.size(); ++layer) {
+    const std::size_t input_dim = sizes[layer];
+    const std::size_t output_dim = sizes[layer + 1];
+    MlpLayer mlp_layer;
+    mlp_layer.weights = DenseMatrix(input_dim, output_dim, 0.0);
+    mlp_layer.bias = Vector(output_dim, 0.0);
+    const double scale =
+        0.5 / std::sqrt(static_cast<double>(std::max(input_dim, std::size_t{1})));
+    std::uniform_real_distribution<double> dist(-scale, scale);
+    for (std::size_t input = 0; input < input_dim; ++input) {
+      for (std::size_t output = 0; output < output_dim; ++output) {
+        mlp_layer.weights[input][output] = dist(rng);
+      }
+    }
+    layers.push_back(std::move(mlp_layer));
+  }
+  return layers;
+}
+
+MlpForwardPass ForwardMlp(const Vector &input,
+                          const std::vector<MlpLayer> &layers,
+                          bool softmax_output) {
+  MlpForwardPass cache;
+  Vector current = input;
+  for (std::size_t layer = 0; layer < layers.size(); ++layer) {
+    const MlpLayer &mlp_layer = layers[layer];
+    Vector pre(mlp_layer.bias.size(), 0.0);
+    for (std::size_t output = 0; output < pre.size(); ++output) {
+      pre[output] = mlp_layer.bias[output];
+      for (std::size_t input_index = 0; input_index < current.size();
+           ++input_index) {
+        pre[output] +=
+            mlp_layer.weights[input_index][output] * current[input_index];
+      }
+    }
+    cache.pre_activation.push_back(pre);
+    const bool is_output = layer + 1 == layers.size();
+    if (is_output && softmax_output) {
+      current = Softmax(pre);
+    } else if (is_output) {
+      current = pre;
+    } else {
+      current = Vector(pre.size(), 0.0);
+      for (std::size_t index = 0; index < pre.size(); ++index) {
+        current[index] = ReLU(pre[index]);
+      }
+    }
+    cache.activation.push_back(current);
+  }
+  return cache;
+}
+
+void BackwardMlpSample(const MlpForwardPass &cache, const Vector &input,
+                       const std::vector<MlpLayer> &layers, Vector delta,
+                       std::vector<DenseMatrix> &weight_grads,
+                       std::vector<Vector> &bias_grads) {
+  for (int layer = static_cast<int>(layers.size()) - 1; layer >= 0; --layer) {
+    const Vector &layer_input =
+        layer == 0 ? input : cache.activation[static_cast<std::size_t>(layer - 1)];
+    const MlpLayer &mlp_layer = layers[static_cast<std::size_t>(layer)];
+    for (std::size_t output = 0; output < delta.size(); ++output) {
+      bias_grads[static_cast<std::size_t>(layer)][output] += delta[output];
+      for (std::size_t input_index = 0; input_index < layer_input.size();
+           ++input_index) {
+        weight_grads[static_cast<std::size_t>(layer)][input_index][output] +=
+            delta[output] * layer_input[input_index];
+      }
+    }
+    if (layer == 0) {
+      break;
+    }
+    Vector previous_delta(layer_input.size(), 0.0);
+    for (std::size_t input_index = 0; input_index < layer_input.size();
+         ++input_index) {
+      for (std::size_t output = 0; output < delta.size(); ++output) {
+        previous_delta[input_index] +=
+            delta[output] *
+            mlp_layer.weights[input_index][output];
+      }
+    }
+    const Vector &pre_activation =
+        cache.pre_activation[static_cast<std::size_t>(layer - 1)];
+    for (std::size_t input_index = 0; input_index < previous_delta.size();
+         ++input_index) {
+      previous_delta[input_index] *= ReLUDerivative(pre_activation[input_index]);
+    }
+    delta = std::move(previous_delta);
+  }
+}
+
+void ApplyMlpGradients(std::vector<MlpLayer> &layers,
+                       const std::vector<DenseMatrix> &weight_grads,
+                       const std::vector<Vector> &bias_grads, double scale,
+                       double alpha) {
+  for (std::size_t layer = 0; layer < layers.size(); ++layer) {
+    for (std::size_t input = 0; input < layers[layer].weights.rows(); ++input) {
+      for (std::size_t output = 0; output < layers[layer].weights.cols();
+           ++output) {
+        layers[layer].weights[input][output] -=
+            scale * (weight_grads[layer][input][output] +
+                     alpha * layers[layer].weights[input][output]);
+      }
+    }
+    for (std::size_t output = 0; output < layers[layer].bias.size(); ++output) {
+      layers[layer].bias[output] -= scale * bias_grads[layer][output];
+    }
+  }
+}
+
+std::expected<std::string, std::string>
+SerializeMlpLayers(const std::vector<MlpLayer> &layers) {
+  std::string out = std::format("{}\n", layers.size());
+  for (const MlpLayer &layer : layers) {
+    out += std::format("{} {}\n", layer.weights.rows(), layer.weights.cols());
+    out += std::format("{}\n", JoinFormatted(layer.bias));
+    for (std::size_t row = 0; row < layer.weights.rows(); ++row) {
+      out += std::format("{}\n", JoinFormatted(layer.weights[row]));
+    }
+  }
+  return out;
+}
+
+std::expected<std::vector<MlpLayer>, std::string>
+LoadMlpLayers(StateReader &reader, std::string_view layer_count_error) {
+  return reader.ReadLine(layer_count_error)
+      .and_then([](std::string_view line) {
+        return ParseNumber<std::size_t>(line, "mlp layer count");
+      })
+      .and_then([&reader](std::size_t layer_count)
+                    -> std::expected<std::vector<MlpLayer>, std::string> {
+        std::vector<MlpLayer> layers;
+        layers.reserve(layer_count);
+        for (std::size_t layer = 0; layer < layer_count; ++layer) {
+          auto shape = reader.ReadLine("invalid mlp layer shape");
+          if (!shape) {
+            return std::unexpected(shape.error());
+          }
+          auto parsed_shape = ParseShape(*shape, "invalid mlp layer shape");
+          if (!parsed_shape) {
+            return std::unexpected(parsed_shape.error());
+          }
+          auto bias_line = reader.ReadLine("invalid mlp layer bias");
+          if (!bias_line) {
+            return std::unexpected(bias_line.error());
+          }
+          auto parsed_bias = ParseDoubles(*bias_line);
+          if (!parsed_bias ||
+              parsed_bias->size() != parsed_shape->second) {
+            return std::unexpected("invalid mlp layer bias");
+          }
+          auto weight_rows = ReadDoubleRowBlock(
+              reader, parsed_shape->first, parsed_shape->second,
+              "invalid mlp weight row", "invalid mlp weight row");
+          if (!weight_rows) {
+            return std::unexpected(weight_rows.error());
+          }
+          auto matrix = MatrixFromRows(*weight_rows);
+          if (!matrix) {
+            return std::unexpected(matrix.error());
+          }
+          layers.push_back(MlpLayer{.weights = std::move(*matrix),
+                                    .bias = std::move(*parsed_bias)});
+        }
+        return layers;
+      });
 }
 
 LabelVector ArgMaxLabels(const DenseMatrix &probabilities) {
@@ -812,6 +1020,73 @@ private:
   double bias_ = 0.0;
 };
 
+class MlpRegressionModel final : public Regressor {
+public:
+  explicit MlpRegressionModel(MlpSpec spec) : spec_(spec) {}
+
+  std::string_view name() const override { return "mlp"; }
+
+  std::expected<void, std::string>
+  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+    const auto layer_sizes =
+        MlpLayerSizes(features.cols(), spec_.hidden_sizes, 1);
+    std::mt19937 rng(42);
+    layers_ = InitializeMlpLayers(layer_sizes, rng);
+    for (int iter = 0; iter < spec_.max_iterations; ++iter) {
+      std::vector<DenseMatrix> weight_grads;
+      std::vector<Vector> bias_grads;
+      weight_grads.reserve(layers_.size());
+      bias_grads.reserve(layers_.size());
+      for (const MlpLayer &layer : layers_) {
+        weight_grads.emplace_back(layer.weights.rows(), layer.weights.cols(),
+                                  0.0);
+        bias_grads.emplace_back(layer.bias.size(), 0.0);
+      }
+      for (std::size_t row = 0; row < features.rows(); ++row) {
+        const Vector input(features[row].begin(), features[row].end());
+        const MlpForwardPass cache = ForwardMlp(input, layers_, false);
+        const double prediction = cache.activation.back()[0];
+        Vector delta(1, prediction - targets[row]);
+        BackwardMlpSample(cache, input, layers_, std::move(delta), weight_grads,
+                          bias_grads);
+      }
+      const double scale =
+          spec_.learning_rate / static_cast<double>(features.rows());
+      ApplyMlpGradients(layers_, weight_grads, bias_grads, scale, spec_.alpha);
+    }
+    return {};
+  }
+
+  std::expected<Vector, std::string>
+  Predict(const DenseMatrix &features) const override {
+    Vector predictions(features.rows(), 0.0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      const Vector input(features[row].begin(), features[row].end());
+      predictions[row] = ForwardMlp(input, layers_, false).activation.back()[0];
+    }
+    return predictions;
+  }
+
+  EstimatorSpec spec() const override { return spec_; }
+
+  std::expected<std::string, std::string> SaveState() const override {
+    return SerializeMlpLayers(layers_);
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) override {
+    StateReader reader(state);
+    return LoadMlpLayers(reader, "invalid mlp layer count").and_then(
+        [this](std::vector<MlpLayer> layers) {
+          layers_ = std::move(layers);
+          return std::expected<void, std::string>{};
+        });
+  }
+
+private:
+  MlpSpec spec_;
+  std::vector<MlpLayer> layers_;
+};
+
 class KnnRegressorModel final : public Regressor {
 public:
   explicit KnnRegressorModel(KnnSpec spec) : spec_(spec) {}
@@ -876,6 +1151,95 @@ public:
 
 private:
   KnnSpec spec_;
+  DenseMatrix features_;
+  Vector targets_;
+};
+
+class KernelKnnRegressorModel final : public Regressor {
+public:
+  explicit KernelKnnRegressorModel(KernelKnnSpec spec) : spec_(spec) {}
+
+  std::string_view name() const override { return "kernel_knn"; }
+
+  std::expected<void, std::string>
+  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+    features_ = features;
+    targets_ = std::ranges::to<Vector>(targets);
+    gamma_ = ResolveGamma(spec_.gamma, features.cols());
+    return {};
+  }
+
+  std::expected<Vector, std::string>
+  Predict(const DenseMatrix &features) const override {
+    Vector predictions(features.rows(), 0.0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      std::vector<std::pair<double, double>> similarities;
+      similarities.reserve(features_.rows());
+      for (std::size_t train = 0; train < features_.rows(); ++train) {
+        similarities.emplace_back(
+            ml::core::RbfKernel(features[row], features_[train], gamma_),
+            targets_[train]);
+      }
+      const std::size_t requested_k =
+          static_cast<std::size_t>(std::max(spec_.k, 1));
+      const std::size_t k = std::min(requested_k, similarities.size());
+      if (k < similarities.size()) {
+        std::nth_element(
+            similarities.begin(),
+            similarities.begin() + static_cast<std::ptrdiff_t>(k),
+            similarities.end(),
+            [](const std::pair<double, double> &lhs,
+               const std::pair<double, double> &rhs) {
+              return lhs.first > rhs.first;
+            });
+      }
+      double weighted_total = 0.0;
+      double weight_sum = 0.0;
+      for (std::size_t index = 0; index < k; ++index) {
+        weighted_total += similarities[index].first * similarities[index].second;
+        weight_sum += similarities[index].first;
+      }
+      predictions[row] = weight_sum == 0.0
+                             ? 0.0
+                             : weighted_total / weight_sum;
+    }
+    return predictions;
+  }
+
+  EstimatorSpec spec() const override { return spec_; }
+
+  std::expected<std::string, std::string> SaveState() const override {
+    std::string out = std::format("{}\n{} {}\n", gamma_, features_.rows(),
+                                  features_.cols());
+    for (std::size_t row = 0; row < features_.rows(); ++row) {
+      out += std::format("{}\n", JoinFormatted(features_[row]));
+    }
+    out += std::format("{}\n", JoinFormatted(targets_));
+    return out;
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) override {
+    StateReader reader(state);
+    return reader.ReadLine("invalid kernel knn regressor gamma")
+        .and_then([this](std::string_view line) {
+          return ParseNumber<double>(line, "kernel knn regressor gamma")
+              .transform([this](double gamma) { gamma_ = gamma; });
+        })
+        .and_then([this, &reader]() {
+          return LoadStoredFeatureMatrix(
+              reader, "invalid kernel knn regressor state",
+              "invalid kernel knn regressor state",
+              "invalid kernel knn regressor state",
+              "invalid kernel knn regressor features",
+              "invalid kernel knn regressor targets",
+              "invalid kernel knn regressor targets", features_, targets_,
+              ParseDoubles);
+        });
+  }
+
+private:
+  KernelKnnSpec spec_;
+  double gamma_ = 1.0;
   DenseMatrix features_;
   Vector targets_;
 };
@@ -1838,6 +2202,101 @@ private:
   std::size_t class_count_ = 0;
 };
 
+class MlpClassifierModel final : public Classifier {
+public:
+  explicit MlpClassifierModel(MlpSpec spec) : spec_(spec) {}
+
+  std::string_view name() const override { return "mlp"; }
+
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const int> labels) override {
+    const int max_label = *std::ranges::max_element(labels);
+    class_count_ = static_cast<std::size_t>(max_label) + 1;
+    const auto layer_sizes =
+        MlpLayerSizes(features.cols(), spec_.hidden_sizes, class_count_);
+    std::mt19937 rng(42);
+    layers_ = InitializeMlpLayers(layer_sizes, rng);
+    for (int iter = 0; iter < spec_.max_iterations; ++iter) {
+      std::vector<DenseMatrix> weight_grads;
+      std::vector<Vector> bias_grads;
+      weight_grads.reserve(layers_.size());
+      bias_grads.reserve(layers_.size());
+      for (const MlpLayer &layer : layers_) {
+        weight_grads.emplace_back(layer.weights.rows(), layer.weights.cols(),
+                                  0.0);
+        bias_grads.emplace_back(layer.bias.size(), 0.0);
+      }
+      for (std::size_t row = 0; row < features.rows(); ++row) {
+        const Vector input(features[row].begin(), features[row].end());
+        const MlpForwardPass cache = ForwardMlp(input, layers_, true);
+        Vector delta(class_count_, 0.0);
+        for (std::size_t cls = 0; cls < class_count_; ++cls) {
+          const double target = std::cmp_equal(cls, labels[row]) ? 1.0 : 0.0;
+          delta[cls] = cache.activation.back()[cls] - target;
+        }
+        BackwardMlpSample(cache, input, layers_, std::move(delta), weight_grads,
+                          bias_grads);
+      }
+      const double scale =
+          spec_.learning_rate / static_cast<double>(features.rows());
+      ApplyMlpGradients(layers_, weight_grads, bias_grads, scale, spec_.alpha);
+    }
+    return {};
+  }
+
+  std::expected<LabelVector, std::string>
+  Predict(const DenseMatrix &features) const override {
+    return PredictArgMax(PredictProba(features));
+  }
+
+  std::expected<DenseMatrix, std::string>
+  PredictProba(const DenseMatrix &features) const override {
+    DenseMatrix probabilities(features.rows(), class_count_, 0.0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      const Vector input(features[row].begin(), features[row].end());
+      const Vector output = ForwardMlp(input, layers_, true).activation.back();
+      for (std::size_t cls = 0; cls < class_count_; ++cls) {
+        probabilities[row][cls] = output[cls];
+      }
+    }
+    return probabilities;
+  }
+
+  std::vector<int> classes() const override {
+    return MakeClassLabels(class_count_);
+  }
+
+  EstimatorSpec spec() const override { return spec_; }
+
+  std::expected<std::string, std::string> SaveState() const override {
+    return SerializeMlpLayers(layers_).transform([this](std::string layers) {
+      return std::format("{}\n{}", class_count_, layers);
+    });
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) override {
+    StateReader reader(state);
+    return reader.ReadLine("invalid mlp class count")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "mlp class count");
+        })
+        .and_then([this, &reader](std::size_t class_count)
+                      -> std::expected<void, std::string> {
+          class_count_ = class_count;
+          return LoadMlpLayers(reader, "invalid mlp layer count").and_then(
+              [this](std::vector<MlpLayer> layers) {
+                layers_ = std::move(layers);
+                return std::expected<void, std::string>{};
+              });
+        });
+  }
+
+private:
+  MlpSpec spec_;
+  std::vector<MlpLayer> layers_;
+  std::size_t class_count_ = 0;
+};
+
 class SgdClassificationModel final : public Classifier {
 public:
   explicit SgdClassificationModel(SgdClassificationSpec spec) : spec_(spec) {}
@@ -2249,6 +2708,173 @@ private:
   DenseMatrix weights_;
 };
 
+class RbfSvmClassifierModel final : public Classifier {
+public:
+  RbfSvmClassifierModel(RbfSvmSpec spec, std::size_t class_count)
+      : spec_(spec), class_count_(class_count) {}
+
+  std::string_view name() const override { return "rbf_svm"; }
+
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const int> labels) override {
+    features_ = features;
+    labels_ = std::ranges::to<LabelVector>(labels);
+    gamma_ = ResolveGamma(spec_.gamma, features.cols());
+    alphas_ = DenseMatrix(features.rows(), class_count_, 0.0);
+    biases_ = Vector(class_count_, 0.0);
+    for (std::size_t cls = 0; cls < class_count_; ++cls) {
+      Vector alphas(features.rows(), 0.0);
+      double bias = 0.0;
+      for (int iter = 0; iter < spec_.max_iterations; ++iter) {
+        for (std::size_t row = 0; row < features.rows(); ++row) {
+          const double signed_label =
+              labels_[row] == static_cast<int>(cls) ? 1.0 : -1.0;
+          double decision = bias;
+          for (std::size_t train = 0; train < features.rows(); ++train) {
+            const double train_label =
+                labels_[train] == static_cast<int>(cls) ? 1.0 : -1.0;
+            decision += alphas[train] * train_label *
+                        ml::core::RbfKernel(features_[train], features[row],
+                                            gamma_);
+          }
+          if (signed_label * decision < 1.0) {
+            alphas[row] += spec_.learning_rate * spec_.C;
+            bias += spec_.learning_rate * spec_.C * signed_label;
+          }
+        }
+      }
+      biases_[cls] = bias;
+      for (std::size_t train = 0; train < features.rows(); ++train) {
+        alphas_[train][cls] = alphas[train];
+      }
+    }
+    return {};
+  }
+
+  std::expected<LabelVector, std::string>
+  Predict(const DenseMatrix &features) const override {
+    return PredictArgMax(PredictProba(features));
+  }
+
+  std::expected<DenseMatrix, std::string>
+  PredictProba(const DenseMatrix &features) const override {
+    DenseMatrix scores(features.rows(), class_count_, 0.0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      for (std::size_t cls = 0; cls < class_count_; ++cls) {
+        scores[row][cls] = biases_[cls];
+        for (std::size_t train = 0; train < features_.rows(); ++train) {
+          const double train_label =
+              labels_[train] == static_cast<int>(cls) ? 1.0 : -1.0;
+          scores[row][cls] +=
+              alphas_[train][cls] * train_label *
+              ml::core::RbfKernel(features_[train], features[row], gamma_);
+        }
+      }
+    }
+    return SoftmaxRows(scores);
+  }
+
+  std::vector<int> classes() const override {
+    return MakeClassLabels(class_count_);
+  }
+
+  EstimatorSpec spec() const override { return spec_; }
+
+  std::expected<std::string, std::string> SaveState() const override {
+    std::string out =
+        std::format("{}\n{}\n{}\n", class_count_, gamma_, JoinFormatted(biases_));
+    for (std::size_t cls = 0; cls < class_count_; ++cls) {
+      Vector alpha_row(features_.rows(), 0.0);
+      for (std::size_t train = 0; train < features_.rows(); ++train) {
+        alpha_row[train] = alphas_[train][cls];
+      }
+      out += std::format("{}\n", JoinFormatted(alpha_row));
+    }
+    out += std::format("{} {}\n", features_.rows(), features_.cols());
+    for (std::size_t row = 0; row < features_.rows(); ++row) {
+      out += std::format("{}\n", JoinFormatted(features_[row]));
+    }
+    out += std::format("{}\n", JoinFormatted(labels_));
+    return out;
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) override {
+    StateReader reader(state);
+    return reader.ReadLine("invalid rbf svm class count")
+        .and_then([this](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "rbf svm class count")
+              .transform([this](std::size_t class_count) {
+                class_count_ = class_count;
+              });
+        })
+        .and_then([this, &reader]() {
+          return reader.ReadLine("invalid rbf svm gamma")
+              .and_then([this](std::string_view line) {
+                return ParseNumber<double>(line, "rbf svm gamma")
+                    .transform([this](double gamma) { gamma_ = gamma; });
+              });
+        })
+        .and_then([this, &reader]() {
+          return reader.ReadLine("invalid rbf svm biases")
+              .and_then([this](std::string_view line) {
+                return ParseDoubles(line).and_then(
+                    [this](Vector biases) -> std::expected<void, std::string> {
+                      if (biases.size() != class_count_) {
+                        return std::unexpected<std::string>(
+                            "invalid rbf svm biases");
+                      }
+                      biases_ = std::move(biases);
+                      return std::expected<void, std::string>{};
+                    });
+              });
+        })
+        .and_then([this, &reader]() -> std::expected<void, std::string> {
+          std::vector<Vector> alpha_rows;
+          alpha_rows.reserve(class_count_);
+          for (std::size_t cls = 0; cls < class_count_; ++cls) {
+            auto line = reader.ReadLine("invalid rbf svm alpha row");
+            if (!line) {
+              return std::unexpected(line.error());
+            }
+            auto parsed = ParseDoubles(*line);
+            if (!parsed) {
+              return std::unexpected(parsed.error());
+            }
+            alpha_rows.push_back(std::move(*parsed));
+          }
+          if (alpha_rows.empty()) {
+            return std::unexpected<std::string>("invalid rbf svm alpha rows");
+          }
+          const std::size_t train_count = alpha_rows.front().size();
+          for (const Vector &row : alpha_rows) {
+            if (row.size() != train_count) {
+              return std::unexpected<std::string>("invalid rbf svm alpha row");
+            }
+          }
+          alphas_ = DenseMatrix(train_count, class_count_, 0.0);
+          for (std::size_t cls = 0; cls < class_count_; ++cls) {
+            for (std::size_t train = 0; train < train_count; ++train) {
+              alphas_[train][cls] = alpha_rows[cls][train];
+            }
+          }
+          return LoadStoredFeatureMatrix(
+              reader, "invalid rbf svm state", "invalid rbf svm state",
+              "invalid rbf svm state", "invalid rbf svm features",
+              "invalid rbf svm labels", "invalid rbf svm labels", features_,
+              labels_, ParseInts);
+        });
+  }
+
+private:
+  RbfSvmSpec spec_;
+  std::size_t class_count_;
+  double gamma_ = 1.0;
+  DenseMatrix features_;
+  LabelVector labels_;
+  Vector biases_;
+  DenseMatrix alphas_;
+};
+
 class KnnClassifierModel final : public Classifier {
 public:
   KnnClassifierModel(KnnSpec spec, std::size_t class_count)
@@ -2331,6 +2957,118 @@ public:
 private:
   KnnSpec spec_;
   std::size_t class_count_;
+  DenseMatrix features_;
+  LabelVector labels_;
+};
+
+class KernelKnnClassifierModel final : public Classifier {
+public:
+  KernelKnnClassifierModel(KernelKnnSpec spec, std::size_t class_count)
+      : spec_(spec), class_count_(class_count) {}
+
+  std::string_view name() const override { return "kernel_knn"; }
+
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const int> labels) override {
+    features_ = features;
+    labels_ = std::ranges::to<LabelVector>(labels);
+    gamma_ = ResolveGamma(spec_.gamma, features.cols());
+    return {};
+  }
+
+  std::expected<LabelVector, std::string>
+  Predict(const DenseMatrix &features) const override {
+    return PredictArgMax(PredictProba(features));
+  }
+
+  std::expected<DenseMatrix, std::string>
+  PredictProba(const DenseMatrix &features) const override {
+    DenseMatrix probabilities(features.rows(), class_count_, 0.0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      std::vector<std::pair<double, int>> similarities;
+      similarities.reserve(features_.rows());
+      for (std::size_t train = 0; train < features_.rows(); ++train) {
+        similarities.emplace_back(
+            ml::core::RbfKernel(features[row], features_[train], gamma_),
+            labels_[train]);
+      }
+      const std::size_t requested_k =
+          static_cast<std::size_t>(std::max(spec_.k, 1));
+      const std::size_t k = std::min(requested_k, similarities.size());
+      if (k < similarities.size()) {
+        std::nth_element(
+            similarities.begin(),
+            similarities.begin() + static_cast<std::ptrdiff_t>(k),
+            similarities.end(),
+            [](const std::pair<double, int> &lhs,
+               const std::pair<double, int> &rhs) {
+              return lhs.first > rhs.first;
+            });
+      }
+      double weight_sum = 0.0;
+      for (std::size_t index = 0; index < k; ++index) {
+        weight_sum += similarities[index].first;
+      }
+      if (weight_sum == 0.0) {
+        continue;
+      }
+      for (std::size_t index = 0; index < k; ++index) {
+        probabilities[row]
+            [static_cast<std::size_t>(similarities[index].second)] +=
+            similarities[index].first / weight_sum;
+      }
+    }
+    return probabilities;
+  }
+
+  std::vector<int> classes() const override {
+    return MakeClassLabels(class_count_);
+  }
+
+  EstimatorSpec spec() const override { return spec_; }
+
+  std::expected<std::string, std::string> SaveState() const override {
+    std::string out = std::format("{}\n{}\n{} {}\n", class_count_, gamma_,
+                                  features_.rows(), features_.cols());
+    for (std::size_t row = 0; row < features_.rows(); ++row) {
+      out += std::format("{}\n", JoinFormatted(features_[row]));
+    }
+    out += std::format("{}\n", JoinFormatted(labels_));
+    return out;
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) override {
+    StateReader reader(state);
+    return reader.ReadLine("invalid kernel knn classifier class count")
+        .and_then([this](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "kernel knn classifier class count")
+              .transform([this](std::size_t class_count) {
+                class_count_ = class_count;
+              });
+        })
+        .and_then([this, &reader]() {
+          return reader.ReadLine("invalid kernel knn classifier gamma")
+              .and_then([this](std::string_view line) {
+                return ParseNumber<double>(line, "kernel knn classifier gamma")
+                    .transform([this](double gamma) { gamma_ = gamma; });
+              });
+        })
+        .and_then([this, &reader]() {
+          return LoadStoredFeatureMatrix(
+              reader, "invalid kernel knn classifier state",
+              "invalid kernel knn classifier state",
+              "invalid kernel knn classifier state",
+              "invalid kernel knn classifier features",
+              "invalid kernel knn classifier labels",
+              "invalid kernel knn classifier labels", features_, labels_,
+              ParseInts);
+        });
+  }
+
+private:
+  KernelKnnSpec spec_;
+  std::size_t class_count_;
+  double gamma_ = 1.0;
   DenseMatrix features_;
   LabelVector labels_;
 };
@@ -3725,6 +4463,386 @@ private:
   std::unique_ptr<Classifier> final_estimator_;
 };
 
+double AveragePathLength(double sample_count) {
+  if (sample_count <= 1.0) {
+    return 0.0;
+  }
+  if (sample_count == 2.0) {
+    return 1.0;
+  }
+  const double harmonic =
+      std::log(sample_count - 1.0) + 0.5772156649015329;
+  return 2.0 * harmonic - 2.0 * (sample_count - 1.0) / sample_count;
+}
+
+int IsolationMaxDepth(int sample_count) {
+  return static_cast<int>(
+      std::ceil(std::log2(static_cast<double>(std::max(sample_count, 2)))));
+}
+
+double AnomalyScoreFromPathLength(double avg_path_length, double sample_size) {
+  const double normalizer = AveragePathLength(sample_size);
+  if (normalizer <= 0.0) {
+    return 0.0;
+  }
+  return std::pow(2.0, -avg_path_length / normalizer);
+}
+
+std::vector<std::size_t> SampleFeatureFraction(std::size_t feature_count,
+                                               double feature_fraction,
+                                               std::mt19937 &rng) {
+  const std::size_t sampled_feature_count = std::max<std::size_t>(
+      1, static_cast<std::size_t>(std::round(
+             feature_fraction * static_cast<double>(feature_count))));
+  auto feature_indices = IotaVector<std::size_t>(feature_count);
+  std::ranges::shuffle(feature_indices, rng);
+  feature_indices.resize(sampled_feature_count);
+  return feature_indices;
+}
+
+struct IsolationTreeNode {
+  bool leaf = true;
+  std::size_t feature = 0;
+  double threshold = 0.0;
+  std::size_t sample_count = 1;
+  std::unique_ptr<IsolationTreeNode> left;
+  std::unique_ptr<IsolationTreeNode> right;
+};
+
+class IsolationTree {
+public:
+  IsolationTree(int max_depth, std::vector<std::size_t> feature_indices)
+      : max_depth_(max_depth),
+        feature_indices_(std::move(feature_indices)) {}
+
+  void Fit(const DenseMatrix &features, std::span<const std::size_t> indices,
+           std::mt19937 &rng) {
+    root_ = Build(features, indices, 0, rng);
+  }
+
+  double PathLength(DenseMatrix::ConstRow row) const {
+    return PathLength(root_.get(), row, 0);
+  }
+
+  std::string SaveState() const {
+    std::string out = std::format("{}\n{}\n", feature_indices_.size(),
+                                  JoinFormatted(feature_indices_));
+    WriteNode(root_.get(), out);
+    return out;
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) {
+    StateReader reader(state);
+    return reader.ReadLine("invalid isolation tree state")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "feature count");
+        })
+        .and_then([this, &reader](std::size_t feature_count) {
+          return reader.ReadLine("invalid isolation tree feature list")
+              .and_then([this, feature_count](std::string_view line) {
+                return ParseDelimitedNumbers<std::size_t>(line, ',',
+                                                          "feature index")
+                    .and_then([this, feature_count](
+                                  std::vector<std::size_t> parsed_indices)
+                                  -> std::expected<void, std::string> {
+                      if (parsed_indices.size() != feature_count) {
+                        return std::unexpected(
+                            "isolation tree feature list mismatch");
+                      }
+                      feature_indices_ = std::move(parsed_indices);
+                      return std::expected<void, std::string>{};
+                    });
+              });
+        })
+        .and_then([this, &reader]() {
+          return ReadNode(reader).and_then(
+              [this](std::unique_ptr<IsolationTreeNode> root) {
+                root_ = std::move(root);
+                return std::expected<void, std::string>{};
+              });
+        });
+  }
+
+private:
+  double PathLength(const IsolationTreeNode *node, DenseMatrix::ConstRow row,
+                    double depth) const {
+    if (node == nullptr) {
+      return depth;
+    }
+    if (node->leaf) {
+      if (node->sample_count <= 1) {
+        return depth;
+      }
+      return depth + AveragePathLength(static_cast<double>(node->sample_count));
+    }
+    if (row[node->feature] <= node->threshold) {
+      return PathLength(node->left.get(), row, depth + 1.0);
+    }
+    return PathLength(node->right.get(), row, depth + 1.0);
+  }
+
+  std::unique_ptr<IsolationTreeNode>
+  Build(const DenseMatrix &features, std::span<const std::size_t> indices,
+        int depth, std::mt19937 &rng) const {
+    auto node = std::make_unique<IsolationTreeNode>();
+    node->sample_count = indices.size();
+    if (depth >= max_depth_ || indices.size() <= 1) {
+      return node;
+    }
+
+    std::uniform_int_distribution<std::size_t> feature_dist(
+        0, feature_indices_.size() - 1);
+    const std::size_t feature = feature_indices_[feature_dist(rng)];
+
+    double min_value = features[indices.front()][feature];
+    double max_value = min_value;
+    for (std::size_t index : indices) {
+      const double value = features[index][feature];
+      min_value = std::min(min_value, value);
+      max_value = std::max(max_value, value);
+    }
+    if (min_value == max_value) {
+      return node;
+    }
+
+    std::uniform_real_distribution<double> threshold_dist(min_value, max_value);
+    const double threshold = threshold_dist(rng);
+
+    std::vector<std::size_t> left_indices;
+    std::vector<std::size_t> right_indices;
+    for (std::size_t index : indices) {
+      if (features[index][feature] <= threshold) {
+        left_indices.push_back(index);
+      } else {
+        right_indices.push_back(index);
+      }
+    }
+    if (left_indices.empty() || right_indices.empty()) {
+      return node;
+    }
+
+    node->leaf = false;
+    node->feature = feature;
+    node->threshold = threshold;
+    node->left = Build(features, left_indices, depth + 1, rng);
+    node->right = Build(features, right_indices, depth + 1, rng);
+    return node;
+  }
+
+  static void WriteNode(const IsolationTreeNode *node, std::string &out) {
+    if (node == nullptr) {
+      out += "null\n";
+      return;
+    }
+    if (node->leaf) {
+      out += std::format("leaf {}\n", node->sample_count);
+      return;
+    }
+    out += std::format("split {} {}\n", node->feature, node->threshold);
+    WriteNode(node->left.get(), out);
+    WriteNode(node->right.get(), out);
+  }
+
+  static std::expected<std::unique_ptr<IsolationTreeNode>, std::string>
+  ReadNode(StateReader &reader) {
+    return reader.ReadLine("invalid isolation tree node")
+        .and_then([&reader](std::string_view line)
+                      -> std::expected<std::unique_ptr<IsolationTreeNode>,
+                                       std::string> {
+          if (line == "null") {
+            return nullptr;
+          }
+          if (line.starts_with("leaf ")) {
+            return ParseNumber<std::size_t>(line.substr(5),
+                                            "isolation tree leaf sample count")
+                .transform([](std::size_t sample_count) {
+                  auto node = std::make_unique<IsolationTreeNode>();
+                  node->sample_count = sample_count;
+                  return node;
+                });
+          }
+          if (!line.starts_with("split ")) {
+            return std::unexpected<std::string>("invalid isolation tree node");
+          }
+          const std::string_view payload = line.substr(6);
+          const auto separator = payload.find(' ');
+          if (separator == std::string_view::npos) {
+            return std::unexpected<std::string>("invalid isolation tree split");
+          }
+          return ParseNumber<std::size_t>(payload.substr(0, separator),
+                                          "isolation tree split feature")
+              .and_then([&](std::size_t feature) {
+                return ParseNumber<double>(payload.substr(separator + 1),
+                                           "isolation tree split threshold")
+                    .and_then([&reader, feature](double threshold)
+                                  -> std::expected<
+                                      std::unique_ptr<IsolationTreeNode>,
+                                      std::string> {
+                      return ReadNode(reader).and_then(
+                          [&reader, feature, threshold](
+                              std::unique_ptr<IsolationTreeNode> left) {
+                            return ReadNode(reader).and_then(
+                                [feature, threshold, left = std::move(left)](
+                                    std::unique_ptr<IsolationTreeNode>
+                                        right) mutable
+                                    -> std::expected<
+                                        std::unique_ptr<IsolationTreeNode>,
+                                        std::string> {
+                                  auto node =
+                                      std::make_unique<IsolationTreeNode>();
+                                  node->leaf = false;
+                                  node->feature = feature;
+                                  node->threshold = threshold;
+                                  node->left = std::move(left);
+                                  node->right = std::move(right);
+                                  return node;
+                                });
+                          });
+                    });
+              });
+        });
+  }
+
+  int max_depth_;
+  std::vector<std::size_t> feature_indices_;
+  std::unique_ptr<IsolationTreeNode> root_;
+};
+
+class IsolationForestModel final : public AnomalyDetector {
+public:
+  explicit IsolationForestModel(IsolationForestSpec spec) : spec_(spec) {}
+
+  std::string_view name() const override { return "isolation_forest"; }
+
+  std::expected<void, std::string>
+  Fit(const DenseMatrix &features) override {
+    if (features.rows() == 0) {
+      return std::unexpected("isolation forest requires at least one row");
+    }
+    trees_.clear();
+    sample_size_ = static_cast<int>(std::min<std::size_t>(
+        static_cast<std::size_t>(spec_.max_samples), features.rows()));
+    const int max_depth = IsolationMaxDepth(sample_size_);
+    std::mt19937 rng(spec_.seed);
+    for (int tree_index = 0; tree_index < spec_.tree_count; ++tree_index) {
+      auto indices = IotaVector<std::size_t>(features.rows());
+      std::ranges::shuffle(indices, rng);
+      indices.resize(static_cast<std::size_t>(sample_size_));
+      auto feature_indices =
+          SampleFeatureFraction(features.cols(), spec_.feature_fraction, rng);
+      trees_.emplace_back(max_depth, std::move(feature_indices));
+      trees_.back().Fit(features, indices, rng);
+    }
+    return FitThreshold(features);
+  }
+
+  std::expected<Vector, std::string>
+  Score(const DenseMatrix &features) const override {
+    Vector scores(features.rows(), 0.0);
+    if (trees_.empty()) {
+      return scores;
+    }
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      double total_path = 0.0;
+      for (const auto &tree : trees_) {
+        total_path += tree.PathLength(features[row]);
+      }
+      const double avg_path = total_path / static_cast<double>(trees_.size());
+      scores[row] =
+          AnomalyScoreFromPathLength(avg_path, static_cast<double>(sample_size_));
+    }
+    return scores;
+  }
+
+  std::expected<LabelVector, std::string>
+  Predict(const DenseMatrix &features) const override {
+    auto scores = Score(features);
+    if (!scores) {
+      return std::unexpected(scores.error());
+    }
+    LabelVector labels(scores->size(), 0);
+    for (std::size_t index = 0; index < scores->size(); ++index) {
+      if ((*scores)[index] >= threshold_) {
+        labels[index] = 1;
+      }
+    }
+    return labels;
+  }
+
+  double threshold() const override { return threshold_; }
+
+  EstimatorSpec spec() const override { return spec_; }
+
+  std::expected<std::string, std::string> SaveState() const override {
+    std::string out =
+        std::format("{}\n{}\n{}\n", sample_size_, threshold_, trees_.size());
+    for (const auto &tree : trees_) {
+      const std::string state = tree.SaveState();
+      out += std::format("{}\n{}", state.size(), state);
+    }
+    return out;
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) override {
+    StateReader reader(state);
+    return reader.ReadLine("invalid isolation forest state")
+        .and_then([](std::string_view line) {
+          return ParseNumber<int>(line, "isolation forest sample size");
+        })
+        .and_then([this, &reader](int sample_size) {
+          sample_size_ = sample_size;
+          return reader.ReadLine("invalid isolation forest threshold");
+        })
+        .and_then([this, &reader](std::string_view line) {
+          return ParseNumber<double>(line, "isolation forest threshold")
+              .and_then([this, &reader](double threshold)
+                            -> std::expected<std::size_t, std::string> {
+                threshold_ = threshold;
+                return reader.ReadLine("invalid isolation forest tree count")
+                    .and_then([](std::string_view tree_line) {
+                      return ParseNumber<std::size_t>(tree_line,
+                                                      "isolation forest tree "
+                                                      "count");
+                    });
+              });
+        })
+        .and_then([this, &reader](std::size_t tree_count) {
+          return LoadTreeEnsemble(
+              reader, tree_count, "invalid isolation forest size",
+              "isolation forest size", "invalid isolation forest state",
+              [this] {
+                return IsolationTree(IsolationMaxDepth(sample_size_), {});
+              },
+              trees_);
+        });
+  }
+
+private:
+  std::expected<void, std::string> FitThreshold(const DenseMatrix &features) {
+    auto scores = Score(features);
+    if (!scores) {
+      return std::unexpected(scores.error());
+    }
+    if (scores->empty()) {
+      threshold_ = 0.0;
+      return {};
+    }
+    std::vector<double> sorted(scores->begin(), scores->end());
+    std::ranges::sort(sorted);
+    const double contamination =
+        std::clamp(spec_.contamination, 0.0, 0.5);
+    const std::size_t index = static_cast<std::size_t>(std::floor(
+        (1.0 - contamination) * static_cast<double>(sorted.size())));
+    threshold_ = sorted[std::min(index, sorted.size() - 1)];
+    return {};
+  }
+
+  IsolationForestSpec spec_;
+  int sample_size_ = 0;
+  double threshold_ = 0.0;
+  std::vector<IsolationTree> trees_;
+};
+
 } // namespace
 
 std::expected<std::unique_ptr<Regressor>, std::string>
@@ -3751,6 +4869,10 @@ MakeRegressor(const EstimatorSpec &spec) {
               -> std::expected<std::unique_ptr<Regressor>, std::string> {
             return std::make_unique<KnnRegressorModel>(value);
           },
+          [](const KernelKnnSpec &value)
+              -> std::expected<std::unique_ptr<Regressor>, std::string> {
+            return std::make_unique<KernelKnnRegressorModel>(value);
+          },
           [](const DecisionTreeSpec &value)
               -> std::expected<std::unique_ptr<Regressor>, std::string> {
             return std::make_unique<DecisionTreeRegressorModel>(value);
@@ -3770,6 +4892,10 @@ MakeRegressor(const EstimatorSpec &spec) {
           [](const SgdRegressionSpec &value)
               -> std::expected<std::unique_ptr<Regressor>, std::string> {
             return std::make_unique<SgdRegressionModel>(value);
+          },
+          [](const MlpSpec &value)
+              -> std::expected<std::unique_ptr<Regressor>, std::string> {
+            return std::make_unique<MlpRegressionModel>(value);
           },
           [](const VotingRegressorSpec &value)
               -> std::expected<std::unique_ptr<Regressor>, std::string> {
@@ -3820,6 +4946,10 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
             return std::make_unique<SoftmaxClassifierModel>(value);
           },
+          [&](const MlpSpec &value)
+              -> std::expected<std::unique_ptr<Classifier>, std::string> {
+            return std::make_unique<MlpClassifierModel>(value);
+          },
           [&](const SgdClassificationSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
             return std::make_unique<SgdClassificationModel>(value);
@@ -3833,9 +4963,18 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
             return std::make_unique<LinearSvmClassifierModel>(value,
                                                               class_count);
           },
+          [&](const RbfSvmSpec &value)
+              -> std::expected<std::unique_ptr<Classifier>, std::string> {
+            return std::make_unique<RbfSvmClassifierModel>(value, class_count);
+          },
           [&](const KnnSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
             return std::make_unique<KnnClassifierModel>(value, class_count);
+          },
+          [&](const KernelKnnSpec &value)
+              -> std::expected<std::unique_ptr<Classifier>, std::string> {
+            return std::make_unique<KernelKnnClassifierModel>(value,
+                                                              class_count);
           },
           [&](const DecisionTreeSpec &value)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
@@ -3881,6 +5020,22 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
           [&](const auto &)
               -> std::expected<std::unique_ptr<Classifier>, std::string> {
             return std::unexpected("estimator spec is not a classifier");
+          },
+      },
+      spec);
+}
+
+std::expected<std::unique_ptr<AnomalyDetector>, std::string>
+MakeAnomalyDetector(const EstimatorSpec &spec) {
+  return std::visit(
+      Overload{
+          [](const IsolationForestSpec &value)
+              -> std::expected<std::unique_ptr<AnomalyDetector>, std::string> {
+            return std::make_unique<IsolationForestModel>(value);
+          },
+          [](const auto &)
+              -> std::expected<std::unique_ptr<AnomalyDetector>, std::string> {
+            return std::unexpected("estimator spec is not an anomaly detector");
           },
       },
       spec);

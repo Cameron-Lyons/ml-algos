@@ -10,8 +10,12 @@ namespace ml::preprocess {
 
 struct StandardScalerSpec {};
 struct MinMaxScalerSpec {};
+struct PcaSpec {
+  int n_components = 0;
+};
 
-using TransformerSpec = std::variant<StandardScalerSpec, MinMaxScalerSpec>;
+using TransformerSpec =
+    std::variant<StandardScalerSpec, MinMaxScalerSpec, PcaSpec>;
 
 std::string_view TransformerId(const TransformerSpec &spec);
 std::string SerializeTransformerSpec(const TransformerSpec &spec);

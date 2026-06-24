@@ -8,16 +8,25 @@
 
 namespace ml::core {
 
+struct SymmetricEighResult {
+  Vector eigenvalues;
+  DenseMatrix eigenvectors;
+};
+
 std::expected<DenseMatrix, std::string> Transpose(const DenseMatrix &matrix);
 std::expected<DenseMatrix, std::string> MatMul(const DenseMatrix &lhs,
                                                const DenseMatrix &rhs);
 std::expected<DenseMatrix, std::string> Add(const DenseMatrix &lhs,
                                             const DenseMatrix &rhs);
 std::expected<DenseMatrix, std::string> Inverse(const DenseMatrix &matrix);
+std::expected<SymmetricEighResult, std::string>
+SymmetricEigh(const DenseMatrix &matrix);
 
 Vector MeanColumns(const DenseMatrix &matrix);
 double SquaredEuclideanDistance(std::span<const double> lhs,
                                 std::span<const double> rhs);
+double RbfKernel(std::span<const double> lhs, std::span<const double> rhs,
+                 double gamma);
 double ClampProbability(double value);
 
 } // namespace ml::core
