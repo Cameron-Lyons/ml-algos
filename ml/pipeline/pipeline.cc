@@ -26,7 +26,7 @@ bool IsIntegerLike(double value) {
 }
 
 std::expected<void, std::string>
-ValidateDataset(const TabularDataset &dataset) {
+ValidateDataset(const TabularDataset &dataset, Task task) {
   if (dataset.features.rows() == 0) {
     return std::unexpected("dataset has no rows");
   }
@@ -38,6 +38,9 @@ ValidateDataset(const TabularDataset &dataset) {
   }
   if (dataset.schema.feature_names.size() != dataset.features.cols()) {
     return std::unexpected("dataset schema does not match feature columns");
+  }
+  if (task == Task::kAnomalyDetection && dataset.features.rows() < 2) {
+    return std::unexpected("anomaly detection requires at least two rows");
   }
   return {};
 }
@@ -114,6 +117,61 @@ ToIntLabels(std::span<const double> targets) {
   return labels;
 }
 
+std::expected<LabelVector, std::string>
+ToBinaryAnomalyLabels(std::span<const double> targets) {
+  LabelVector labels;
+  labels.reserve(targets.size());
+  for (double value : targets) {
+    if (!IsIntegerLike(value)) {
+      return std::unexpected("anomaly targets must be integer-like");
+    }
+    const int label = static_cast<int>(std::llround(value));
+    if (label != 0 && label != 1) {
+      return std::unexpected("anomaly targets must be 0 or 1");
+    }
+    labels.push_back(label);
+  }
+  return labels;
+}
+
+struct BinaryScores {
+  double precision = 0.0;
+  double recall = 0.0;
+  double f1 = 0.0;
+};
+
+BinaryScores ComputeBinaryScores(std::span<const int> actual,
+                                 std::span<const int> predicted) {
+  BinaryScores scores;
+  int true_positive = 0;
+  int false_positive = 0;
+  int false_negative = 0;
+  for (std::size_t index = 0; index < actual.size(); ++index) {
+    if (actual[index] == 1 && predicted[index] == 1) {
+      ++true_positive;
+    } else if (actual[index] == 0 && predicted[index] == 1) {
+      ++false_positive;
+    } else if (actual[index] == 1 && predicted[index] == 0) {
+      ++false_negative;
+    }
+  }
+  if (true_positive + false_positive > 0) {
+    scores.precision =
+        static_cast<double>(true_positive) /
+        static_cast<double>(true_positive + false_positive);
+  }
+  if (true_positive + false_negative > 0) {
+    scores.recall =
+        static_cast<double>(true_positive) /
+        static_cast<double>(true_positive + false_negative);
+  }
+  if (scores.precision + scores.recall > 0.0) {
+    scores.f1 = 2.0 * scores.precision * scores.recall /
+                (scores.precision + scores.recall);
+  }
+  return scores;
+}
+
 std::expected<EvaluationReport, std::string>
 EvaluateFittedPipeline(const Pipeline &pipeline, const Split &split) {
   EvaluationReport report;
@@ -125,6 +183,33 @@ EvaluateFittedPipeline(const Pipeline &pipeline, const Split &split) {
   auto predictions = pipeline.Predict(split.test.features);
   if (!predictions) {
     return std::unexpected(predictions.error());
+  }
+
+  if (pipeline.task() == Task::kAnomalyDetection) {
+    AnomalySummary summary;
+    summary.threshold = pipeline.AnomalyThreshold();
+    double total_score = 0.0;
+    for (double score : *predictions) {
+      total_score += score;
+    }
+    summary.mean_score =
+        predictions->empty()
+            ? 0.0
+            : total_score / static_cast<double>(predictions->size());
+    if (auto actual_labels = ToBinaryAnomalyLabels(split.test.targets)) {
+      auto predicted_labels =
+          pipeline.PredictAnomalyLabels(split.test.features);
+      if (!predicted_labels) {
+        return std::unexpected(predicted_labels.error());
+      }
+      const BinaryScores binary =
+          ComputeBinaryScores(*actual_labels, *predicted_labels);
+      summary.precision = binary.precision;
+      summary.recall = binary.recall;
+      summary.f1 = binary.f1;
+    }
+    report.metrics = summary;
+    return report;
   }
 
   if (pipeline.task() == Task::kRegression) {
@@ -180,6 +265,9 @@ double ObjectiveForReport(const EvaluationReport &report) {
       Overload{
           [](const RegressionSummary &summary) { return summary.r2; },
           [](const ClassificationSummary &summary) { return summary.accuracy; },
+          [](const AnomalySummary &summary) {
+            return summary.f1 ? *summary.f1 : summary.mean_score;
+          },
       },
       report.metrics);
 }
@@ -248,6 +336,15 @@ Pipeline::EnsureInitializedForFit(std::size_t class_count) {
   }
   regressor_.reset();
   classifier_.reset();
+  anomaly_detector_.reset();
+  if (task_ == Task::kAnomalyDetection) {
+    auto detector = models::MakeAnomalyDetector(estimator_spec_);
+    if (!detector) {
+      return std::unexpected(detector.error());
+    }
+    anomaly_detector_ = std::move(*detector);
+    return {};
+  }
   if (task_ == Task::kRegression) {
     auto regressor = models::MakeRegressor(estimator_spec_);
     if (!regressor) {
@@ -265,13 +362,37 @@ Pipeline::EnsureInitializedForFit(std::size_t class_count) {
 }
 
 std::expected<void, std::string> Pipeline::Fit(const TabularDataset &dataset) {
-  auto validation = ValidateDataset(dataset);
+  auto validation = ValidateDataset(dataset, task_);
   if (!validation) {
     return std::unexpected(validation.error());
   }
 
   DenseMatrix transformed = dataset.features;
   class_labels_.clear();
+
+  if (task_ == Task::kAnomalyDetection) {
+    auto init = EnsureInitializedForFit(0);
+    if (!init) {
+      return std::unexpected(init.error());
+    }
+    for (auto &transformer : transformers_) {
+      auto status = transformer->Fit(transformed);
+      if (!status) {
+        return std::unexpected(status.error());
+      }
+      auto next = transformer->Transform(transformed);
+      if (!next) {
+        return std::unexpected(next.error());
+      }
+      transformed = std::move(*next);
+    }
+    auto status = anomaly_detector_->Fit(transformed);
+    if (!status) {
+      return std::unexpected(status.error());
+    }
+    fitted_ = true;
+    return {};
+  }
 
   if (task_ == Task::kClassification) {
     auto encoded = EncodeLabels(dataset.targets);
@@ -350,6 +471,9 @@ Pipeline::Predict(const DenseMatrix &features) const {
   if (task_ == Task::kRegression) {
     return regressor_->Predict(*transformed);
   }
+  if (task_ == Task::kAnomalyDetection) {
+    return anomaly_detector_->Score(*transformed);
+  }
   auto predicted = classifier_->Predict(*transformed);
   if (!predicted) {
     return std::unexpected(predicted.error());
@@ -382,6 +506,26 @@ Pipeline::PredictProba(const DenseMatrix &features) const {
 
 std::vector<int> Pipeline::classes() const { return class_labels_; }
 
+double Pipeline::AnomalyThreshold() const {
+  return anomaly_detector_ ? anomaly_detector_->threshold() : 0.0;
+}
+
+std::expected<LabelVector, std::string>
+Pipeline::PredictAnomalyLabels(const DenseMatrix &features) const {
+  if (!fitted_) {
+    return std::unexpected("pipeline is not fitted");
+  }
+  if (task_ != Task::kAnomalyDetection) {
+    return std::unexpected(
+        "anomaly labels are only available for anomaly detection");
+  }
+  auto transformed = TransformFeatures(features);
+  if (!transformed) {
+    return std::unexpected(transformed.error());
+  }
+  return anomaly_detector_->Predict(*transformed);
+}
+
 std::expected<ModelBundle, std::string>
 Pipeline::ExportModel(const DatasetSchema &schema) const {
   if (!fitted_) {
@@ -402,8 +546,11 @@ Pipeline::ExportModel(const DatasetSchema &schema) const {
     }
     bundle.transformer_states.push_back(std::move(*state));
   }
-  auto estimator_state = task_ == Task::kRegression ? regressor_->SaveState()
-                                                    : classifier_->SaveState();
+  auto estimator_state =
+      task_ == Task::kRegression
+          ? regressor_->SaveState()
+          : task_ == Task::kAnomalyDetection ? anomaly_detector_->SaveState()
+                                             : classifier_->SaveState();
   if (!estimator_state) {
     return std::unexpected(estimator_state.error());
   }
@@ -432,6 +579,9 @@ Pipeline::FromModelBundle(const ModelBundle &bundle) {
   }
   auto status = bundle.task == Task::kRegression
                     ? pipeline.regressor_->LoadState(bundle.estimator_state)
+                : bundle.task == Task::kAnomalyDetection
+                    ? pipeline.anomaly_detector_->LoadState(
+                          bundle.estimator_state)
                     : pipeline.classifier_->LoadState(bundle.estimator_state);
   if (!status) {
     return std::unexpected(status.error());
@@ -443,7 +593,7 @@ Pipeline::FromModelBundle(const ModelBundle &bundle) {
 std::expected<Split, std::string>
 MakeTrainTestSplit(const TabularDataset &dataset, Task task,
                    const SplitOptions &options) {
-  auto validation = ValidateDataset(dataset);
+  auto validation = ValidateDataset(dataset, task);
   if (!validation) {
     return std::unexpected(validation.error());
   }
@@ -474,7 +624,7 @@ MakeTrainTestSplit(const TabularDataset &dataset, Task task,
 std::expected<FoldSet, std::string> MakeKFoldSet(const TabularDataset &dataset,
                                                  Task task, int fold_count,
                                                  unsigned int seed) {
-  auto validation = ValidateDataset(dataset);
+  auto validation = ValidateDataset(dataset, task);
   if (!validation) {
     return std::unexpected(validation.error());
   }
@@ -600,7 +750,9 @@ GridSearch(const FoldSet &folds, Task task,
            std::span<const models::EstimatorSpec> candidates) {
   TuneReport report;
   report.task = task;
-  report.objective_name = task == Task::kRegression ? "r2" : "accuracy";
+  report.objective_name = task == Task::kRegression    ? "r2"
+                          : task == Task::kClassification ? "accuracy"
+                                                          : "f1";
   report.best_score = -std::numeric_limits<double>::infinity();
 
   for (const auto &candidate : candidates) {

@@ -114,6 +114,94 @@ std::expected<DenseMatrix, std::string> Inverse(const DenseMatrix &matrix) {
   return inverse;
 }
 
+std::expected<SymmetricEighResult, std::string>
+SymmetricEigh(const DenseMatrix &matrix) {
+  if (matrix.rows() == 0 || matrix.rows() != matrix.cols()) {
+    return std::unexpected(
+        "symmetric eigendecomposition requires a non-empty square matrix");
+  }
+
+  const std::size_t size = matrix.rows();
+  DenseMatrix working(size, size, 0.0);
+  for (std::size_t row = 0; row < size; ++row) {
+    for (std::size_t col = 0; col < size; ++col) {
+      working[row][col] = matrix[row][col];
+    }
+  }
+
+  DenseMatrix eigenvectors(size, size, 0.0);
+  for (std::size_t index = 0; index < size; ++index) {
+    eigenvectors[index][index] = 1.0;
+  }
+
+  constexpr int kMaxSweeps = 100;
+  constexpr double kTolerance = 1e-10;
+
+  for (int sweep = 0; sweep < kMaxSweeps; ++sweep) {
+    double off_diagonal_sum = 0.0;
+    for (std::size_t row = 0; row < size; ++row) {
+      for (std::size_t col = row + 1; col < size; ++col) {
+        off_diagonal_sum += std::fabs(working[row][col]);
+      }
+    }
+    if (off_diagonal_sum < kTolerance) {
+      break;
+    }
+
+    for (std::size_t pivot = 0; pivot + 1 < size; ++pivot) {
+      for (std::size_t col = pivot + 1; col < size; ++col) {
+        const double value = working[pivot][col];
+        if (std::fabs(value) < kTolerance) {
+          continue;
+        }
+
+        const double pivot_value = working[pivot][pivot];
+        const double col_value = working[col][col];
+        const double phi =
+            0.5 * std::atan2(2.0 * value, col_value - pivot_value);
+        const double cosine = std::cos(phi);
+        const double sine = std::sin(phi);
+
+        working[pivot][pivot] =
+            cosine * cosine * pivot_value + sine * sine * col_value -
+            2.0 * sine * cosine * value;
+        working[col][col] =
+            sine * sine * pivot_value + cosine * cosine * col_value +
+            2.0 * sine * cosine * value;
+        working[pivot][col] = 0.0;
+        working[col][pivot] = 0.0;
+
+        for (std::size_t row = 0; row < size; ++row) {
+          if (row == pivot || row == col) {
+            continue;
+          }
+          const double pivot_entry = working[row][pivot];
+          const double col_entry = working[row][col];
+          working[row][pivot] = working[pivot][row] =
+              cosine * pivot_entry - sine * col_entry;
+          working[row][col] = working[col][row] =
+              sine * pivot_entry + cosine * col_entry;
+        }
+
+        for (std::size_t row = 0; row < size; ++row) {
+          const double pivot_entry = eigenvectors[row][pivot];
+          const double col_entry = eigenvectors[row][col];
+          eigenvectors[row][pivot] = cosine * pivot_entry - sine * col_entry;
+          eigenvectors[row][col] = sine * pivot_entry + cosine * col_entry;
+        }
+      }
+    }
+  }
+
+  SymmetricEighResult result;
+  result.eigenvalues.resize(size);
+  for (std::size_t index = 0; index < size; ++index) {
+    result.eigenvalues[index] = working[index][index];
+  }
+  result.eigenvectors = std::move(eigenvectors);
+  return result;
+}
+
 Vector MeanColumns(const DenseMatrix &matrix) {
   Vector means(matrix.cols(), 0.0);
   if (matrix.rows() == 0) {
@@ -139,6 +227,11 @@ double SquaredEuclideanDistance(std::span<const double> lhs,
     sum += diff * diff;
   }
   return sum;
+}
+
+double RbfKernel(std::span<const double> lhs, std::span<const double> rhs,
+                 double gamma) {
+  return std::exp(-gamma * SquaredEuclideanDistance(lhs, rhs));
 }
 
 double ClampProbability(double value) {

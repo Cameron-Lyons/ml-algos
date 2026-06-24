@@ -40,6 +40,9 @@ public:
   transformer_specs() const {
     return transformer_specs_;
   }
+  [[nodiscard]] double AnomalyThreshold() const;
+  std::expected<core::LabelVector, std::string>
+  PredictAnomalyLabels(const core::DenseMatrix &features) const;
 
 private:
   std::expected<void, std::string>
@@ -53,6 +56,7 @@ private:
   std::vector<std::unique_ptr<preprocess::Transformer>> transformers_;
   std::unique_ptr<models::Regressor> regressor_;
   std::unique_ptr<models::Classifier> classifier_;
+  std::unique_ptr<models::AnomalyDetector> anomaly_detector_;
   std::vector<int> class_labels_;
   bool fitted_ = false;
 };

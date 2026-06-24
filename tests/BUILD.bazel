@@ -41,6 +41,18 @@ cc_test(
 )
 
 cc_test(
+    name = "preprocess_test",
+    srcs = [
+        "preprocess_test.cc",
+        "support/test_support.h",
+    ],
+    deps = [
+        "//ml/core",
+        "//ml/preprocess",
+    ],
+)
+
+cc_test(
     name = "pipeline_test",
     srcs = [
         "pipeline_test.cc",

@@ -37,6 +37,14 @@ bazel test //...
   --transformers standard_scaler \
   --cv-folds 4
 
+# Evaluate an anomaly detector with optional ground-truth labels
+./bazel-bin/app/ml-algos eval \
+  --task anomaly \
+  --algorithm isolation_forest \
+  --data data/v3/regression.csv \
+  --target target \
+  --transformers standard_scaler
+
 # Inspect a saved bundle
 ./bazel-bin/app/ml-algos inspect --model /tmp/ridge.bundle
 
@@ -66,11 +74,18 @@ Commands support `--json` for machine-readable output.
 - `linear_svr`
 - `sgd_regression`
 - `knn`
+- `kernel_knn`
 - `decision_tree`
 - `random_forest`
 - `gradient_boosting`
 - `voting`
 - `stacking`
+
+### Anomaly Detection
+
+- `isolation_forest`
+
+Predictions return anomaly scores in `[0, 1]` where higher values indicate more anomalous points. Optional `--target` labels (`0` = normal, `1` = anomaly) enable precision/recall/F1 during eval and tune.
 
 ### Classification
 
@@ -79,8 +94,10 @@ Commands support `--json` for machine-readable output.
 - `softmax`
 - `gaussian_nb`
 - `linear_svm`
+- `rbf_svm`
 - `sgd_classification`
 - `knn`
+- `kernel_knn`
 - `decision_tree`
 - `random_forest`
 - `gradient_boosting`
@@ -92,6 +109,7 @@ Commands support `--json` for machine-readable output.
 
 - `standard_scaler`
 - `minmax_scaler`
+- `pca` (optional `n_components`, default keeps all components)
 
 ## Library Layout
 

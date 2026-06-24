@@ -18,6 +18,7 @@ namespace ml {
 enum class Task : std::uint8_t {
   kRegression = 0,
   kClassification = 1,
+  kAnomalyDetection = 2,
 };
 
 struct DatasetSchema {
@@ -71,8 +72,16 @@ struct ClassificationSummary {
   std::vector<std::vector<std::size_t>> confusion_matrix;
 };
 
+struct AnomalySummary {
+  double mean_score = 0.0;
+  double threshold = 0.0;
+  std::optional<double> precision;
+  std::optional<double> recall;
+  std::optional<double> f1;
+};
+
 using EvaluationMetrics =
-    std::variant<RegressionSummary, ClassificationSummary>;
+    std::variant<RegressionSummary, ClassificationSummary, AnomalySummary>;
 
 struct EvaluationReport {
   Task task = Task::kRegression;
@@ -114,7 +123,15 @@ struct TuneReport {
 };
 
 constexpr std::string_view TaskName(Task task) {
-  return task == Task::kRegression ? "regression" : "classification";
+  switch (task) {
+  case Task::kRegression:
+    return "regression";
+  case Task::kClassification:
+    return "classification";
+  case Task::kAnomalyDetection:
+    return "anomaly";
+  }
+  return "unknown";
 }
 
 } // namespace ml

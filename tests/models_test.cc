@@ -39,7 +39,12 @@ int main() {
                                 .max_iterations = 2000},
       ml::models::SgdRegressionSpec{
           .learning_rate = 0.05, .max_iterations = 2000, .alpha = 0.001},
+      ml::models::MlpSpec{.hidden_sizes = {8, 4},
+                          .learning_rate = 0.05,
+                          .max_iterations = 2000,
+                          .alpha = 0.001},
       ml::models::KnnSpec{},
+      ml::models::KernelKnnSpec{},
       ml::models::DecisionTreeSpec{},
       ml::models::RandomForestSpec{.tree_count = 8, .max_depth = 6},
       ml::models::GradientBoostingSpec{.tree_count = 10, .max_depth = 3}};
@@ -84,9 +89,16 @@ int main() {
       ml::models::GaussianNbSpec{},
       ml::models::LinearSvmSpec{
           .C = 1.0, .learning_rate = 0.05, .max_iterations = 2000},
+      ml::models::RbfSvmSpec{
+          .C = 1.0, .gamma = 1.0, .learning_rate = 0.05, .max_iterations = 2000},
       ml::models::SgdClassificationSpec{
           .learning_rate = 0.05, .max_iterations = 2000, .alpha = 0.001},
+      ml::models::MlpSpec{.hidden_sizes = {8, 4},
+                          .learning_rate = 0.05,
+                          .max_iterations = 2000,
+                          .alpha = 0.001},
       ml::models::KnnSpec{},
+      ml::models::KernelKnnSpec{},
       ml::models::DecisionTreeSpec{},
       ml::models::RandomForestSpec{.tree_count = 8, .max_depth = 6},
       ml::models::GradientBoostingSpec{.tree_count = 10, .max_depth = 3},
@@ -130,6 +142,29 @@ int main() {
     ML_EXPECT_TRUE(probabilities.has_value(),
                    "classification ensemble probability output should succeed");
   }
+
+  const auto anomaly_features = ml::core::DenseMatrix::FromRows(
+      std::vector<ml::core::Vector>{{0, 0}, {0, 1}, {1, 0}, {1, 1}, {2, 2},
+                                    {10, 10}, {11, 9}, {9, 11}});
+  ML_EXPECT_TRUE(anomaly_features.has_value(),
+                 "anomaly feature matrix should build");
+  const ml::models::IsolationForestSpec anomaly_spec{
+      .tree_count = 20, .max_samples = 8, .contamination = 0.25, .seed = 7};
+  auto anomaly_model = ml::models::MakeAnomalyDetector(anomaly_spec);
+  ML_EXPECT_TRUE(anomaly_model.has_value(),
+                 "anomaly detector factory should succeed");
+  auto anomaly_fit = (*anomaly_model)->Fit(*anomaly_features);
+  ML_EXPECT_TRUE(anomaly_fit.has_value(), "anomaly detector fit should succeed");
+  auto anomaly_scores = (*anomaly_model)->Score(*anomaly_features);
+  ML_EXPECT_TRUE(anomaly_scores.has_value(),
+                 "anomaly detector score should succeed");
+  ML_EXPECT_TRUE(anomaly_scores->size() == anomaly_features->rows(),
+                 "anomaly score size");
+  auto anomaly_labels = (*anomaly_model)->Predict(*anomaly_features);
+  ML_EXPECT_TRUE(anomaly_labels.has_value(),
+                 "anomaly detector predict should succeed");
+  ML_EXPECT_TRUE((*anomaly_scores)[5] > (*anomaly_scores)[0],
+                 "clear outlier should score higher than inlier");
 
   return 0;
 }

@@ -47,10 +47,30 @@ public:
   LoadState(std::string_view state) = 0;
 };
 
+class AnomalyDetector {
+public:
+  virtual ~AnomalyDetector() = default;
+
+  virtual std::string_view name() const = 0;
+  virtual std::expected<void, std::string>
+  Fit(const ml::core::DenseMatrix &features) = 0;
+  virtual std::expected<ml::core::Vector, std::string>
+  Score(const ml::core::DenseMatrix &features) const = 0;
+  virtual std::expected<ml::core::LabelVector, std::string>
+  Predict(const ml::core::DenseMatrix &features) const = 0;
+  virtual double threshold() const = 0;
+  virtual EstimatorSpec spec() const = 0;
+  virtual std::expected<std::string, std::string> SaveState() const = 0;
+  virtual std::expected<void, std::string>
+  LoadState(std::string_view state) = 0;
+};
+
 std::expected<std::unique_ptr<Regressor>, std::string>
 MakeRegressor(const EstimatorSpec &spec);
 std::expected<std::unique_ptr<Classifier>, std::string>
 MakeClassifier(const EstimatorSpec &spec, std::size_t class_count);
+std::expected<std::unique_ptr<AnomalyDetector>, std::string>
+MakeAnomalyDetector(const EstimatorSpec &spec);
 
 } // namespace ml::models
 

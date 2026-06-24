@@ -33,5 +33,17 @@ int main() {
   ML_EXPECT_NEAR(ml::core::MacroF1(truth, guesses, labels), 0.7333333333, 1e-6,
                  "macro f1");
 
+  auto symmetric = ml::core::DenseMatrix::FromRows(
+      std::vector<ml::core::Vector>{{2.0, 1.0}, {1.0, 2.0}});
+  ML_EXPECT_TRUE(symmetric.has_value(), "symmetric matrix should build");
+  auto eigh = ml::core::SymmetricEigh(*symmetric);
+  ML_EXPECT_TRUE(eigh.has_value(), "symmetric eigh should succeed");
+  const double largest =
+      std::max(eigh->eigenvalues[0], eigh->eigenvalues[1]);
+  const double smallest =
+      std::min(eigh->eigenvalues[0], eigh->eigenvalues[1]);
+  ML_EXPECT_NEAR(largest, 3.0, 1e-6, "largest eigenvalue");
+  ML_EXPECT_NEAR(smallest, 1.0, 1e-6, "smallest eigenvalue");
+
   return 0;
 }

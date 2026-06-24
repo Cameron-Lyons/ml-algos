@@ -5,6 +5,7 @@
 #include <span>
 #include <string>
 
+#include "ml/core/format.h"
 #include "ml/core/parse.h"
 
 namespace ml::models {
@@ -12,7 +13,9 @@ namespace ml::models {
 namespace {
 
 using ml::core::AssignFieldIfPresent;
+using ml::core::JoinFormatted;
 using ml::core::Overload;
+using ml::core::ParseDelimitedNumbers;
 using ml::core::Split;
 
 } // namespace
@@ -61,6 +64,11 @@ ParseBaseEstimatorSpec(std::string_view text) {
                          -> std::expected<BaseEstimatorSpec, std::string> {
                        return std::unexpected(
                            "ensemble specs cannot be used as base estimators");
+                     },
+                     [](const IsolationForestSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "anomaly specs cannot be used as base estimators");
                      }},
             spec);
       });
@@ -107,6 +115,7 @@ std::string_view EstimatorId(const EstimatorSpec &spec) {
             return "elasticnet";
           },
           [](const KnnSpec &) -> std::string_view { return "knn"; },
+          [](const KernelKnnSpec &) -> std::string_view { return "kernel_knn"; },
           [](const DecisionTreeSpec &) -> std::string_view {
             return "decision_tree";
           },
@@ -123,6 +132,7 @@ std::string_view EstimatorId(const EstimatorSpec &spec) {
           [](const SgdRegressionSpec &) -> std::string_view {
             return "sgd_regression";
           },
+          [](const MlpSpec &) -> std::string_view { return "mlp"; },
           [](const LogisticSpec &) -> std::string_view { return "logistic"; },
           [](const OneVsRestLogisticSpec &) -> std::string_view {
             return "one_vs_rest_logistic";
@@ -134,8 +144,12 @@ std::string_view EstimatorId(const EstimatorSpec &spec) {
           [](const LinearSvmSpec &) -> std::string_view {
             return "linear_svm";
           },
+          [](const RbfSvmSpec &) -> std::string_view { return "rbf_svm"; },
           [](const SgdClassificationSpec &) -> std::string_view {
             return "sgd_classification";
+          },
+          [](const IsolationForestSpec &) -> std::string_view {
+            return "isolation_forest";
           },
           [](const VotingRegressorSpec &) -> std::string_view {
             return "voting_regressor";
@@ -172,6 +186,9 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
                                value.max_iterations, value.tolerance);
           },
           [](const KnnSpec &value) { return std::format("knn|k={}", value.k); },
+          [](const KernelKnnSpec &value) {
+            return std::format("kernel_knn|k={};gamma={}", value.k, value.gamma);
+          },
           [](const DecisionTreeSpec &value) {
             return std::format(
                 "decision_tree|max_depth={};min_samples_split={}",
@@ -208,6 +225,12 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
                 "sgd_regression|learning_rate={};max_iterations={};alpha={}",
                 value.learning_rate, value.max_iterations, value.alpha);
           },
+          [](const MlpSpec &value) {
+            return std::format(
+                "mlp|hidden_sizes={};learning_rate={};max_iterations={};alpha={}",
+                JoinFormatted(value.hidden_sizes), value.learning_rate,
+                value.max_iterations, value.alpha);
+          },
           [](const LogisticSpec &value) {
             return std::format("logistic|learning_rate={};max_iterations={}",
                                value.learning_rate, value.max_iterations);
@@ -230,11 +253,23 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
                 "linear_svm|C={};learning_rate={};max_iterations={}", value.C,
                 value.learning_rate, value.max_iterations);
           },
+          [](const RbfSvmSpec &value) {
+            return std::format(
+                "rbf_svm|C={};gamma={};learning_rate={};max_iterations={}",
+                value.C, value.gamma, value.learning_rate, value.max_iterations);
+          },
           [](const SgdClassificationSpec &value) {
             return std::format("sgd_classification|learning_rate={};max_"
                                "iterations={};alpha={}",
                                value.learning_rate, value.max_iterations,
                                value.alpha);
+          },
+          [](const IsolationForestSpec &value) {
+            return std::format(
+                "isolation_forest|tree_count={};max_samples={};feature_fraction="
+                "{};contamination={};seed={}",
+                value.tree_count, value.max_samples, value.feature_fraction,
+                value.contamination, value.seed);
           },
           [](const VotingRegressorSpec &value) {
             return std::format("voting_regressor|estimators={}",
@@ -327,6 +362,13 @@ ParseEstimatorSpec(std::string_view text) {
       return EstimatorSpec(spec);
     });
   }
+  if (id == "kernel_knn") {
+    KernelKnnSpec spec;
+    return AssignFieldIfPresent(spec.k, values, "k")
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.gamma, values, "gamma"); })
+        .transform([&] { return EstimatorSpec(spec); });
+  }
   if (id == "decision_tree") {
     DecisionTreeSpec spec;
     return AssignFieldIfPresent(spec.max_depth, values, "max_depth")
@@ -414,6 +456,29 @@ ParseEstimatorSpec(std::string_view text) {
             [&] { return AssignFieldIfPresent(spec.alpha, values, "alpha"); })
         .transform([&] { return EstimatorSpec(spec); });
   }
+  if (id == "mlp") {
+    MlpSpec spec;
+    if (const auto hidden_sizes = values.find("hidden_sizes");
+        hidden_sizes != values.end()) {
+      auto parsed = ParseDelimitedNumbers<int>(hidden_sizes->second, ',',
+                                               "hidden layer size");
+      if (!parsed) {
+        return std::unexpected(parsed.error());
+      }
+      if (parsed->empty()) {
+        return std::unexpected("mlp hidden_sizes cannot be empty");
+      }
+      spec.hidden_sizes = std::move(*parsed);
+    }
+    return AssignFieldIfPresent(spec.learning_rate, values, "learning_rate")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_iterations, values,
+                                      "max_iterations");
+        })
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.alpha, values, "alpha"); })
+        .transform([&] { return EstimatorSpec(spec); });
+  }
   if (id == "logistic") {
     LogisticSpec spec;
     return AssignFieldIfPresent(spec.learning_rate, values, "learning_rate")
@@ -460,6 +525,20 @@ ParseEstimatorSpec(std::string_view text) {
         })
         .transform([&] { return EstimatorSpec(spec); });
   }
+  if (id == "rbf_svm") {
+    RbfSvmSpec spec;
+    return AssignFieldIfPresent(spec.C, values, "C")
+        .and_then([&] { return AssignFieldIfPresent(spec.gamma, values, "gamma"); })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.learning_rate, values,
+                                      "learning_rate");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_iterations, values,
+                                      "max_iterations");
+        })
+        .transform([&] { return EstimatorSpec(spec); });
+  }
   if (id == "sgd_classification") {
     SgdClassificationSpec spec;
     return AssignFieldIfPresent(spec.learning_rate, values, "learning_rate")
@@ -469,6 +548,24 @@ ParseEstimatorSpec(std::string_view text) {
         })
         .and_then(
             [&] { return AssignFieldIfPresent(spec.alpha, values, "alpha"); })
+        .transform([&] { return EstimatorSpec(spec); });
+  }
+  if (id == "isolation_forest") {
+    IsolationForestSpec spec;
+    return AssignFieldIfPresent(spec.tree_count, values, "tree_count")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_samples, values, "max_samples");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.feature_fraction, values,
+                                      "feature_fraction");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.contamination, values,
+                                      "contamination");
+        })
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })
         .transform([&] { return EstimatorSpec(spec); });
   }
   if (id == "voting_regressor") {

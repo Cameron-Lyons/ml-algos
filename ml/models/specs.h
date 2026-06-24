@@ -27,6 +27,10 @@ struct ElasticNetSpec {
 struct KnnSpec {
   int k = 5;
 };
+struct KernelKnnSpec {
+  int k = 5;
+  double gamma = 0.0;
+};
 struct DecisionTreeSpec {
   int max_depth = 6;
   int min_samples_split = 2;
@@ -71,6 +75,12 @@ struct LinearSvmSpec {
   double learning_rate = 0.01;
   int max_iterations = 2000;
 };
+struct RbfSvmSpec {
+  double C = 1.0;
+  double gamma = 0.0;
+  double learning_rate = 0.01;
+  int max_iterations = 2000;
+};
 struct LinearSvrSpec {
   double C = 1.0;
   double epsilon = 0.1;
@@ -87,13 +97,27 @@ struct SgdClassificationSpec {
   int max_iterations = 2000;
   double alpha = 0.0001;
 };
+struct MlpSpec {
+  std::vector<int> hidden_sizes = {16, 8};
+  double learning_rate = 0.01;
+  int max_iterations = 2000;
+  double alpha = 0.0001;
+};
+struct IsolationForestSpec {
+  int tree_count = 100;
+  int max_samples = 256;
+  double feature_fraction = 1.0;
+  double contamination = 0.1;
+  unsigned int seed = 42;
+};
 
 using BaseEstimatorSpec =
     std::variant<LinearSpec, RidgeSpec, LassoSpec, ElasticNetSpec, KnnSpec,
-                 DecisionTreeSpec, RandomForestSpec, GradientBoostingSpec,
-                 AdaBoostSpec, LinearSvrSpec, SgdRegressionSpec, LogisticSpec,
-                 OneVsRestLogisticSpec, SoftmaxSpec, GaussianNbSpec,
-                 LinearSvmSpec, SgdClassificationSpec>;
+                 KernelKnnSpec, DecisionTreeSpec, RandomForestSpec,
+                 GradientBoostingSpec, AdaBoostSpec, LinearSvrSpec,
+                 SgdRegressionSpec, MlpSpec, LogisticSpec, OneVsRestLogisticSpec,
+                 SoftmaxSpec, GaussianNbSpec, LinearSvmSpec, RbfSvmSpec,
+                 SgdClassificationSpec>;
 
 struct VotingRegressorSpec {
   std::vector<BaseEstimatorSpec> estimators;
@@ -116,10 +140,11 @@ struct StackingClassifierSpec {
 };
 
 using EstimatorSpec = std::variant<
-    LinearSpec, RidgeSpec, LassoSpec, ElasticNetSpec, KnnSpec, DecisionTreeSpec,
-    RandomForestSpec, GradientBoostingSpec, AdaBoostSpec, LinearSvrSpec,
-    SgdRegressionSpec, LogisticSpec, OneVsRestLogisticSpec, SoftmaxSpec,
-    GaussianNbSpec, LinearSvmSpec, SgdClassificationSpec, VotingRegressorSpec,
+    LinearSpec, RidgeSpec, LassoSpec, ElasticNetSpec, KnnSpec, KernelKnnSpec,
+    DecisionTreeSpec, RandomForestSpec, GradientBoostingSpec, AdaBoostSpec,
+    LinearSvrSpec, SgdRegressionSpec, MlpSpec, LogisticSpec,
+    OneVsRestLogisticSpec, SoftmaxSpec, GaussianNbSpec, LinearSvmSpec,
+    RbfSvmSpec, SgdClassificationSpec, IsolationForestSpec, VotingRegressorSpec,
     VotingClassifierSpec, StackingRegressorSpec, StackingClassifierSpec>;
 
 bool IsEnsembleSpec(const EstimatorSpec &spec);
