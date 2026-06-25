@@ -206,13 +206,13 @@ private:
   std::unique_ptr<IsolationTreeNode> root_;
 };
 
-class IsolationForestModel final : public AnomalyDetector {
+class IsolationForestModel {
 public:
   explicit IsolationForestModel(IsolationForestSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "isolation_forest"; }
+  std::string_view name() const { return "isolation_forest"; }
 
-  std::expected<void, std::string> Fit(const DenseMatrix &features) override {
+  std::expected<void, std::string> Fit(const DenseMatrix &features) {
     if (features.rows() == 0) {
       return std::unexpected("isolation forest requires at least one row");
     }
@@ -234,7 +234,7 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Score(const DenseMatrix &features) const override {
+  Score(const DenseMatrix &features) const {
     Vector scores(features.rows(), 0.0);
     if (trees_.empty()) {
       return scores;
@@ -252,7 +252,7 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     auto scores = Score(features);
     if (!scores) {
       return std::unexpected(scores.error());
@@ -266,11 +266,11 @@ public:
     return labels;
   }
 
-  double threshold() const override { return threshold_; }
+  double threshold() const { return threshold_; }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out =
         std::format("{}\n{}\n{}\n", sample_size_, threshold_, trees_.size());
     for (const auto &tree : trees_) {
@@ -280,7 +280,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid isolation forest state")
         .and_then([](std::string_view line) {
@@ -339,9 +339,9 @@ private:
   std::vector<IsolationTree> trees_;
 };
 
-std::expected<std::unique_ptr<AnomalyDetector>, std::string>
+std::expected<AnomalyDetector, std::string>
 MakeIsolationForestModel(const IsolationForestSpec &spec) {
-  return std::make_unique<IsolationForestModel>(spec);
+  return AnomalyDetector(IsolationForestModel(spec));
 }
 
 } // namespace ml::models::detail

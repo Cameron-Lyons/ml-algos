@@ -5,7 +5,7 @@
 
 namespace ml::models {
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeRegressor(const EstimatorSpec &spec) {
   return std::visit(
       ml::core::Overload{
@@ -52,14 +52,14 @@ MakeRegressor(const EstimatorSpec &spec) {
             return detail::MakeStackingRegressorModel(value);
           },
           [](const auto &)
-              -> std::expected<std::unique_ptr<Regressor>, std::string> {
+              -> std::expected<Regressor, std::string> {
             return std::unexpected("estimator spec is not a regressor");
           },
       },
       spec);
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
   return std::visit(
       ml::core::Overload{
@@ -114,14 +114,14 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
             return detail::MakeStackingClassifierModel(value, class_count);
           },
           [&](const auto &)
-              -> std::expected<std::unique_ptr<Classifier>, std::string> {
+              -> std::expected<Classifier, std::string> {
             return std::unexpected("estimator spec is not a classifier");
           },
       },
       spec);
 }
 
-std::expected<std::unique_ptr<AnomalyDetector>, std::string>
+std::expected<AnomalyDetector, std::string>
 MakeAnomalyDetector(const EstimatorSpec &spec) {
   return std::visit(
       ml::core::Overload{
@@ -129,7 +129,7 @@ MakeAnomalyDetector(const EstimatorSpec &spec) {
             return detail::MakeIsolationForestModel(value);
           },
           [](const auto &)
-              -> std::expected<std::unique_ptr<AnomalyDetector>, std::string> {
+              -> std::expected<AnomalyDetector, std::string> {
             return std::unexpected("estimator spec is not an anomaly detector");
           },
       },

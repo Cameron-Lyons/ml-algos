@@ -4,14 +4,14 @@
 
 namespace ml::models::detail {
 
-class LogisticClassifierModel final : public Classifier {
+class LogisticClassifierModel {
 public:
   explicit LogisticClassifierModel(LogisticSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "logistic"; }
+  std::string_view name() const { return "logistic"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     const std::size_t feature_count = features.cols();
     weights_ = Vector(feature_count, 0.0);
     bias_ = 0.0;
@@ -40,7 +40,7 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictProba(features).transform([](DenseMatrix probs) {
       LabelVector labels(probs.rows(), 0);
       for (std::size_t row = 0; row < probs.rows(); ++row) {
@@ -51,7 +51,7 @@ public:
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix probabilities(features.rows(), 2, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       double linear = bias_;
@@ -65,15 +65,15 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const override { return {0, 1}; }
+  std::vector<int> classes() const { return {0, 1}; }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return std::format("{}\n{}", bias_, JoinFormatted(weights_));
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid logistic state")
         .and_then([](std::string_view line) {
@@ -97,16 +97,16 @@ private:
   double bias_ = 0.0;
 };
 
-class OneVsRestLogisticClassifierModel final : public Classifier {
+class OneVsRestLogisticClassifierModel {
 public:
   OneVsRestLogisticClassifierModel(OneVsRestLogisticSpec spec,
                                    std::size_t class_count)
       : spec_(spec), class_count_(class_count) {}
 
-  std::string_view name() const override { return "one_vs_rest_logistic"; }
+  std::string_view name() const { return "one_vs_rest_logistic"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     const std::size_t feature_count = features.cols();
     weights_ = DenseMatrix(feature_count, class_count_, 0.0);
     biases_ = Vector(class_count_, 0.0);
@@ -145,12 +145,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix scores(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       for (std::size_t cls = 0; cls < class_count_; ++cls) {
@@ -173,13 +173,13 @@ public:
     return scores;
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out =
         std::format("{}\n{}\n", class_count_, JoinFormatted(biases_));
     for (std::size_t row = 0; row < weights_.rows(); ++row) {
@@ -188,7 +188,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid one-vs-rest logistic class count")
         .and_then([](std::string_view line) {
@@ -238,14 +238,14 @@ private:
   Vector biases_;
 };
 
-class SoftmaxClassifierModel final : public Classifier {
+class SoftmaxClassifierModel {
 public:
   explicit SoftmaxClassifierModel(SoftmaxSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "softmax"; }
+  std::string_view name() const { return "softmax"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     const int max_label = *std::ranges::max_element(labels);
     class_count_ = static_cast<std::size_t>(max_label) + 1;
     weights_ = DenseMatrix(features.cols(), class_count_, 0.0);
@@ -286,12 +286,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix out(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       Vector logits(class_count_, 0.0);
@@ -309,13 +309,13 @@ public:
     return out;
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out =
         std::format("{}\n{}\n", class_count_, JoinFormatted(biases_));
     for (std::size_t row = 0; row < weights_.rows(); ++row) {
@@ -324,7 +324,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid softmax class count")
         .and_then([](std::string_view line) {
@@ -372,14 +372,14 @@ private:
   std::size_t class_count_ = 0;
 };
 
-class MlpClassifierModel final : public Classifier {
+class MlpClassifierModel {
 public:
   explicit MlpClassifierModel(MlpSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "mlp"; }
+  std::string_view name() const { return "mlp"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     const int max_label = *std::ranges::max_element(labels);
     class_count_ = static_cast<std::size_t>(max_label) + 1;
     const auto layer_sizes =
@@ -415,12 +415,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix probabilities(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       const Vector input(features[row].begin(), features[row].end());
@@ -432,19 +432,19 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return SerializeMlpLayers(layers_).transform([this](std::string layers) {
       return std::format("{}\n{}", class_count_, layers);
     });
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid mlp class count")
         .and_then([](std::string_view line) {
@@ -467,14 +467,14 @@ private:
   std::size_t class_count_ = 0;
 };
 
-class SgdClassificationModel final : public Classifier {
+class SgdClassificationModel {
 public:
   explicit SgdClassificationModel(SgdClassificationSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "sgd_classification"; }
+  std::string_view name() const { return "sgd_classification"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     const int max_label = *std::ranges::max_element(labels);
     class_count_ = static_cast<std::size_t>(max_label) + 1;
     weights_ = DenseMatrix(features.cols(), class_count_, 0.0);
@@ -508,12 +508,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix out(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       Vector logits(class_count_, 0.0);
@@ -531,13 +531,13 @@ public:
     return out;
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out =
         std::format("{}\n{}\n", class_count_, JoinFormatted(biases_));
     for (std::size_t row = 0; row < weights_.rows(); ++row) {
@@ -546,7 +546,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid sgd classification class count")
         .and_then([](std::string_view line) {
@@ -596,14 +596,14 @@ private:
   std::size_t class_count_ = 0;
 };
 
-class GaussianNbClassifierModel final : public Classifier {
+class GaussianNbClassifierModel {
 public:
   explicit GaussianNbClassifierModel(GaussianNbSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "gaussian_nb"; }
+  std::string_view name() const { return "gaussian_nb"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     const int max_label = *std::ranges::max_element(labels);
     class_count_ = static_cast<std::size_t>(max_label) + 1;
     priors_ = Vector(class_count_, 0.0);
@@ -642,12 +642,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix probabilities(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       Vector log_probs(class_count_, 0.0);
@@ -669,13 +669,13 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out =
         std::format("{}\n{}\n", class_count_, JoinFormatted(priors_));
     for (std::size_t row = 0; row < means_.rows(); ++row) {
@@ -687,7 +687,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid gaussian nb class count")
         .and_then([](std::string_view line) {
@@ -745,15 +745,15 @@ private:
   DenseMatrix variances_;
 };
 
-class LinearSvmClassifierModel final : public Classifier {
+class LinearSvmClassifierModel {
 public:
   LinearSvmClassifierModel(LinearSvmSpec spec, std::size_t class_count)
       : spec_(spec), class_count_(class_count) {}
 
-  std::string_view name() const override { return "linear_svm"; }
+  std::string_view name() const { return "linear_svm"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     const std::size_t feature_count = features.cols();
     weights_ = DenseMatrix(feature_count, class_count_, 0.0);
     biases_ = Vector(class_count_, 0.0);
@@ -796,12 +796,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix scores(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       for (std::size_t cls = 0; cls < class_count_; ++cls) {
@@ -814,13 +814,13 @@ public:
     return SoftmaxRows(scores);
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out =
         std::format("{}\n{}\n", class_count_, JoinFormatted(biases_));
     for (std::size_t row = 0; row < weights_.rows(); ++row) {
@@ -829,7 +829,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid linear svm class count")
         .and_then([](std::string_view line) {
@@ -878,15 +878,15 @@ private:
   DenseMatrix weights_;
 };
 
-class RbfSvmClassifierModel final : public Classifier {
+class RbfSvmClassifierModel {
 public:
   RbfSvmClassifierModel(RbfSvmSpec spec, std::size_t class_count)
       : spec_(spec), class_count_(class_count) {}
 
-  std::string_view name() const override { return "rbf_svm"; }
+  std::string_view name() const { return "rbf_svm"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     features_ = features;
     labels_ = std::ranges::to<LabelVector>(labels);
     gamma_ = ResolveGamma(spec_.gamma, features.cols());
@@ -922,12 +922,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix scores(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       for (std::size_t cls = 0; cls < class_count_; ++cls) {
@@ -944,13 +944,13 @@ public:
     return SoftmaxRows(scores);
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out = std::format("{}\n{}\n{}\n", class_count_, gamma_,
                                   JoinFormatted(biases_));
     for (std::size_t cls = 0; cls < class_count_; ++cls) {
@@ -968,7 +968,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid rbf svm class count")
         .and_then([this](std::string_view line) {
@@ -1045,49 +1045,49 @@ private:
   DenseMatrix alphas_;
 };
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeLogisticClassifierModel(const LogisticSpec &spec, std::size_t class_count) {
   if (class_count != 2) {
     return std::unexpected("logistic regression requires exactly two classes");
   }
-  return std::make_unique<LogisticClassifierModel>(spec);
+  return Classifier(LogisticClassifierModel(spec));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeOneVsRestLogisticClassifierModel(const OneVsRestLogisticSpec &spec,
                                      std::size_t class_count) {
-  return std::make_unique<OneVsRestLogisticClassifierModel>(spec, class_count);
+  return Classifier(OneVsRestLogisticClassifierModel(spec, class_count));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeSoftmaxClassifierModel(const SoftmaxSpec &spec) {
-  return std::make_unique<SoftmaxClassifierModel>(spec);
+  return Classifier(SoftmaxClassifierModel(spec));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeMlpClassifierModel(const MlpSpec &spec) {
-  return std::make_unique<MlpClassifierModel>(spec);
+  return Classifier(MlpClassifierModel(spec));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeSgdClassificationModel(const SgdClassificationSpec &spec) {
-  return std::make_unique<SgdClassificationModel>(spec);
+  return Classifier(SgdClassificationModel(spec));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeGaussianNbClassifierModel(const GaussianNbSpec &spec) {
-  return std::make_unique<GaussianNbClassifierModel>(spec);
+  return Classifier(GaussianNbClassifierModel(spec));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeLinearSvmClassifierModel(const LinearSvmSpec &spec,
                              std::size_t class_count) {
-  return std::make_unique<LinearSvmClassifierModel>(spec, class_count);
+  return Classifier(LinearSvmClassifierModel(spec, class_count));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeRbfSvmClassifierModel(const RbfSvmSpec &spec, std::size_t class_count) {
-  return std::make_unique<RbfSvmClassifierModel>(spec, class_count);
+  return Classifier(RbfSvmClassifierModel(spec, class_count));
 }
 
 } // namespace ml::models::detail

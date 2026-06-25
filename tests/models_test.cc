@@ -51,9 +51,9 @@ int main() {
   for (const auto &spec : regressors) {
     auto model = ml::models::MakeRegressor(spec);
     ML_EXPECT_TRUE(model.has_value(), "regressor factory should succeed");
-    auto fit = (*model)->Fit(regression_features, regression_targets);
+    auto fit = (*model).Fit(regression_features, regression_targets);
     ML_EXPECT_TRUE(fit.has_value(), "regressor fit should succeed");
-    auto predicted = (*model)->Predict(regression_features);
+    auto predicted = (*model).Predict(regression_features);
     ML_EXPECT_TRUE(predicted.has_value(), "regressor predict should succeed");
     ML_EXPECT_TRUE(predicted->size() == regression_targets.size(),
                    "regressor prediction size");
@@ -72,9 +72,9 @@ int main() {
     auto model = ml::models::MakeRegressor(spec);
     ML_EXPECT_TRUE(model.has_value(),
                    "regression ensemble factory should succeed");
-    auto fit = (*model)->Fit(regression_features, regression_targets);
+    auto fit = (*model).Fit(regression_features, regression_targets);
     ML_EXPECT_TRUE(fit.has_value(), "regression ensemble fit should succeed");
-    auto predicted = (*model)->Predict(regression_features);
+    auto predicted = (*model).Predict(regression_features);
     ML_EXPECT_TRUE(predicted.has_value(),
                    "regression ensemble predict should succeed");
   }
@@ -108,11 +108,11 @@ int main() {
   for (const auto &spec : classifiers) {
     auto model = ml::models::MakeClassifier(spec, 2);
     ML_EXPECT_TRUE(model.has_value(), "classifier factory should succeed");
-    auto fit = (*model)->Fit(classification_features, classification_labels);
+    auto fit = (*model).Fit(classification_features, classification_labels);
     ML_EXPECT_TRUE(fit.has_value(), "classifier fit should succeed");
-    auto predicted = (*model)->Predict(classification_features);
+    auto predicted = (*model).Predict(classification_features);
     ML_EXPECT_TRUE(predicted.has_value(), "classifier predict should succeed");
-    auto probabilities = (*model)->PredictProba(classification_features);
+    auto probabilities = (*model).PredictProba(classification_features);
     ML_EXPECT_TRUE(probabilities.has_value(),
                    "classifier probability output should succeed");
     ML_EXPECT_TRUE(probabilities->cols() == 2,
@@ -134,13 +134,13 @@ int main() {
     auto model = ml::models::MakeClassifier(spec, 2);
     ML_EXPECT_TRUE(model.has_value(),
                    "classification ensemble factory should succeed");
-    auto fit = (*model)->Fit(classification_features, classification_labels);
+    auto fit = (*model).Fit(classification_features, classification_labels);
     ML_EXPECT_TRUE(fit.has_value(),
                    "classification ensemble fit should succeed");
-    auto predicted = (*model)->Predict(classification_features);
+    auto predicted = (*model).Predict(classification_features);
     ML_EXPECT_TRUE(predicted.has_value(),
                    "classification ensemble predict should succeed");
-    auto probabilities = (*model)->PredictProba(classification_features);
+    auto probabilities = (*model).PredictProba(classification_features);
     ML_EXPECT_TRUE(probabilities.has_value(),
                    "classification ensemble probability output should succeed");
   }
@@ -155,15 +155,15 @@ int main() {
   auto anomaly_model = ml::models::MakeAnomalyDetector(anomaly_spec);
   ML_EXPECT_TRUE(anomaly_model.has_value(),
                  "anomaly detector factory should succeed");
-  auto anomaly_fit = (*anomaly_model)->Fit(*anomaly_features);
+  auto anomaly_fit = (*anomaly_model).Fit(*anomaly_features);
   ML_EXPECT_TRUE(anomaly_fit.has_value(),
                  "anomaly detector fit should succeed");
-  auto anomaly_scores = (*anomaly_model)->Score(*anomaly_features);
+  auto anomaly_scores = (*anomaly_model).Score(*anomaly_features);
   ML_EXPECT_TRUE(anomaly_scores.has_value(),
                  "anomaly detector score should succeed");
   ML_EXPECT_TRUE(anomaly_scores->size() == anomaly_features->rows(),
                  "anomaly score size");
-  auto anomaly_labels = (*anomaly_model)->Predict(*anomaly_features);
+  auto anomaly_labels = (*anomaly_model).Predict(*anomaly_features);
   ML_EXPECT_TRUE(anomaly_labels.has_value(),
                  "anomaly detector predict should succeed");
   ML_EXPECT_TRUE((*anomaly_scores)[5] > (*anomaly_scores)[0],

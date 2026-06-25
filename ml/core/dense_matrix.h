@@ -3,6 +3,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <mdspan>
 #include <span>
 #include <string>
 #include <vector>
@@ -16,6 +17,10 @@ class DenseMatrix {
 public:
   using Row = std::span<double>;
   using ConstRow = std::span<const double>;
+  using MdSpan =
+      std::mdspan<double, std::dextents<std::size_t, 2>>;
+  using ConstMdSpan =
+      std::mdspan<const double, std::dextents<std::size_t, 2>>;
 
   DenseMatrix() = default;
   DenseMatrix(std::size_t rows, std::size_t cols, double value = 0.0);
@@ -26,8 +31,22 @@ public:
 
   void ReserveRows(std::size_t rows);
 
+  [[nodiscard]] double &operator[](std::size_t row, std::size_t col) {
+    return values_[row * cols_ + col];
+  }
+  [[nodiscard]] const double &operator[](std::size_t row, std::size_t col) const {
+    return values_[row * cols_ + col];
+  }
+
   [[nodiscard]] Row operator[](std::size_t row);
   [[nodiscard]] ConstRow operator[](std::size_t row) const;
+
+  [[nodiscard]] MdSpan as_mdspan() {
+    return MdSpan(values_.data(), rows_, cols_);
+  }
+  [[nodiscard]] ConstMdSpan as_mdspan() const {
+    return ConstMdSpan(values_.data(), rows_, cols_);
+  }
 
   [[nodiscard]] double *data() { return values_.data(); }
   [[nodiscard]] const double *data() const { return values_.data(); }

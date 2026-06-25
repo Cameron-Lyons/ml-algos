@@ -4,7 +4,7 @@
 #include <charconv>
 #include <concepts>
 #include <expected>
-#include <map>
+#include <flat_map>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -20,6 +20,8 @@ template <typename... Ts> Overload(Ts...) -> Overload<Ts...>;
 
 template <typename T>
 concept ParsedNumber = std::integral<T> || std::floating_point<T>;
+
+using KeyedFields = std::flat_map<std::string_view, std::string_view>;
 
 template <ParsedNumber T>
 std::expected<T, std::string> ParseNumber(std::string_view text,
@@ -62,13 +64,12 @@ SplitCommaSeparated(std::string_view text) {
   return Split(text, ',', true);
 }
 
-inline std::map<std::string_view, std::string_view>
-ParseKeyedFields(std::string_view text) {
-  std::map<std::string_view, std::string_view> values;
+inline KeyedFields ParseKeyedFields(std::string_view text) {
+  KeyedFields values;
   for (const auto token : Split(text, ';', true)) {
     const auto parts = Split(token, '=', true);
     if (parts.size() == 2) {
-      values[parts[0]] = parts[1];
+      values.emplace(parts[0], parts[1]);
     }
   }
   return values;
