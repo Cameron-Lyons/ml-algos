@@ -16,7 +16,8 @@ namespace ml::models {
 
 template <typename T>
 concept RegressorLike =
-    requires(T &model, const T &const_model, const ml::core::DenseMatrix &features,
+    requires(T &model, const T &const_model,
+             const ml::core::DenseMatrix &features,
              std::span<const double> targets, std::string_view state) {
       { const_model.name() } -> std::convertible_to<std::string_view>;
       {
@@ -36,8 +37,9 @@ concept RegressorLike =
 
 template <typename T>
 concept ClassifierLike =
-    requires(T &model, const T &const_model, const ml::core::DenseMatrix &features,
-             std::span<const int> labels, std::string_view state) {
+    requires(T &model, const T &const_model,
+             const ml::core::DenseMatrix &features, std::span<const int> labels,
+             std::string_view state) {
       { const_model.name() } -> std::convertible_to<std::string_view>;
       {
         model.Fit(features, labels)
@@ -60,12 +62,10 @@ concept ClassifierLike =
 
 template <typename T>
 concept AnomalyDetectorLike =
-    requires(T &model, const T &const_model, const ml::core::DenseMatrix &features,
-             std::string_view state) {
+    requires(T &model, const T &const_model,
+             const ml::core::DenseMatrix &features, std::string_view state) {
       { const_model.name() } -> std::convertible_to<std::string_view>;
-      {
-        model.Fit(features)
-      } -> std::same_as<std::expected<void, std::string>>;
+      { model.Fit(features) } -> std::same_as<std::expected<void, std::string>>;
       {
         const_model.Score(features)
       } -> std::same_as<std::expected<ml::core::Vector, std::string>>;
@@ -91,9 +91,8 @@ public:
       : impl_(std::make_unique<ModelHolder<Model>>(std::move(model))) {}
 
   [[nodiscard]] std::string_view name() const { return impl_->Name(); }
-  std::expected<void, std::string>
-  Fit(const ml::core::DenseMatrix &features,
-      std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const ml::core::DenseMatrix &features,
+                                       std::span<const double> targets) {
     return impl_->Fit(features, targets);
   }
   std::expected<ml::core::Vector, std::string>
@@ -119,14 +118,16 @@ private:
     Predict(const ml::core::DenseMatrix &features) const = 0;
     [[nodiscard]] virtual EstimatorSpec Spec() const = 0;
     virtual std::expected<std::string, std::string> SaveState() const = 0;
-    virtual std::expected<void, std::string> LoadState(std::string_view state) = 0;
+    virtual std::expected<void, std::string>
+    LoadState(std::string_view state) = 0;
   };
 
-  template <RegressorLike Model>
-  struct ModelHolder final : Concept {
+  template <RegressorLike Model> struct ModelHolder final : Concept {
     explicit ModelHolder(Model model) : model_(std::move(model)) {}
 
-    [[nodiscard]] std::string_view Name() const override { return model_.name(); }
+    [[nodiscard]] std::string_view Name() const override {
+      return model_.name();
+    }
     std::expected<void, std::string>
     Fit(const ml::core::DenseMatrix &features,
         std::span<const double> targets) override {
@@ -140,7 +141,8 @@ private:
     std::expected<std::string, std::string> SaveState() const override {
       return model_.SaveState();
     }
-    std::expected<void, std::string> LoadState(std::string_view state) override {
+    std::expected<void, std::string>
+    LoadState(std::string_view state) override {
       return model_.LoadState(state);
     }
 
@@ -159,8 +161,8 @@ public:
       : impl_(std::make_unique<ModelHolder<Model>>(std::move(model))) {}
 
   [[nodiscard]] std::string_view name() const { return impl_->Name(); }
-  std::expected<void, std::string>
-  Fit(const ml::core::DenseMatrix &features, std::span<const int> labels) {
+  std::expected<void, std::string> Fit(const ml::core::DenseMatrix &features,
+                                       std::span<const int> labels) {
     return impl_->Fit(features, labels);
   }
   std::expected<ml::core::LabelVector, std::string>
@@ -193,17 +195,18 @@ private:
     [[nodiscard]] virtual std::vector<int> Classes() const = 0;
     [[nodiscard]] virtual EstimatorSpec Spec() const = 0;
     virtual std::expected<std::string, std::string> SaveState() const = 0;
-    virtual std::expected<void, std::string> LoadState(std::string_view state) = 0;
+    virtual std::expected<void, std::string>
+    LoadState(std::string_view state) = 0;
   };
 
-  template <ClassifierLike Model>
-  struct ModelHolder final : Concept {
+  template <ClassifierLike Model> struct ModelHolder final : Concept {
     explicit ModelHolder(Model model) : model_(std::move(model)) {}
 
-    [[nodiscard]] std::string_view Name() const override { return model_.name(); }
-    std::expected<void, std::string>
-    Fit(const ml::core::DenseMatrix &features,
-        std::span<const int> labels) override {
+    [[nodiscard]] std::string_view Name() const override {
+      return model_.name();
+    }
+    std::expected<void, std::string> Fit(const ml::core::DenseMatrix &features,
+                                         std::span<const int> labels) override {
       return model_.Fit(features, labels);
     }
     std::expected<ml::core::LabelVector, std::string>
@@ -221,7 +224,8 @@ private:
     std::expected<std::string, std::string> SaveState() const override {
       return model_.SaveState();
     }
-    std::expected<void, std::string> LoadState(std::string_view state) override {
+    std::expected<void, std::string>
+    LoadState(std::string_view state) override {
       return model_.LoadState(state);
     }
 
@@ -240,8 +244,7 @@ public:
       : impl_(std::make_unique<ModelHolder<Model>>(std::move(model))) {}
 
   [[nodiscard]] std::string_view name() const { return impl_->Name(); }
-  std::expected<void, std::string>
-  Fit(const ml::core::DenseMatrix &features) {
+  std::expected<void, std::string> Fit(const ml::core::DenseMatrix &features) {
     return impl_->Fit(features);
   }
   std::expected<ml::core::Vector, std::string>
@@ -274,14 +277,16 @@ private:
     [[nodiscard]] virtual double Threshold() const = 0;
     [[nodiscard]] virtual EstimatorSpec Spec() const = 0;
     virtual std::expected<std::string, std::string> SaveState() const = 0;
-    virtual std::expected<void, std::string> LoadState(std::string_view state) = 0;
+    virtual std::expected<void, std::string>
+    LoadState(std::string_view state) = 0;
   };
 
-  template <AnomalyDetectorLike Model>
-  struct ModelHolder final : Concept {
+  template <AnomalyDetectorLike Model> struct ModelHolder final : Concept {
     explicit ModelHolder(Model model) : model_(std::move(model)) {}
 
-    [[nodiscard]] std::string_view Name() const override { return model_.name(); }
+    [[nodiscard]] std::string_view Name() const override {
+      return model_.name();
+    }
     std::expected<void, std::string>
     Fit(const ml::core::DenseMatrix &features) override {
       return model_.Fit(features);
@@ -294,12 +299,15 @@ private:
     Predict(const ml::core::DenseMatrix &features) const override {
       return model_.Predict(features);
     }
-    [[nodiscard]] double Threshold() const override { return model_.threshold(); }
+    [[nodiscard]] double Threshold() const override {
+      return model_.threshold();
+    }
     [[nodiscard]] EstimatorSpec Spec() const override { return model_.spec(); }
     std::expected<std::string, std::string> SaveState() const override {
       return model_.SaveState();
     }
-    std::expected<void, std::string> LoadState(std::string_view state) override {
+    std::expected<void, std::string>
+    LoadState(std::string_view state) override {
       return model_.LoadState(state);
     }
 
@@ -310,8 +318,8 @@ private:
 };
 
 std::expected<Regressor, std::string> MakeRegressor(const EstimatorSpec &spec);
-std::expected<Classifier, std::string>
-MakeClassifier(const EstimatorSpec &spec, std::size_t class_count);
+std::expected<Classifier, std::string> MakeClassifier(const EstimatorSpec &spec,
+                                                      std::size_t class_count);
 std::expected<AnomalyDetector, std::string>
 MakeAnomalyDetector(const EstimatorSpec &spec);
 

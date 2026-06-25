@@ -233,8 +233,7 @@ public:
     return FitThreshold(features);
   }
 
-  std::expected<Vector, std::string>
-  Score(const DenseMatrix &features) const {
+  std::expected<Vector, std::string> Score(const DenseMatrix &features) const {
     Vector scores(features.rows(), 0.0);
     if (trees_.empty()) {
       return scores;

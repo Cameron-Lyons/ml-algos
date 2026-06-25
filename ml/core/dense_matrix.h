@@ -17,10 +17,8 @@ class DenseMatrix {
 public:
   using Row = std::span<double>;
   using ConstRow = std::span<const double>;
-  using MdSpan =
-      std::mdspan<double, std::dextents<std::size_t, 2>>;
-  using ConstMdSpan =
-      std::mdspan<const double, std::dextents<std::size_t, 2>>;
+  using MdSpan = std::mdspan<double, std::dextents<std::size_t, 2>>;
+  using ConstMdSpan = std::mdspan<const double, std::dextents<std::size_t, 2>>;
 
   DenseMatrix() = default;
   DenseMatrix(std::size_t rows, std::size_t cols, double value = 0.0);
@@ -34,7 +32,8 @@ public:
   [[nodiscard]] double &operator[](std::size_t row, std::size_t col) {
     return values_[row * cols_ + col];
   }
-  [[nodiscard]] const double &operator[](std::size_t row, std::size_t col) const {
+  [[nodiscard]] const double &operator[](std::size_t row,
+                                         std::size_t col) const {
     return values_[row * cols_ + col];
   }
 

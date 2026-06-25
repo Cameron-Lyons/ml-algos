@@ -10,8 +10,8 @@ public:
 
   std::string_view name() const { return "knn"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     features_ = features;
     targets_ = std::ranges::to<Vector>(targets);
     return {};
@@ -57,8 +57,8 @@ public:
 
   std::string_view name() const { return "kernel_knn"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     features_ = features;
     targets_ = std::ranges::to<Vector>(targets);
     gamma_ = ResolveGamma(spec_.gamma, features.cols());

@@ -9,8 +9,7 @@ namespace ml::models::detail {
 std::expected<Regressor, std::string>
 MakeBaseRegressor(const BaseEstimatorSpec &spec) {
   return std::visit(
-      [&](const auto &value)
-          -> std::expected<Regressor, std::string> {
+      [&](const auto &value) -> std::expected<Regressor, std::string> {
         return MakeRegressor(EstimatorSpec(value));
       },
       spec);
@@ -19,8 +18,7 @@ MakeBaseRegressor(const BaseEstimatorSpec &spec) {
 std::expected<Classifier, std::string>
 MakeBaseClassifier(const BaseEstimatorSpec &spec, std::size_t class_count) {
   return std::visit(
-      [&](const auto &value)
-          -> std::expected<Classifier, std::string> {
+      [&](const auto &value) -> std::expected<Classifier, std::string> {
         return MakeClassifier(EstimatorSpec(value), class_count);
       },
       spec);
@@ -61,8 +59,7 @@ MakeBaseClassifiers(std::span<const BaseEstimatorSpec> specs,
   return models;
 }
 
-std::string
-SaveRegressorStates(const std::vector<Regressor> &models) {
+std::string SaveRegressorStates(const std::vector<Regressor> &models) {
   std::string out = std::format("{}\n", models.size());
   for (const auto &model : models) {
     const auto state = model.SaveState();
@@ -103,8 +100,7 @@ LoadRegressorStates(StateReader &reader, std::vector<Regressor> &models) {
       });
 }
 
-std::string
-SaveClassifierStates(const std::vector<Classifier> &models) {
+std::string SaveClassifierStates(const std::vector<Classifier> &models) {
   std::string out = std::format("{}\n", models.size());
   for (const auto &model : models) {
     const auto state = model.SaveState();
@@ -151,8 +147,8 @@ public:
 
   std::string_view name() const { return "voting_regressor"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     auto models = MakeBaseRegressors(spec_.estimators);
     if (!models) {
       return std::unexpected(models.error());
@@ -287,9 +283,7 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -341,8 +335,8 @@ public:
 
   std::string_view name() const { return "stacking_regressor"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     auto base_models = MakeBaseRegressors(spec_.estimators);
     if (!base_models) {
       return std::unexpected(base_models.error());
@@ -501,8 +495,7 @@ public:
         }
         const DenseMatrix train_features = features.SliceRows(fold.train);
         const LabelVector train_labels = SelectLabels(labels, fold.train);
-        if (auto status = (*model).Fit(train_features, train_labels);
-            !status) {
+        if (auto status = (*model).Fit(train_features, train_labels); !status) {
           return std::unexpected(status.error());
         }
         const DenseMatrix test_features = features.SliceRows(fold.test);
@@ -561,9 +554,7 @@ public:
     return final_estimator_->PredictProba(meta);
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 

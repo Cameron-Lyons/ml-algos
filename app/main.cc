@@ -48,8 +48,9 @@ void PrintUsage(const char *program) {
                program);
   std::println("  {} predict --model <bundle> --input <csv> [--json]", program);
   std::println("  {} inspect --model <bundle> [--json]", program);
-  std::println("  {} list [--task <regression|classification|anomaly>] [--json]",
-               program);
+  std::println(
+      "  {} list [--task <regression|classification|anomaly>] [--json]",
+      program);
 }
 
 void PrintError(std::string_view message) {
@@ -189,11 +190,11 @@ std::string ToJson(const ml::TuneReport &report) {
   const std::string candidates = ml::core::JoinJsonObjects(
       report.candidates |
       std::views::transform([](const ml::TuneCandidate &candidate) {
-        return std::format("{{\"spec\":\"{}\",\"objective\":{}}}",
-                           ml::core::EscapeJson(
-                               ml::models::SerializeEstimatorSpec(
-                                   candidate.spec)),
-                           candidate.objective);
+        return std::format(
+            "{{\"spec\":\"{}\",\"objective\":{}}}",
+            ml::core::EscapeJson(
+                ml::models::SerializeEstimatorSpec(candidate.spec)),
+            candidate.objective);
       }));
   return std::format("{{\"task\":\"{}\",\"objective\":\"{}\",\"best_score\":{},"
                      "\"best_spec\":\"{}\",\"candidates\":[{}]}}",
@@ -281,7 +282,8 @@ void PrintTune(const ml::TuneReport &report) {
   }
 }
 
-std::string FormatAlgorithmListJson(const std::vector<std::string> &algorithms) {
+std::string
+FormatAlgorithmListJson(const std::vector<std::string> &algorithms) {
   return ml::core::JoinJsonQuoted(algorithms);
 }
 

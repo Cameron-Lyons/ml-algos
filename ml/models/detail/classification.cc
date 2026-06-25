@@ -173,9 +173,7 @@ public:
     return scores;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -309,9 +307,7 @@ public:
     return out;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -432,9 +428,7 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -531,9 +525,7 @@ public:
     return out;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -669,9 +661,7 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -814,9 +804,7 @@ public:
     return SoftmaxRows(scores);
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -944,9 +932,7 @@ public:
     return SoftmaxRows(scores);
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 

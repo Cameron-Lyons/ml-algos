@@ -210,8 +210,8 @@ public:
 
   std::string_view name() const { return "decision_tree"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     tree_ = RegressionTree(spec_.max_depth, spec_.min_samples_split, {});
     tree_.Fit(features, targets);
     return {};
@@ -536,9 +536,7 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -562,8 +560,8 @@ public:
 
   std::string_view name() const { return "random_forest"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     trees_.clear();
     std::mt19937 rng(spec_.seed);
     std::uniform_int_distribution<std::size_t> row_dist(0, features.rows() - 1);
@@ -701,9 +699,7 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -758,8 +754,8 @@ public:
 
   std::string_view name() const { return "gradient_boosting"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     trees_.clear();
     bias_ = Mean(targets);
     Vector predictions(features.rows(), bias_);
@@ -925,9 +921,7 @@ public:
     return SoftmaxRows(scores);
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -1112,9 +1106,7 @@ public:
     return scores;
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 

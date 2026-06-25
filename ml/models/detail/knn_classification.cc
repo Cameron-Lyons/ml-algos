@@ -32,9 +32,7 @@ public:
                            });
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
@@ -99,9 +97,7 @@ public:
         });
   }
 
-  std::vector<int> classes() const {
-    return MakeClassLabels(class_count_);
-  }
+  std::vector<int> classes() const { return MakeClassLabels(class_count_); }
 
   EstimatorSpec spec() const { return spec_; }
 
