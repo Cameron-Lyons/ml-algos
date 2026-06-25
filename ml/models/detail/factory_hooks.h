@@ -9,8 +9,7 @@
 
 namespace ml::models::detail {
 
-std::expected<Regressor, std::string>
-MakeLinearRegressionModel();
+std::expected<Regressor, std::string> MakeLinearRegressionModel();
 std::expected<Regressor, std::string>
 MakeRidgeRegressionModel(const RidgeSpec &spec);
 std::expected<Regressor, std::string>

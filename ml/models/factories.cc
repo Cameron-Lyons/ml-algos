@@ -5,8 +5,7 @@
 
 namespace ml::models {
 
-std::expected<Regressor, std::string>
-MakeRegressor(const EstimatorSpec &spec) {
+std::expected<Regressor, std::string> MakeRegressor(const EstimatorSpec &spec) {
   return std::visit(
       ml::core::Overload{
           [](const LinearSpec &) {
@@ -51,16 +50,15 @@ MakeRegressor(const EstimatorSpec &spec) {
           [](const StackingRegressorSpec &value) {
             return detail::MakeStackingRegressorModel(value);
           },
-          [](const auto &)
-              -> std::expected<Regressor, std::string> {
+          [](const auto &) -> std::expected<Regressor, std::string> {
             return std::unexpected("estimator spec is not a regressor");
           },
       },
       spec);
 }
 
-std::expected<Classifier, std::string>
-MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
+std::expected<Classifier, std::string> MakeClassifier(const EstimatorSpec &spec,
+                                                      std::size_t class_count) {
   return std::visit(
       ml::core::Overload{
           [&](const LogisticSpec &value) {
@@ -113,8 +111,7 @@ MakeClassifier(const EstimatorSpec &spec, std::size_t class_count) {
           [&](const StackingClassifierSpec &value) {
             return detail::MakeStackingClassifierModel(value, class_count);
           },
-          [&](const auto &)
-              -> std::expected<Classifier, std::string> {
+          [&](const auto &) -> std::expected<Classifier, std::string> {
             return std::unexpected("estimator spec is not a classifier");
           },
       },
@@ -128,8 +125,7 @@ MakeAnomalyDetector(const EstimatorSpec &spec) {
           [](const IsolationForestSpec &value) {
             return detail::MakeIsolationForestModel(value);
           },
-          [](const auto &)
-              -> std::expected<AnomalyDetector, std::string> {
+          [](const auto &) -> std::expected<AnomalyDetector, std::string> {
             return std::unexpected("estimator spec is not an anomaly detector");
           },
       },

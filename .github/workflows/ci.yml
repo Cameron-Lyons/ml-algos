@@ -34,7 +34,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 23
-          sudo apt-get install -y clang-tidy-23
+          sudo apt-get install -y clang-tidy-23 libc++-23-dev libc++abi-23-dev
 
       - name: Run clang-tidy
         run: ./scripts/check_clang_tidy.sh
@@ -68,6 +68,7 @@ jobs:
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh 23
+          sudo apt-get install -y libc++-23-dev libc++abi-23-dev
 
       - uses: bazel-contrib/setup-bazel@0.19.0
         with:
@@ -81,6 +82,13 @@ jobs:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
         run: |
+          extra_flags=()
+          if [ "${CC}" = "clang-23" ]; then
+            extra_flags+=(--cxxopt=-stdlib=libc++)
+            extra_flags+=(--linkopt=-stdlib=libc++)
+            extra_flags+=(--linkopt=-lc++abi)
+          fi
           bazel test //... \
             --action_env=CC \
-            --action_env=CXX
+            --action_env=CXX \
+            "${extra_flags[@]}"

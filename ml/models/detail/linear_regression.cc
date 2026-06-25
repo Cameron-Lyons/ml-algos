@@ -8,8 +8,8 @@ class LinearRegressionModel {
 public:
   std::string_view name() const { return "linear"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     return NormalEquation(features, targets, 0.0)
         .and_then([this](Vector solved) {
           coefficients_ = std::move(solved);
@@ -45,8 +45,8 @@ public:
 
   std::string_view name() const { return "ridge"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     return NormalEquation(features, targets, spec_.lambda)
         .and_then([this](Vector solved) {
           coefficients_ = std::move(solved);
@@ -83,8 +83,8 @@ public:
 
   std::string_view name() const { return "lasso"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     return FitCoordinateDescent(features, targets, coefficients_,
                                 spec_.max_iterations, spec_.tolerance,
                                 {spec_.lambda, 0.0});
@@ -119,8 +119,8 @@ public:
 
   std::string_view name() const { return "elasticnet"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     const double l1 = spec_.alpha * spec_.l1_ratio;
     const double l2 = spec_.alpha * (1.0 - spec_.l1_ratio);
     return FitCoordinateDescent(features, targets, coefficients_,
@@ -157,8 +157,8 @@ public:
 
   std::string_view name() const { return "linear_svr"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     const std::size_t feature_count = features.cols();
     weights_ = Vector(feature_count, 0.0);
     bias_ = 0.0;
@@ -243,8 +243,8 @@ public:
 
   std::string_view name() const { return "sgd_regression"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     const std::size_t feature_count = features.cols();
     weights_ = Vector(feature_count, 0.0);
     bias_ = 0.0;
@@ -315,8 +315,8 @@ public:
 
   std::string_view name() const { return "mlp"; }
 
-  std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) {
+  std::expected<void, std::string> Fit(const DenseMatrix &features,
+                                       std::span<const double> targets) {
     const auto layer_sizes =
         MlpLayerSizes(features.cols(), spec_.hidden_sizes, 1);
     std::mt19937 rng(42);
@@ -376,8 +376,7 @@ private:
   std::vector<MlpLayer> layers_;
 };
 
-std::expected<Regressor, std::string>
-MakeLinearRegressionModel() {
+std::expected<Regressor, std::string> MakeLinearRegressionModel() {
   return Regressor(LinearRegressionModel{});
 }
 

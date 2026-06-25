@@ -17,6 +17,7 @@ fi
 
 extra_args=(
   -std=c++26
+  -stdlib=libc++
   -I.
   -Wall
   -Wextra
