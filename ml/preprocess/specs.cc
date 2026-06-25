@@ -49,8 +49,8 @@ std::expected<TransformerSpec, std::string>
 ParseTransformerSpec(std::string_view text) {
   const auto parts = Split(text, '|');
   const std::string_view id = parts[0];
-  const auto values = parts.size() > 1 ? ParseKeyedFields(parts[1])
-                                       : decltype(ParseKeyedFields(parts[0])){};
+  const auto values =
+      parts.size() > 1 ? ParseKeyedFields(parts[1]) : ml::core::KeyedFields{};
 
   if (id == "standard_scaler") {
     return TransformerSpec(StandardScalerSpec{});

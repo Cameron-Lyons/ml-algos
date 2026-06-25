@@ -203,22 +203,22 @@ private:
   std::unique_ptr<RegressionTreeNode> root_;
 };
 
-class DecisionTreeRegressorModel final : public Regressor {
+class DecisionTreeRegressorModel {
 public:
   explicit DecisionTreeRegressorModel(DecisionTreeSpec spec)
       : spec_(spec), tree_(spec.max_depth, spec.min_samples_split, {}) {}
 
-  std::string_view name() const override { return "decision_tree"; }
+  std::string_view name() const { return "decision_tree"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     tree_ = RegressionTree(spec_.max_depth, spec_.min_samples_split, {});
     tree_.Fit(features, targets);
     return {};
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     Vector predictions(features.rows(), 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       predictions[row] = tree_.Predict(features[row]);
@@ -226,13 +226,13 @@ public:
     return predictions;
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return tree_.SaveState();
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     return tree_.LoadState(state);
   }
 
@@ -502,17 +502,17 @@ private:
   mutable std::vector<std::size_t> feature_indices_;
   std::unique_ptr<ClassificationTreeNode> root_;
 };
-class DecisionTreeClassifierModel final : public Classifier {
+class DecisionTreeClassifierModel {
 public:
   DecisionTreeClassifierModel(DecisionTreeSpec spec, std::size_t class_count)
       : spec_(spec), tree_(spec.max_depth, spec.min_samples_split,
                            static_cast<int>(class_count), {}),
         class_count_(class_count) {}
 
-  std::string_view name() const override { return "decision_tree"; }
+  std::string_view name() const { return "decision_tree"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     tree_ = ClassificationTree(spec_.max_depth, spec_.min_samples_split,
                                static_cast<int>(class_count_), {});
     tree_.Fit(features, labels);
@@ -520,12 +520,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix probabilities(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       const Vector probs = tree_.PredictProba(features[row]);
@@ -536,17 +536,17 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return tree_.SaveState();
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     return tree_.LoadState(state);
   }
 
@@ -556,14 +556,14 @@ private:
   std::size_t class_count_;
 };
 
-class RandomForestRegressorModel final : public Regressor {
+class RandomForestRegressorModel {
 public:
   explicit RandomForestRegressorModel(RandomForestSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "random_forest"; }
+  std::string_view name() const { return "random_forest"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     trees_.clear();
     std::mt19937 rng(spec_.seed);
     std::uniform_int_distribution<std::size_t> row_dist(0, features.rows() - 1);
@@ -589,7 +589,7 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     Vector predictions(features.rows(), 0.0);
     if (trees_.empty()) {
       return predictions;
@@ -605,9 +605,9 @@ public:
     return predictions;
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out = std::format("{}\n", trees_.size());
     for (const auto &tree : trees_) {
       const std::string state = tree.SaveState();
@@ -616,7 +616,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid random forest regressor state")
         .and_then([](std::string_view line) {
@@ -641,15 +641,15 @@ private:
   std::vector<RegressionTree> trees_;
 };
 
-class RandomForestClassifierModel final : public Classifier {
+class RandomForestClassifierModel {
 public:
   RandomForestClassifierModel(RandomForestSpec spec, std::size_t class_count)
       : spec_(spec), class_count_(class_count) {}
 
-  std::string_view name() const override { return "random_forest"; }
+  std::string_view name() const { return "random_forest"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     trees_.clear();
     std::mt19937 rng(spec_.seed);
     std::uniform_int_distribution<std::size_t> row_dist(0, features.rows() - 1);
@@ -675,12 +675,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix probabilities(features.rows(), class_count_, 0.0);
     if (trees_.empty()) {
       return probabilities;
@@ -701,13 +701,13 @@ public:
     return probabilities;
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out = std::format("{}\n{}\n", class_count_, trees_.size());
     for (const auto &tree : trees_) {
       const std::string state = tree.SaveState();
@@ -716,7 +716,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid random forest classifier class count")
         .and_then([](std::string_view line) {
@@ -751,15 +751,15 @@ private:
   std::vector<ClassificationTree> trees_;
 };
 
-class GradientBoostingRegressorModel final : public Regressor {
+class GradientBoostingRegressorModel {
 public:
   explicit GradientBoostingRegressorModel(GradientBoostingSpec spec)
       : spec_(spec) {}
 
-  std::string_view name() const override { return "gradient_boosting"; }
+  std::string_view name() const { return "gradient_boosting"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     trees_.clear();
     bias_ = Mean(targets);
     Vector predictions(features.rows(), bias_);
@@ -792,7 +792,7 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     Vector predictions(features.rows(), bias_);
     for (const auto &tree : trees_) {
       for (std::size_t row = 0; row < features.rows(); ++row) {
@@ -802,9 +802,9 @@ public:
     return predictions;
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out = std::format("{}\n{}\n", bias_, trees_.size());
     for (const auto &tree : trees_) {
       const std::string state = tree.SaveState();
@@ -813,7 +813,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid gradient boosting regressor bias")
         .and_then([](std::string_view line) {
@@ -847,16 +847,16 @@ private:
   std::vector<RegressionTree> trees_;
 };
 
-class GradientBoostingClassifierModel final : public Classifier {
+class GradientBoostingClassifierModel {
 public:
   GradientBoostingClassifierModel(GradientBoostingSpec spec,
                                   std::size_t class_count)
       : spec_(spec), class_count_(class_count) {}
 
-  std::string_view name() const override { return "gradient_boosting"; }
+  std::string_view name() const { return "gradient_boosting"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     stages_.clear();
     biases_ = ClassLogPriors(labels, class_count_);
     DenseMatrix scores(features.rows(), class_count_, 0.0);
@@ -902,12 +902,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix scores(features.rows(), class_count_, 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       for (std::size_t cls = 0; cls < class_count_; ++cls) {
@@ -925,13 +925,13 @@ public:
     return SoftmaxRows(scores);
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out = std::format("{}\n{}\n{}\n", class_count_,
                                   JoinFormatted(biases_), stages_.size());
     for (const auto &stage : stages_) {
@@ -944,7 +944,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     auto class_count =
         reader.ReadLine("invalid gradient boosting classifier class count")
@@ -1022,15 +1022,15 @@ private:
   std::vector<std::vector<RegressionTree>> stages_;
 };
 
-class AdaBoostClassifierModel final : public Classifier {
+class AdaBoostClassifierModel {
 public:
   AdaBoostClassifierModel(AdaBoostSpec spec, std::size_t class_count)
       : spec_(spec), class_count_(class_count) {}
 
-  std::string_view name() const override { return "adaboost"; }
+  std::string_view name() const { return "adaboost"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     if (class_count_ < 2) {
       return std::unexpected("adaboost requires at least two classes");
     }
@@ -1085,12 +1085,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     DenseMatrix scores(features.rows(), class_count_, 0.0);
     for (std::size_t index = 0; index < estimators_.size(); ++index) {
       for (std::size_t row = 0; row < features.rows(); ++row) {
@@ -1112,13 +1112,13 @@ public:
     return scores;
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     std::string out = std::format("{}\n{}\n{}\n", class_count_,
                                   JoinFormatted(alphas_), estimators_.size());
     for (const auto &tree : estimators_) {
@@ -1128,7 +1128,7 @@ public:
     return out;
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     auto class_count =
         reader.ReadLine("invalid adaboost classifier class count")
@@ -1180,42 +1180,42 @@ private:
   std::vector<ClassificationTree> estimators_;
 };
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeRandomForestRegressorModel(const RandomForestSpec &spec) {
-  return std::make_unique<RandomForestRegressorModel>(spec);
+  return Regressor(RandomForestRegressorModel(spec));
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeGradientBoostingRegressorModel(const GradientBoostingSpec &spec) {
-  return std::make_unique<GradientBoostingRegressorModel>(spec);
+  return Regressor(GradientBoostingRegressorModel(spec));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeRandomForestClassifierModel(const RandomForestSpec &spec,
                                 std::size_t class_count) {
-  return std::make_unique<RandomForestClassifierModel>(spec, class_count);
+  return Classifier(RandomForestClassifierModel(spec, class_count));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeGradientBoostingClassifierModel(const GradientBoostingSpec &spec,
                                     std::size_t class_count) {
-  return std::make_unique<GradientBoostingClassifierModel>(spec, class_count);
+  return Classifier(GradientBoostingClassifierModel(spec, class_count));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeAdaBoostClassifierModel(const AdaBoostSpec &spec, std::size_t class_count) {
-  return std::make_unique<AdaBoostClassifierModel>(spec, class_count);
+  return Classifier(AdaBoostClassifierModel(spec, class_count));
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeDecisionTreeRegressorModel(const DecisionTreeSpec &spec) {
-  return std::make_unique<DecisionTreeRegressorModel>(spec);
+  return Regressor(DecisionTreeRegressorModel(spec));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeDecisionTreeClassifierModel(const DecisionTreeSpec &spec,
                                 std::size_t class_count) {
-  return std::make_unique<DecisionTreeClassifierModel>(spec, class_count);
+  return Classifier(DecisionTreeClassifierModel(spec, class_count));
 }
 
 } // namespace ml::models::detail

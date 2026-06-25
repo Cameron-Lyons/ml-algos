@@ -3,7 +3,7 @@
 
 #include <expected>
 #include <initializer_list>
-#include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -54,9 +54,9 @@ private:
   std::vector<preprocess::TransformerSpec> transformer_specs_;
   models::EstimatorSpec estimator_spec_;
   std::vector<std::unique_ptr<preprocess::Transformer>> transformers_;
-  std::unique_ptr<models::Regressor> regressor_;
-  std::unique_ptr<models::Classifier> classifier_;
-  std::unique_ptr<models::AnomalyDetector> anomaly_detector_;
+  std::optional<models::Regressor> regressor_;
+  std::optional<models::Classifier> classifier_;
+  std::optional<models::AnomalyDetector> anomaly_detector_;
   std::vector<int> class_labels_;
   bool fitted_ = false;
 };

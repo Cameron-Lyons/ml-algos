@@ -4,21 +4,21 @@
 
 namespace ml::models::detail {
 
-class KnnRegressorModel final : public Regressor {
+class KnnRegressorModel {
 public:
   explicit KnnRegressorModel(KnnSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "knn"; }
+  std::string_view name() const { return "knn"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     features_ = features;
     targets_ = std::ranges::to<Vector>(targets);
     return {};
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     Vector predictions(features.rows(), 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       predictions[row] = PredictKnnMean(
@@ -30,13 +30,13 @@ public:
     return predictions;
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return SerializeStoredRegressionState(features_, targets_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return LoadStoredFeatureMatrix(
         reader, "invalid knn regressor state", "invalid knn regressor state",
@@ -51,14 +51,14 @@ private:
   Vector targets_;
 };
 
-class KernelKnnRegressorModel final : public Regressor {
+class KernelKnnRegressorModel {
 public:
   explicit KernelKnnRegressorModel(KernelKnnSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "kernel_knn"; }
+  std::string_view name() const { return "kernel_knn"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     features_ = features;
     targets_ = std::ranges::to<Vector>(targets);
     gamma_ = ResolveGamma(spec_.gamma, features.cols());
@@ -66,7 +66,7 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     Vector predictions(features.rows(), 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       predictions[row] = PredictKernelKnnMean(
@@ -82,13 +82,13 @@ public:
     return predictions;
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return SerializeStoredKernelRegressionState(gamma_, features_, targets_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid kernel knn regressor gamma")
         .and_then([this](std::string_view line) {
@@ -114,14 +114,14 @@ private:
   Vector targets_;
 };
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeKnnRegressorModel(const KnnSpec &spec) {
-  return std::make_unique<KnnRegressorModel>(spec);
+  return Regressor(KnnRegressorModel(spec));
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeKernelKnnRegressorModel(const KernelKnnSpec &spec) {
-  return std::make_unique<KernelKnnRegressorModel>(spec);
+  return Regressor(KernelKnnRegressorModel(spec));
 }
 
 } // namespace ml::models::detail

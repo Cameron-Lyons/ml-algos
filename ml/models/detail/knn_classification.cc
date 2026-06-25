@@ -4,27 +4,27 @@
 
 namespace ml::models::detail {
 
-class KnnClassifierModel final : public Classifier {
+class KnnClassifierModel {
 public:
   KnnClassifierModel(KnnSpec spec, std::size_t class_count)
       : spec_(spec), class_count_(class_count) {}
 
-  std::string_view name() const override { return "knn"; }
+  std::string_view name() const { return "knn"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     features_ = features;
     labels_ = std::ranges::to<LabelVector>(labels);
     return {};
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     return PredictKnnProba(features, features_, labels_, class_count_, spec_.k,
                            [](auto query, auto train) {
                              return ml::core::SquaredEuclideanDistance(query,
@@ -32,17 +32,17 @@ public:
                            });
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return SerializeStoredClassificationState(class_count_, features_, labels_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid knn classifier class count")
         .and_then([](std::string_view line) {
@@ -66,15 +66,15 @@ private:
   LabelVector labels_;
 };
 
-class KernelKnnClassifierModel final : public Classifier {
+class KernelKnnClassifierModel {
 public:
   KernelKnnClassifierModel(KernelKnnSpec spec, std::size_t class_count)
       : spec_(spec), class_count_(class_count) {}
 
-  std::string_view name() const override { return "kernel_knn"; }
+  std::string_view name() const { return "kernel_knn"; }
 
   std::expected<void, std::string> Fit(const DenseMatrix &features,
-                                       std::span<const int> labels) override {
+                                       std::span<const int> labels) {
     features_ = features;
     labels_ = std::ranges::to<LabelVector>(labels);
     gamma_ = ResolveGamma(spec_.gamma, features.cols());
@@ -82,12 +82,12 @@ public:
   }
 
   std::expected<LabelVector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictArgMax(PredictProba(features));
   }
 
   std::expected<DenseMatrix, std::string>
-  PredictProba(const DenseMatrix &features) const override {
+  PredictProba(const DenseMatrix &features) const {
     return PredictKernelKnnProba(
         features, features_, labels_, class_count_, spec_.k,
         [this](auto query, auto train) {
@@ -99,18 +99,18 @@ public:
         });
   }
 
-  std::vector<int> classes() const override {
+  std::vector<int> classes() const {
     return MakeClassLabels(class_count_);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return SerializeStoredKernelClassificationState(class_count_, gamma_,
                                                     features_, labels_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid kernel knn classifier class count")
         .and_then([this](std::string_view line) {
@@ -147,15 +147,15 @@ private:
   LabelVector labels_;
 };
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeKnnClassifierModel(const KnnSpec &spec, std::size_t class_count) {
-  return std::make_unique<KnnClassifierModel>(spec, class_count);
+  return Classifier(KnnClassifierModel(spec, class_count));
 }
 
-std::expected<std::unique_ptr<Classifier>, std::string>
+std::expected<Classifier, std::string>
 MakeKernelKnnClassifierModel(const KernelKnnSpec &spec,
                              std::size_t class_count) {
-  return std::make_unique<KernelKnnClassifierModel>(spec, class_count);
+  return Classifier(KernelKnnClassifierModel(spec, class_count));
 }
 
 } // namespace ml::models::detail

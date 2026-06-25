@@ -4,12 +4,12 @@
 
 namespace ml::models::detail {
 
-class LinearRegressionModel final : public Regressor {
+class LinearRegressionModel {
 public:
-  std::string_view name() const override { return "linear"; }
+  std::string_view name() const { return "linear"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     return NormalEquation(features, targets, 0.0)
         .and_then([this](Vector solved) {
           coefficients_ = std::move(solved);
@@ -18,17 +18,17 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictLinear(coefficients_, features);
   }
 
-  EstimatorSpec spec() const override { return LinearSpec{}; }
+  EstimatorSpec spec() const { return LinearSpec{}; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return JoinFormatted(coefficients_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     return ParseDoubles(state).and_then([this](Vector parsed) {
       coefficients_ = std::move(parsed);
       return std::expected<void, std::string>{};
@@ -39,14 +39,14 @@ private:
   Vector coefficients_;
 };
 
-class RidgeRegressionModel final : public Regressor {
+class RidgeRegressionModel {
 public:
   explicit RidgeRegressionModel(RidgeSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "ridge"; }
+  std::string_view name() const { return "ridge"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     return NormalEquation(features, targets, spec_.lambda)
         .and_then([this](Vector solved) {
           coefficients_ = std::move(solved);
@@ -55,17 +55,17 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictLinear(coefficients_, features);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return JoinFormatted(coefficients_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     return ParseDoubles(state).and_then([this](Vector parsed) {
       coefficients_ = std::move(parsed);
       return std::expected<void, std::string>{};
@@ -77,31 +77,31 @@ private:
   Vector coefficients_;
 };
 
-class LassoRegressionModel final : public Regressor {
+class LassoRegressionModel {
 public:
   explicit LassoRegressionModel(LassoSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "lasso"; }
+  std::string_view name() const { return "lasso"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     return FitCoordinateDescent(features, targets, coefficients_,
                                 spec_.max_iterations, spec_.tolerance,
                                 {spec_.lambda, 0.0});
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictLinear(coefficients_, features);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return JoinFormatted(coefficients_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     return ParseDoubles(state).and_then([this](Vector parsed) {
       coefficients_ = std::move(parsed);
       return std::expected<void, std::string>{};
@@ -113,14 +113,14 @@ private:
   Vector coefficients_;
 };
 
-class ElasticNetRegressionModel final : public Regressor {
+class ElasticNetRegressionModel {
 public:
   explicit ElasticNetRegressionModel(ElasticNetSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "elasticnet"; }
+  std::string_view name() const { return "elasticnet"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     const double l1 = spec_.alpha * spec_.l1_ratio;
     const double l2 = spec_.alpha * (1.0 - spec_.l1_ratio);
     return FitCoordinateDescent(features, targets, coefficients_,
@@ -129,17 +129,17 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     return PredictLinear(coefficients_, features);
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return JoinFormatted(coefficients_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     return ParseDoubles(state).and_then([this](Vector parsed) {
       coefficients_ = std::move(parsed);
       return std::expected<void, std::string>{};
@@ -151,14 +151,14 @@ private:
   Vector coefficients_;
 };
 
-class LinearSvrRegressorModel final : public Regressor {
+class LinearSvrRegressorModel {
 public:
   explicit LinearSvrRegressorModel(LinearSvrSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "linear_svr"; }
+  std::string_view name() const { return "linear_svr"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     const std::size_t feature_count = features.cols();
     weights_ = Vector(feature_count, 0.0);
     bias_ = 0.0;
@@ -197,7 +197,7 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     Vector predictions(features.rows(), bias_);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       for (std::size_t col = 0; col < features.cols(); ++col) {
@@ -207,13 +207,13 @@ public:
     return predictions;
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return std::format("{}\n{}", bias_, JoinFormatted(weights_));
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid linear svr state")
         .and_then([](std::string_view line) {
@@ -237,14 +237,14 @@ private:
   double bias_ = 0.0;
 };
 
-class SgdRegressionModel final : public Regressor {
+class SgdRegressionModel {
 public:
   explicit SgdRegressionModel(SgdRegressionSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "sgd_regression"; }
+  std::string_view name() const { return "sgd_regression"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     const std::size_t feature_count = features.cols();
     weights_ = Vector(feature_count, 0.0);
     bias_ = 0.0;
@@ -269,7 +269,7 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     Vector predictions(features.rows(), bias_);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       for (std::size_t col = 0; col < features.cols(); ++col) {
@@ -279,13 +279,13 @@ public:
     return predictions;
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return std::format("{}\n{}", bias_, JoinFormatted(weights_));
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return reader.ReadLine("invalid sgd regression state")
         .and_then([](std::string_view line) {
@@ -309,14 +309,14 @@ private:
   double bias_ = 0.0;
 };
 
-class MlpRegressionModel final : public Regressor {
+class MlpRegressionModel {
 public:
   explicit MlpRegressionModel(MlpSpec spec) : spec_(spec) {}
 
-  std::string_view name() const override { return "mlp"; }
+  std::string_view name() const { return "mlp"; }
 
   std::expected<void, std::string>
-  Fit(const DenseMatrix &features, std::span<const double> targets) override {
+  Fit(const DenseMatrix &features, std::span<const double> targets) {
     const auto layer_sizes =
         MlpLayerSizes(features.cols(), spec_.hidden_sizes, 1);
     std::mt19937 rng(42);
@@ -347,7 +347,7 @@ public:
   }
 
   std::expected<Vector, std::string>
-  Predict(const DenseMatrix &features) const override {
+  Predict(const DenseMatrix &features) const {
     Vector predictions(features.rows(), 0.0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
       const Vector input(features[row].begin(), features[row].end());
@@ -356,13 +356,13 @@ public:
     return predictions;
   }
 
-  EstimatorSpec spec() const override { return spec_; }
+  EstimatorSpec spec() const { return spec_; }
 
-  std::expected<std::string, std::string> SaveState() const override {
+  std::expected<std::string, std::string> SaveState() const {
     return SerializeMlpLayers(layers_);
   }
 
-  std::expected<void, std::string> LoadState(std::string_view state) override {
+  std::expected<void, std::string> LoadState(std::string_view state) {
     StateReader reader(state);
     return LoadMlpLayers(reader, "invalid mlp layer count")
         .and_then([this](std::vector<MlpLayer> layers) {
@@ -376,39 +376,39 @@ private:
   std::vector<MlpLayer> layers_;
 };
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeLinearRegressionModel() {
-  return std::make_unique<LinearRegressionModel>();
+  return Regressor(LinearRegressionModel{});
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeRidgeRegressionModel(const RidgeSpec &spec) {
-  return std::make_unique<RidgeRegressionModel>(spec);
+  return Regressor(RidgeRegressionModel(spec));
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeLassoRegressionModel(const LassoSpec &spec) {
-  return std::make_unique<LassoRegressionModel>(spec);
+  return Regressor(LassoRegressionModel(spec));
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeElasticNetRegressionModel(const ElasticNetSpec &spec) {
-  return std::make_unique<ElasticNetRegressionModel>(spec);
+  return Regressor(ElasticNetRegressionModel(spec));
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeLinearSvrRegressorModel(const LinearSvrSpec &spec) {
-  return std::make_unique<LinearSvrRegressorModel>(spec);
+  return Regressor(LinearSvrRegressorModel(spec));
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeSgdRegressionModel(const SgdRegressionSpec &spec) {
-  return std::make_unique<SgdRegressionModel>(spec);
+  return Regressor(SgdRegressionModel(spec));
 }
 
-std::expected<std::unique_ptr<Regressor>, std::string>
+std::expected<Regressor, std::string>
 MakeMlpRegressionModel(const MlpSpec &spec) {
-  return std::make_unique<MlpRegressionModel>(spec);
+  return Regressor(MlpRegressionModel(spec));
 }
 
 } // namespace ml::models::detail

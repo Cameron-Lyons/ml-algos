@@ -2,7 +2,9 @@
 #include <expected>
 #include <format>
 #include <iostream>
+#include <optional>
 #include <print>
+#include <ranges>
 #include <span>
 #include <string>
 #include <string_view>
@@ -30,24 +32,28 @@ struct CommandArgs {
 };
 
 void PrintUsage(const char *program) {
-  std::cout
-      << "Usage:\n"
-      << "  " << program
-      << " fit --task <regression|classification|anomaly> --algorithm <name> "
-         "--data <csv> --target <column> [--transformers a,b] "
-         "[--test-ratio <r>] [--seed <n>] [--model <path>] [--json]\n"
-      << "  " << program
-      << " eval --task <regression|classification|anomaly> --algorithm <name> "
-         "--data <csv> --target <column> [--transformers a,b] "
-         "[--test-ratio <r>] [--seed <n>] [--json]\n"
-      << "  " << program
-      << " tune --task <regression|classification|anomaly> --algorithm <name> "
-         "--data <csv> --target <column> [--transformers a,b] "
-         "[--cv-folds <k>] [--seed <n>] [--json]\n"
-      << "  " << program << " predict --model <bundle> --input <csv> [--json]\n"
-      << "  " << program << " inspect --model <bundle> [--json]\n"
-      << "  " << program
-      << " list [--task <regression|classification|anomaly>] [--json]\n";
+  std::println("Usage:");
+  std::println("  {} fit --task <regression|classification|anomaly> "
+               "--algorithm <name> --data <csv> --target <column> "
+               "[--transformers a,b] [--test-ratio <r>] [--seed <n>] "
+               "[--model <path>] [--json]",
+               program);
+  std::println("  {} eval --task <regression|classification|anomaly> "
+               "--algorithm <name> --data <csv> --target <column> "
+               "[--transformers a,b] [--test-ratio <r>] [--seed <n>] [--json]",
+               program);
+  std::println("  {} tune --task <regression|classification|anomaly> "
+               "--algorithm <name> --data <csv> --target <column> "
+               "[--transformers a,b] [--cv-folds <k>] [--seed <n>] [--json]",
+               program);
+  std::println("  {} predict --model <bundle> --input <csv> [--json]", program);
+  std::println("  {} inspect --model <bundle> [--json]", program);
+  std::println("  {} list [--task <regression|classification|anomaly>] [--json]",
+               program);
+}
+
+void PrintError(std::string_view message) {
+  std::println(std::cerr, "{}", message);
 }
 
 std::expected<CommandArgs, std::string> ParseOptions(int argc, char *argv[],
@@ -132,27 +138,16 @@ ParseTransformers(const CommandArgs &args) {
 
 std::string
 FormatConfusionMatrixJson(const std::vector<std::vector<std::size_t>> &matrix) {
-  std::string out = "[";
-  for (std::size_t row = 0; row < matrix.size(); ++row) {
-    if (row > 0) {
-      out += ',';
-    }
-    out += std::format("[{}]",
-                       ml::core::JoinFormatted(std::span<const std::size_t>(
-                           matrix[row].data(), matrix[row].size())));
-  }
-  out += ']';
-  return out;
+  return std::format("[{}]", ml::core::JoinJsonArrayRows(matrix));
 }
 
 std::string
 FormatClassificationMetricsJson(const ml::ClassificationSummary &summary) {
-  const std::string log_loss =
-      summary.log_loss ? std::format("{}", *summary.log_loss) : "null";
   return std::format(
       "\"classification\":{{\"accuracy\":{},\"macro_f1\":{},\"log_loss\":{},"
       "\"labels\":[{}],\"confusion_matrix\":{}}}",
-      summary.accuracy, summary.macro_f1, log_loss,
+      summary.accuracy, summary.macro_f1,
+      ml::core::FormatOptionalJson(summary.log_loss),
       ml::core::JoinFormatted(
           std::span<const int>(summary.labels.data(), summary.labels.size())),
       FormatConfusionMatrixJson(summary.confusion_matrix));
@@ -170,17 +165,13 @@ std::string FormatMetricsJson(const ml::EvaluationMetrics &metrics) {
             return FormatClassificationMetricsJson(summary);
           },
           [](const ml::AnomalySummary &summary) {
-            const std::string precision =
-                summary.precision ? std::format("{}", *summary.precision)
-                                  : "null";
-            const std::string recall =
-                summary.recall ? std::format("{}", *summary.recall) : "null";
-            const std::string f1 =
-                summary.f1 ? std::format("{}", *summary.f1) : "null";
             return std::format(
                 "\"anomaly\":{{\"mean_score\":{},\"threshold\":{},"
                 "\"precision\":{},\"recall\":{},\"f1\":{}}}",
-                summary.mean_score, summary.threshold, precision, recall, f1);
+                summary.mean_score, summary.threshold,
+                ml::core::FormatOptionalJson(summary.precision),
+                ml::core::FormatOptionalJson(summary.recall),
+                ml::core::FormatOptionalJson(summary.f1));
           },
       },
       metrics);
@@ -195,17 +186,15 @@ std::string ToJson(const ml::EvaluationReport &report) {
 }
 
 std::string ToJson(const ml::TuneReport &report) {
-  std::string candidates;
-  for (std::size_t index = 0; index < report.candidates.size(); ++index) {
-    if (index > 0) {
-      candidates += ',';
-    }
-    candidates +=
-        std::format("{{\"spec\":\"{}\",\"objective\":{}}}",
-                    ml::core::EscapeJson(ml::models::SerializeEstimatorSpec(
-                        report.candidates[index].spec)),
-                    report.candidates[index].objective);
-  }
+  const std::string candidates = ml::core::JoinJsonObjects(
+      report.candidates |
+      std::views::transform([](const ml::TuneCandidate &candidate) {
+        return std::format("{{\"spec\":\"{}\",\"objective\":{}}}",
+                           ml::core::EscapeJson(
+                               ml::models::SerializeEstimatorSpec(
+                                   candidate.spec)),
+                           candidate.objective);
+      }));
   return std::format("{{\"task\":\"{}\",\"objective\":\"{}\",\"best_score\":{},"
                      "\"best_spec\":\"{}\",\"candidates\":[{}]}}",
                      ml::TaskName(report.task),
@@ -217,26 +206,13 @@ std::string ToJson(const ml::TuneReport &report) {
 }
 
 std::string ToJson(const ml::ModelBundle &bundle) {
-  std::string features;
-  for (std::size_t index = 0; index < bundle.schema.feature_names.size();
-       ++index) {
-    if (index > 0) {
-      features += ',';
-    }
-    features += std::format(
-        "\"{}\"", ml::core::EscapeJson(bundle.schema.feature_names[index]));
-  }
-
-  std::string transformers;
-  for (std::size_t index = 0; index < bundle.transformer_specs.size();
-       ++index) {
-    if (index > 0) {
-      transformers += ',';
-    }
-    transformers += std::format(
-        "\"{}\"", ml::core::EscapeJson(ml::preprocess::SerializeTransformerSpec(
-                      bundle.transformer_specs[index])));
-  }
+  const std::string features =
+      ml::core::JoinJsonQuoted(bundle.schema.feature_names);
+  const std::string transformers = ml::core::JoinJsonQuoted(
+      bundle.transformer_specs |
+      std::views::transform([](const ml::preprocess::TransformerSpec &spec) {
+        return ml::preprocess::SerializeTransformerSpec(spec);
+      }));
 
   return std::format(
       "{{\"version\":{},\"task\":\"{}\",\"estimator\":\"{}\","
@@ -258,6 +234,13 @@ std::string ToJsonPredictions(const ml::core::Vector &predictions) {
                          predictions.data(), predictions.size())));
 }
 
+void PrintOptionalMetric(std::string_view label,
+                         const std::optional<double> &value) {
+  if (value) {
+    std::println("{}: {}", label, *value);
+  }
+}
+
 void PrintEvaluation(const ml::EvaluationReport &report) {
   std::println("Task: {}", ml::TaskName(report.task));
   std::println("Estimator: {}", report.estimator_name);
@@ -271,22 +254,14 @@ void PrintEvaluation(const ml::EvaluationReport &report) {
                  [](const ml::ClassificationSummary &summary) {
                    std::println("Accuracy: {}", summary.accuracy);
                    std::println("Macro F1: {}", summary.macro_f1);
-                   if (summary.log_loss) {
-                     std::println("Log loss: {}", *summary.log_loss);
-                   }
+                   PrintOptionalMetric("Log loss", summary.log_loss);
                  },
                  [](const ml::AnomalySummary &summary) {
                    std::println("Mean score: {}", summary.mean_score);
                    std::println("Threshold: {}", summary.threshold);
-                   if (summary.precision) {
-                     std::println("Precision: {}", *summary.precision);
-                   }
-                   if (summary.recall) {
-                     std::println("Recall: {}", *summary.recall);
-                   }
-                   if (summary.f1) {
-                     std::println("F1: {}", *summary.f1);
-                   }
+                   PrintOptionalMetric("Precision", summary.precision);
+                   PrintOptionalMetric("Recall", summary.recall);
+                   PrintOptionalMetric("F1", summary.f1);
                  },
              },
              report.metrics);
@@ -306,23 +281,15 @@ void PrintTune(const ml::TuneReport &report) {
   }
 }
 
-std::string
-FormatAlgorithmListJson(const std::vector<std::string> &algorithms) {
-  std::string out;
-  for (std::size_t index = 0; index < algorithms.size(); ++index) {
-    if (index > 0) {
-      out += ',';
-    }
-    out += std::format("\"{}\"", algorithms[index]);
-  }
-  return out;
+std::string FormatAlgorithmListJson(const std::vector<std::string> &algorithms) {
+  return ml::core::JoinJsonQuoted(algorithms);
 }
 
 int HandleList(const CommandArgs &args) {
   if (const auto it = args.values.find("--task"); it != args.values.end()) {
     auto task = ParseTask(it->second);
     if (!task) {
-      std::cerr << task.error() << "\n";
+      PrintError(task.error());
       return 1;
     }
     if (args.json) {
@@ -380,7 +347,7 @@ int main(int argc, char *argv[]) {
   const std::string command = argv[1];
   auto parsed = ParseOptions(argc, argv, 2);
   if (!parsed) {
-    std::cerr << parsed.error() << "\n";
+    PrintError(parsed.error());
     return 1;
   }
   const CommandArgs &args = *parsed;
@@ -395,24 +362,23 @@ int main(int argc, char *argv[]) {
           return ml::io::LoadModelBundle(path);
         });
     if (!bundle) {
-      std::cerr << bundle.error() << "\n";
+      PrintError(bundle.error());
       return 1;
     }
     if (args.json) {
-      std::cout << ToJson(*bundle) << "\n";
+      std::println("{}", ToJson(*bundle));
     } else {
-      std::cout << "Version: " << bundle->version << "\n";
-      std::cout << "Task: " << ml::TaskName(bundle->task) << "\n";
-      std::cout << "Estimator: " << bundle->estimator_name << "\n";
-      std::cout << "Target: " << bundle->schema.target_name << "\n";
-      std::cout << "Features:";
+      std::println("Version: {}", bundle->version);
+      std::println("Task: {}", ml::TaskName(bundle->task));
+      std::println("Estimator: {}", bundle->estimator_name);
+      std::println("Target: {}", bundle->schema.target_name);
+      std::print("Features:");
       for (const auto &feature : bundle->schema.feature_names) {
-        std::cout << " " << feature;
+        std::print(" {}", feature);
       }
-      std::cout << "\n";
-      std::cout << "Estimator spec: "
-                << ml::models::SerializeEstimatorSpec(bundle->estimator_spec)
-                << "\n";
+      std::println("");
+      std::println("Estimator spec: {}",
+                   ml::models::SerializeEstimatorSpec(bundle->estimator_spec));
     }
     return 0;
   }
@@ -421,48 +387,47 @@ int main(int argc, char *argv[]) {
     auto model_path = RequireOption(args, "--model");
     auto input_path = RequireOption(args, "--input");
     if (!model_path || !input_path) {
-      std::cerr << (!model_path ? model_path.error() : input_path.error())
-                << "\n";
+      PrintError(!model_path ? model_path.error() : input_path.error());
       return 1;
     }
     auto bundle = ml::io::LoadModelBundle(*model_path);
     if (!bundle) {
-      std::cerr << bundle.error() << "\n";
+      PrintError(bundle.error());
       return 1;
     }
     auto pipeline = ml::Pipeline::FromModelBundle(*bundle);
     if (!pipeline) {
-      std::cerr << pipeline.error() << "\n";
+      PrintError(pipeline.error());
       return 1;
     }
     auto table = ml::io::ReadNumericCsv(*input_path);
     if (!table) {
-      std::cerr << table.error() << "\n";
+      PrintError(table.error());
       return 1;
     }
     auto features =
         ml::io::SelectFeatureColumns(*table, bundle->schema.feature_names);
     if (!features) {
-      std::cerr << features.error() << "\n";
+      PrintError(features.error());
       return 1;
     }
     auto predictions = pipeline->Predict(*features);
     if (!predictions) {
-      std::cerr << predictions.error() << "\n";
+      PrintError(predictions.error());
       return 1;
     }
     if (args.json) {
-      std::cout << ToJsonPredictions(*predictions) << "\n";
+      std::println("{}", ToJsonPredictions(*predictions));
     } else {
       for (std::size_t index = 0; index < predictions->size(); ++index) {
-        std::cout << index << "\t" << (*predictions)[index] << "\n";
+        std::println("{}	{}", index, (*predictions)[index]);
       }
     }
     return 0;
   }
 
   if (command != "fit" && command != "eval" && command != "tune") {
-    std::cerr << "unknown command: " << command << "\n";
+    PrintError(std::format("unknown command: {}", command));
     PrintUsage(argv[0]);
     return 1;
   }
@@ -472,59 +437,58 @@ int main(int argc, char *argv[]) {
   auto data_path = RequireOption(args, "--data");
   auto target = RequireOption(args, "--target");
   if (!task_text || !algorithm || !data_path || !target) {
-    std::cerr << (!task_text   ? task_text.error()
-                  : !algorithm ? algorithm.error()
-                  : !data_path ? data_path.error()
-                               : target.error())
-              << "\n";
+    PrintError(!task_text   ? task_text.error()
+               : !algorithm ? algorithm.error()
+               : !data_path ? data_path.error()
+                            : target.error());
     return 1;
   }
 
   auto task = task_text.and_then(ParseTask);
   if (!task) {
-    std::cerr << task.error() << "\n";
+    PrintError(task.error());
     return 1;
   }
   auto transformers = ParseTransformers(args);
   if (!transformers) {
-    std::cerr << transformers.error() << "\n";
+    PrintError(transformers.error());
     return 1;
   }
   auto dataset = ml::io::ReadDatasetCsv(*data_path, *target);
   if (!dataset) {
-    std::cerr << dataset.error() << "\n";
+    PrintError(dataset.error());
     return 1;
   }
 
   auto seed = ParseUnsignedOption(args, "--seed", 42U);
   if (!seed) {
-    std::cerr << seed.error() << "\n";
+    PrintError(seed.error());
     return 1;
   }
 
   if (command == "tune") {
     auto fold_count = ParseIntOption(args, "--cv-folds", 5);
     if (!fold_count) {
-      std::cerr << fold_count.error() << "\n";
+      PrintError(fold_count.error());
       return 1;
     }
     auto candidates = ml::TuneGrid(*task, *algorithm);
     if (!candidates) {
-      std::cerr << candidates.error() << "\n";
+      PrintError(candidates.error());
       return 1;
     }
     auto folds = ml::MakeKFoldSet(*dataset, *task, *fold_count, *seed);
     if (!folds) {
-      std::cerr << folds.error() << "\n";
+      PrintError(folds.error());
       return 1;
     }
     auto report = ml::GridSearch(*folds, *task, *transformers, *candidates);
     if (!report) {
-      std::cerr << report.error() << "\n";
+      PrintError(report.error());
       return 1;
     }
     if (args.json) {
-      std::cout << ToJson(*report) << "\n";
+      std::println("{}", ToJson(*report));
     } else {
       PrintTune(*report);
     }
@@ -533,12 +497,12 @@ int main(int argc, char *argv[]) {
 
   auto estimator = ml::DefaultEstimatorSpec(*task, *algorithm);
   if (!estimator) {
-    std::cerr << estimator.error() << "\n";
+    PrintError(estimator.error());
     return 1;
   }
   auto ratio = ParseDoubleOption(args, "--test-ratio", 0.2);
   if (!ratio) {
-    std::cerr << ratio.error() << "\n";
+    PrintError(ratio.error());
     return 1;
   }
   ml::SplitOptions split_options;
@@ -547,18 +511,18 @@ int main(int argc, char *argv[]) {
   split_options.stratified = *task == Task::kClassification;
   auto split = ml::MakeTrainTestSplit(*dataset, *task, split_options);
   if (!split) {
-    std::cerr << split.error() << "\n";
+    PrintError(split.error());
     return 1;
   }
 
   if (command == "eval") {
     auto report = ml::EvaluateSplit(*split, *task, *transformers, *estimator);
     if (!report) {
-      std::cerr << report.error() << "\n";
+      PrintError(report.error());
       return 1;
     }
     if (args.json) {
-      std::cout << ToJson(*report) << "\n";
+      std::println("{}", ToJson(*report));
     } else {
       PrintEvaluation(*report);
     }
@@ -567,22 +531,22 @@ int main(int argc, char *argv[]) {
 
   auto fit = ml::FitSplit(*split, *task, *transformers, *estimator);
   if (!fit) {
-    std::cerr << fit.error() << "\n";
+    PrintError(fit.error());
     return 1;
   }
   if (const auto it = args.values.find("--model"); it != args.values.end()) {
     auto saved = ml::io::SaveModelBundle(fit->bundle, it->second);
     if (!saved) {
-      std::cerr << saved.error() << "\n";
+      PrintError(saved.error());
       return 1;
     }
   }
   if (args.json) {
-    std::cout << ToJson(fit->report) << "\n";
+    std::println("{}", ToJson(fit->report));
   } else {
     PrintEvaluation(fit->report);
     if (const auto it = args.values.find("--model"); it != args.values.end()) {
-      std::cout << "Model saved: " << it->second << "\n";
+      std::println("Model saved: {}", it->second);
     }
   }
   return 0;
