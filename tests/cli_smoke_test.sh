@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BIN="${TEST_SRCDIR}/${TEST_WORKSPACE}/app/ml-algos"
-DATA="${TEST_SRCDIR}/${TEST_WORKSPACE}/data/v3"
+DATA="${TEST_SRCDIR}/${TEST_WORKSPACE}/data"
 TMP="${TEST_TMPDIR}"
 
 if [[ ! -x "${BIN}" ]]; then

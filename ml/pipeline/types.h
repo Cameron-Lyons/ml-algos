@@ -92,7 +92,7 @@ struct EvaluationReport {
 };
 
 struct ModelBundle {
-  std::uint32_t version = 3;
+  std::uint32_t version = 1;
   Task task = Task::kRegression;
   std::string estimator_name;
   DatasetSchema schema;
