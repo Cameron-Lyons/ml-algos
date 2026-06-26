@@ -8,7 +8,7 @@ namespace ml::test {
 
 inline std::string TestDataPath(const std::string &relative) {
   return std::string(std::getenv("TEST_SRCDIR")) + "/" +
-         std::string(std::getenv("TEST_WORKSPACE")) + "/data/v3/" + relative;
+         std::string(std::getenv("TEST_WORKSPACE")) + "/data/" + relative;
 }
 
 inline std::string TempPath(const std::string &relative) {

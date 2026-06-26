@@ -1,6 +1,6 @@
-# ML Algorithms Library (v3)
+# ML Algorithms Library
 
-A Bazel-first C++26 machine learning toolkit for numeric tabular pipelines. v3 breaks the old v2 API and CLI on purpose: the library is now the primary surface, the CLI is a thin wrapper, data is headered CSV, and models use the binary `MLALGOS_V3` bundle format.
+A Bazel-first C++26 machine learning toolkit for numeric tabular pipelines. The library is the primary surface, the CLI is a thin wrapper, data is headered CSV, and models use the binary `MLALGOS` bundle format.
 
 ## Build And Test
 
@@ -16,7 +16,7 @@ bazel test //...
 ./bazel-bin/app/ml-algos fit \
   --task regression \
   --algorithm ridge \
-  --data data/v3/regression.csv \
+  --data data/regression.csv \
   --target target \
   --model /tmp/ridge.bundle
 
@@ -24,7 +24,7 @@ bazel test //...
 ./bazel-bin/app/ml-algos eval \
   --task classification \
   --algorithm logistic \
-  --data data/v3/classification_binary.csv \
+  --data data/classification_binary.csv \
   --target label \
   --transformers standard_scaler
 
@@ -32,7 +32,7 @@ bazel test //...
 ./bazel-bin/app/ml-algos tune \
   --task classification \
   --algorithm logistic \
-  --data data/v3/classification_binary.csv \
+  --data data/classification_binary.csv \
   --target label \
   --transformers standard_scaler \
   --cv-folds 4
@@ -41,7 +41,7 @@ bazel test //...
 ./bazel-bin/app/ml-algos eval \
   --task anomaly \
   --algorithm isolation_forest \
-  --data data/v3/regression.csv \
+  --data data/regression.csv \
   --target target \
   --transformers standard_scaler
 
@@ -51,7 +51,10 @@ bazel test //...
 # Predict from a saved bundle
 ./bazel-bin/app/ml-algos predict \
   --model /tmp/ridge.bundle \
-  --input data/v3/regression_features.csv
+  --input data/regression_features.csv
+
+# List supported algorithms
+./bazel-bin/app/ml-algos list --task regression
 ```
 
 Commands support `--json` for machine-readable output.
@@ -125,7 +128,7 @@ Predictions return anomaly scores in `[0, 1]` where higher values indicate more 
 
 Saved models are binary bundles with:
 
-- fixed magic: `MLALGOS_V3`
+- fixed magic: `MLALGOS`
 - version field
 - task id
 - estimator id and typed estimator spec
@@ -134,5 +137,3 @@ Saved models are binary bundles with:
 - transformer specs and fitted transformer state
 - fitted estimator state
 - checksum validation
-
-v3 does not load `MLALGOS_MODEL_V2`.

@@ -13,7 +13,7 @@ namespace ml::io {
 
 namespace {
 
-constexpr std::string_view kMagic = "MLALGOS_V3";
+constexpr std::string_view kMagic = "MLALGOS";
 
 void WriteU8(std::string *out, std::uint8_t value) {
   out->push_back(static_cast<char>(value));
