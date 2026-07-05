@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <format>
 #include <map>
 #include <random>
 #include <ranges>
@@ -40,8 +41,10 @@ std::expected<void, std::string> ValidateDataset(const TabularDataset &dataset,
   if (dataset.schema.feature_names.size() != dataset.features.cols()) {
     return std::unexpected("dataset schema does not match feature columns");
   }
-  if (task == Task::kAnomalyDetection && dataset.features.rows() < 2) {
-    return std::unexpected("anomaly detection requires at least two rows");
+  if ((task == Task::kAnomalyDetection || task == Task::kClustering) &&
+      dataset.features.rows() < 2) {
+    return std::unexpected(
+        std::format("{} requires at least two rows", TaskName(task)));
   }
   return {};
 }
@@ -179,6 +182,31 @@ EvaluateFittedPipeline(const Pipeline &pipeline, const Split &split) {
   report.train_rows = split.train.features.rows();
   report.test_rows = split.test.features.rows();
 
+  if (pipeline.task() == Task::kClustering) {
+    auto assignments = pipeline.PredictClusterLabels(split.test.features);
+    if (!assignments) {
+      return std::unexpected(assignments.error());
+    }
+    auto transformed = pipeline.TransformFeatures(split.test.features);
+    if (!transformed) {
+      return std::unexpected(transformed.error());
+    }
+    ClusteringSummary summary;
+    summary.cluster_count = pipeline.ClusterCount();
+    summary.silhouette = ml::core::SilhouetteScore(*transformed, *assignments);
+    const auto noise_count = static_cast<double>(std::ranges::count_if(
+        *assignments, [](int label) { return label < 0; }));
+    summary.noise_ratio =
+        assignments->empty()
+            ? 0.0
+            : noise_count / static_cast<double>(assignments->size());
+    if (auto truth = ToIntLabels(split.test.targets)) {
+      summary.adjusted_rand = ml::core::AdjustedRandIndex(*truth, *assignments);
+    }
+    report.metrics = summary;
+    return report;
+  }
+
   auto predictions = pipeline.Predict(split.test.features);
   if (!predictions) {
     return std::unexpected(predictions.error());
@@ -267,6 +295,7 @@ double ObjectiveForReport(const EvaluationReport &report) {
           [](const AnomalySummary &summary) {
             return summary.f1 ? *summary.f1 : summary.mean_score;
           },
+          [](const ClusteringSummary &summary) { return summary.silhouette; },
       },
       report.metrics);
 }
@@ -336,12 +365,21 @@ Pipeline::EnsureInitializedForFit(std::size_t class_count) {
   regressor_.reset();
   classifier_.reset();
   anomaly_detector_.reset();
+  clusterer_.reset();
   if (task_ == Task::kAnomalyDetection) {
     auto detector = models::MakeAnomalyDetector(estimator_spec_);
     if (!detector) {
       return std::unexpected(detector.error());
     }
     anomaly_detector_ = std::move(*detector);
+    return {};
+  }
+  if (task_ == Task::kClustering) {
+    auto clusterer = models::MakeClusterer(estimator_spec_);
+    if (!clusterer) {
+      return std::unexpected(clusterer.error());
+    }
+    clusterer_ = std::move(*clusterer);
     return {};
   }
   if (task_ == Task::kRegression) {
@@ -369,7 +407,7 @@ std::expected<void, std::string> Pipeline::Fit(const TabularDataset &dataset) {
   DenseMatrix transformed = dataset.features;
   class_labels_.clear();
 
-  if (task_ == Task::kAnomalyDetection) {
+  if (task_ == Task::kAnomalyDetection || task_ == Task::kClustering) {
     auto init = EnsureInitializedForFit(0);
     if (!init) {
       return std::unexpected(init.error());
@@ -385,7 +423,9 @@ std::expected<void, std::string> Pipeline::Fit(const TabularDataset &dataset) {
       }
       transformed = std::move(*next);
     }
-    auto status = anomaly_detector_->Fit(transformed);
+    auto status = task_ == Task::kAnomalyDetection
+                      ? anomaly_detector_->Fit(transformed)
+                      : clusterer_->Fit(transformed);
     if (!status) {
       return std::unexpected(status.error());
     }
@@ -473,6 +513,17 @@ Pipeline::Predict(const DenseMatrix &features) const {
   if (task_ == Task::kAnomalyDetection) {
     return anomaly_detector_->Score(*transformed);
   }
+  if (task_ == Task::kClustering) {
+    auto assignments = clusterer_->Predict(*transformed);
+    if (!assignments) {
+      return std::unexpected(assignments.error());
+    }
+    Vector output(assignments->size(), 0.0);
+    for (std::size_t index = 0; index < assignments->size(); ++index) {
+      output[index] = static_cast<double>((*assignments)[index]);
+    }
+    return output;
+  }
   auto predicted = classifier_->Predict(*transformed);
   if (!predicted) {
     return std::unexpected(predicted.error());
@@ -525,6 +576,25 @@ Pipeline::PredictAnomalyLabels(const DenseMatrix &features) const {
   return anomaly_detector_->Predict(*transformed);
 }
 
+std::size_t Pipeline::ClusterCount() const {
+  return clusterer_ ? clusterer_->cluster_count() : 0;
+}
+
+std::expected<LabelVector, std::string>
+Pipeline::PredictClusterLabels(const DenseMatrix &features) const {
+  if (!fitted_) {
+    return std::unexpected("pipeline is not fitted");
+  }
+  if (task_ != Task::kClustering) {
+    return std::unexpected("cluster labels are only available for clustering");
+  }
+  auto transformed = TransformFeatures(features);
+  if (!transformed) {
+    return std::unexpected(transformed.error());
+  }
+  return clusterer_->Predict(*transformed);
+}
+
 std::expected<ModelBundle, std::string>
 Pipeline::ExportModel(const DatasetSchema &schema) const {
   if (!fitted_) {
@@ -545,10 +615,11 @@ Pipeline::ExportModel(const DatasetSchema &schema) const {
     }
     bundle.transformer_states.push_back(std::move(*state));
   }
-  auto estimator_state = task_ == Task::kRegression ? regressor_->SaveState()
-                         : task_ == Task::kAnomalyDetection
-                             ? anomaly_detector_->SaveState()
-                             : classifier_->SaveState();
+  auto estimator_state =
+      task_ == Task::kRegression         ? regressor_->SaveState()
+      : task_ == Task::kAnomalyDetection ? anomaly_detector_->SaveState()
+      : task_ == Task::kClustering       ? clusterer_->SaveState()
+                                         : classifier_->SaveState();
   if (!estimator_state) {
     return std::unexpected(estimator_state.error());
   }
@@ -580,6 +651,8 @@ Pipeline::FromModelBundle(const ModelBundle &bundle) {
           ? pipeline.regressor_->LoadState(bundle.estimator_state)
       : bundle.task == Task::kAnomalyDetection
           ? pipeline.anomaly_detector_->LoadState(bundle.estimator_state)
+      : bundle.task == Task::kClustering
+          ? pipeline.clusterer_->LoadState(bundle.estimator_state)
           : pipeline.classifier_->LoadState(bundle.estimator_state);
   if (!status) {
     return std::unexpected(status.error());
@@ -728,6 +801,7 @@ GridSearch(const FoldSet &folds, Task task,
   report.task = task;
   report.objective_name = task == Task::kRegression       ? "r2"
                           : task == Task::kClassification ? "accuracy"
+                          : task == Task::kClustering     ? "silhouette"
                                                           : "f1";
   report.best_score = -std::numeric_limits<double>::infinity();
 

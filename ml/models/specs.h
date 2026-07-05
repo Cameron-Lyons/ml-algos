@@ -110,6 +110,24 @@ struct IsolationForestSpec {
   double contamination = 0.1;
   unsigned int seed = 42;
 };
+struct KMeansSpec {
+  int cluster_count = 3;
+  int max_iterations = 300;
+  double tolerance = 1e-4;
+  int init_count = 5;
+  unsigned int seed = 42;
+};
+struct DbscanSpec {
+  double eps = 0.5;
+  int min_samples = 5;
+};
+struct GaussianMixtureSpec {
+  int component_count = 3;
+  int max_iterations = 100;
+  double tolerance = 1e-3;
+  double reg_covar = 1e-6;
+  unsigned int seed = 42;
+};
 
 using BaseEstimatorSpec =
     std::variant<LinearSpec, RidgeSpec, LassoSpec, ElasticNetSpec, KnnSpec,
@@ -144,8 +162,9 @@ using EstimatorSpec = std::variant<
     DecisionTreeSpec, RandomForestSpec, GradientBoostingSpec, AdaBoostSpec,
     LinearSvrSpec, SgdRegressionSpec, MlpSpec, LogisticSpec,
     OneVsRestLogisticSpec, SoftmaxSpec, GaussianNbSpec, LinearSvmSpec,
-    RbfSvmSpec, SgdClassificationSpec, IsolationForestSpec, VotingRegressorSpec,
-    VotingClassifierSpec, StackingRegressorSpec, StackingClassifierSpec>;
+    RbfSvmSpec, SgdClassificationSpec, IsolationForestSpec, KMeansSpec,
+    DbscanSpec, GaussianMixtureSpec, VotingRegressorSpec, VotingClassifierSpec,
+    StackingRegressorSpec, StackingClassifierSpec>;
 
 bool IsEnsembleSpec(const EstimatorSpec &spec);
 std::string SerializeBaseEstimatorSpec(const BaseEstimatorSpec &spec);

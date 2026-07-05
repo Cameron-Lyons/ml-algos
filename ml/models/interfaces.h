@@ -82,6 +82,25 @@ concept AnomalyDetectorLike =
       } -> std::same_as<std::expected<void, std::string>>;
     };
 
+template <typename T>
+concept ClustererLike =
+    requires(T &model, const T &const_model,
+             const ml::core::DenseMatrix &features, std::string_view state) {
+      { const_model.name() } -> std::convertible_to<std::string_view>;
+      { model.Fit(features) } -> std::same_as<std::expected<void, std::string>>;
+      {
+        const_model.Predict(features)
+      } -> std::same_as<std::expected<ml::core::LabelVector, std::string>>;
+      { const_model.cluster_count() } -> std::same_as<std::size_t>;
+      { const_model.spec() } -> std::same_as<EstimatorSpec>;
+      {
+        const_model.SaveState()
+      } -> std::same_as<std::expected<std::string, std::string>>;
+      {
+        model.LoadState(state)
+      } -> std::same_as<std::expected<void, std::string>>;
+    };
+
 class Regressor {
 public:
   Regressor() = default;
@@ -317,11 +336,86 @@ private:
   std::unique_ptr<Concept> impl_;
 };
 
+class Clusterer {
+public:
+  Clusterer() = default;
+
+  template <ClustererLike Model>
+  explicit Clusterer(Model model)
+      : impl_(std::make_unique<ModelHolder<Model>>(std::move(model))) {}
+
+  [[nodiscard]] std::string_view name() const { return impl_->Name(); }
+  std::expected<void, std::string> Fit(const ml::core::DenseMatrix &features) {
+    return impl_->Fit(features);
+  }
+  std::expected<ml::core::LabelVector, std::string>
+  Predict(const ml::core::DenseMatrix &features) const {
+    return impl_->Predict(features);
+  }
+  [[nodiscard]] std::size_t cluster_count() const {
+    return impl_->ClusterCount();
+  }
+  [[nodiscard]] EstimatorSpec spec() const { return impl_->Spec(); }
+  std::expected<std::string, std::string> SaveState() const {
+    return impl_->SaveState();
+  }
+  std::expected<void, std::string> LoadState(std::string_view state) {
+    return impl_->LoadState(state);
+  }
+
+private:
+  struct Concept {
+    virtual ~Concept() = default;
+    [[nodiscard]] virtual std::string_view Name() const = 0;
+    virtual std::expected<void, std::string>
+    Fit(const ml::core::DenseMatrix &features) = 0;
+    virtual std::expected<ml::core::LabelVector, std::string>
+    Predict(const ml::core::DenseMatrix &features) const = 0;
+    [[nodiscard]] virtual std::size_t ClusterCount() const = 0;
+    [[nodiscard]] virtual EstimatorSpec Spec() const = 0;
+    virtual std::expected<std::string, std::string> SaveState() const = 0;
+    virtual std::expected<void, std::string>
+    LoadState(std::string_view state) = 0;
+  };
+
+  template <ClustererLike Model> struct ModelHolder final : Concept {
+    explicit ModelHolder(Model model) : model_(std::move(model)) {}
+
+    [[nodiscard]] std::string_view Name() const override {
+      return model_.name();
+    }
+    std::expected<void, std::string>
+    Fit(const ml::core::DenseMatrix &features) override {
+      return model_.Fit(features);
+    }
+    std::expected<ml::core::LabelVector, std::string>
+    Predict(const ml::core::DenseMatrix &features) const override {
+      return model_.Predict(features);
+    }
+    [[nodiscard]] std::size_t ClusterCount() const override {
+      return model_.cluster_count();
+    }
+    [[nodiscard]] EstimatorSpec Spec() const override { return model_.spec(); }
+    std::expected<std::string, std::string> SaveState() const override {
+      return model_.SaveState();
+    }
+    std::expected<void, std::string>
+    LoadState(std::string_view state) override {
+      return model_.LoadState(state);
+    }
+
+    Model model_;
+  };
+
+  std::unique_ptr<Concept> impl_;
+};
+
 std::expected<Regressor, std::string> MakeRegressor(const EstimatorSpec &spec);
 std::expected<Classifier, std::string> MakeClassifier(const EstimatorSpec &spec,
                                                       std::size_t class_count);
 std::expected<AnomalyDetector, std::string>
 MakeAnomalyDetector(const EstimatorSpec &spec);
+std::expected<Clusterer, std::string> MakeClusterer(const EstimatorSpec &spec);
 
 } // namespace ml::models
 

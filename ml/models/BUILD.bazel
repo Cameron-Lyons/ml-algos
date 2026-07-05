@@ -7,6 +7,7 @@ cc_library(
     srcs = [
         "detail/anomaly.cc",
         "detail/classification.cc",
+        "detail/clustering.cc",
         "detail/common.cc",
         "detail/ensembles.cc",
         "detail/knn_classification.cc",
