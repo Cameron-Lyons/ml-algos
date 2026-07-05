@@ -20,10 +20,10 @@ std::vector<models::BaseEstimatorSpec> DefaultClassificationBases() {
 
 std::vector<std::string> AlgorithmsForTask(Task task) {
   if (task == Task::kAnomalyDetection) {
-    return {"isolation_forest"};
+    return {"isolation_forest", "lof"};
   }
   if (task == Task::kClustering) {
-    return {"kmeans", "dbscan", "gaussian_mixture"};
+    return {"kmeans", "dbscan", "gaussian_mixture", "agglomerative"};
   }
   if (task == Task::kRegression) {
     return {"linear",        "ridge",         "lasso",
@@ -56,6 +56,9 @@ DefaultEstimatorSpec(Task task, std::string_view algorithm) {
     if (algorithm == "isolation_forest") {
       return models::IsolationForestSpec{};
     }
+    if (algorithm == "lof") {
+      return models::LofSpec{};
+    }
     return std::unexpected("unsupported algorithm: " + std::string(algorithm));
   }
   if (task == Task::kClustering) {
@@ -67,6 +70,9 @@ DefaultEstimatorSpec(Task task, std::string_view algorithm) {
     }
     if (algorithm == "gaussian_mixture") {
       return models::GaussianMixtureSpec{};
+    }
+    if (algorithm == "agglomerative") {
+      return models::AgglomerativeSpec{};
     }
     return std::unexpected("unsupported algorithm: " + std::string(algorithm));
   }
@@ -164,6 +170,19 @@ TuneGrid(Task task, std::string_view algorithm) {
         models::IsolationForestSpec{.tree_count = 50, .max_samples = 128},
         models::IsolationForestSpec{.tree_count = 100, .max_samples = 256},
         models::IsolationForestSpec{.tree_count = 150, .max_samples = 512}};
+  }
+  if (task == Task::kAnomalyDetection && algorithm == "lof") {
+    return std::vector<models::EstimatorSpec>{
+        models::LofSpec{.neighbor_count = 10}, models::LofSpec{},
+        models::LofSpec{.neighbor_count = 35}};
+  }
+  if (task == Task::kClustering && algorithm == "agglomerative") {
+    return std::vector<models::EstimatorSpec>{
+        models::AgglomerativeSpec{.cluster_count = 2},
+        models::AgglomerativeSpec{},
+        models::AgglomerativeSpec{.cluster_count = 4},
+        models::AgglomerativeSpec{.cluster_count = 3,
+                                  .linkage = models::Linkage::kComplete}};
   }
   if (task == Task::kClustering && algorithm == "kmeans") {
     return std::vector<models::EstimatorSpec>{
