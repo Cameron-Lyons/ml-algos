@@ -20,8 +20,8 @@ cc_test(
         "support/test_support.h",
     ],
     data = [
-        "//data/v3:classification_binary.csv",
-        "//data/v3:regression.csv",
+        "//data:classification_binary.csv",
+        "//data:regression.csv",
     ],
     deps = [
         "//ml/io",
@@ -61,9 +61,9 @@ cc_test(
         "support/test_support.h",
     ],
     data = [
-        "//data/v3:classification_offset.csv",
-        "//data/v3:clustering.csv",
-        "//data/v3:prediction_features.csv",
+        "//data:classification_offset.csv",
+        "//data:clustering.csv",
+        "//data:prediction_features.csv",
     ],
     deps = [
         "//ml/core",
@@ -80,11 +80,11 @@ sh_test(
     srcs = ["cli_smoke_test.sh"],
     data = [
         "//app:ml-algos",
-        "//data/v3:classification_binary.csv",
-        "//data/v3:classification_offset.csv",
-        "//data/v3:clustering.csv",
-        "//data/v3:prediction_features.csv",
-        "//data/v3:regression.csv",
-        "//data/v3:regression_features.csv",
+        "//data:classification_binary.csv",
+        "//data:classification_offset.csv",
+        "//data:clustering.csv",
+        "//data:prediction_features.csv",
+        "//data:regression.csv",
+        "//data:regression_features.csv",
     ],
 )
