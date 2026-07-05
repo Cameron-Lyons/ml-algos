@@ -169,5 +169,50 @@ int main() {
   ML_EXPECT_TRUE((*anomaly_scores)[5] > (*anomaly_scores)[0],
                  "clear outlier should score higher than inlier");
 
+  const auto clustering_features = ml::core::DenseMatrix::FromRows(
+      std::vector<ml::core::Vector>{{0.0, 0.1},
+                                    {0.2, 0.0},
+                                    {0.1, 0.2},
+                                    {0.2, 0.2},
+                                    {8.0, 8.1},
+                                    {8.2, 8.0},
+                                    {8.1, 8.2},
+                                    {8.2, 8.2}});
+  ML_EXPECT_TRUE(clustering_features.has_value(),
+                 "clustering feature matrix should build");
+  const std::vector<ml::models::EstimatorSpec> clusterers = {
+      ml::models::KMeansSpec{.cluster_count = 2, .seed = 7},
+      ml::models::DbscanSpec{.eps = 1.0, .min_samples = 3},
+      ml::models::GaussianMixtureSpec{.component_count = 2, .seed = 7}};
+  for (const auto &spec : clusterers) {
+    auto model = ml::models::MakeClusterer(spec);
+    ML_EXPECT_TRUE(model.has_value(), "clusterer factory should succeed");
+    auto fit = (*model).Fit(*clustering_features);
+    ML_EXPECT_TRUE(fit.has_value(), "clusterer fit should succeed");
+    ML_EXPECT_TRUE((*model).cluster_count() == 2,
+                   "clusterer should find both blobs");
+    auto assignments = (*model).Predict(*clustering_features);
+    ML_EXPECT_TRUE(assignments.has_value(), "clusterer predict should succeed");
+    ML_EXPECT_TRUE(assignments->size() == clustering_features->rows(),
+                   "clusterer assignment size");
+    ML_EXPECT_TRUE((*assignments)[0] == (*assignments)[3],
+                   "points in the same blob should share a cluster");
+    ML_EXPECT_TRUE((*assignments)[0] != (*assignments)[4],
+                   "points in different blobs should not share a cluster");
+
+    auto state = (*model).SaveState();
+    ML_EXPECT_TRUE(state.has_value(), "clusterer save state should succeed");
+    auto restored = ml::models::MakeClusterer(spec);
+    ML_EXPECT_TRUE(restored.has_value(),
+                   "restored clusterer factory should succeed");
+    auto loaded = (*restored).LoadState(*state);
+    ML_EXPECT_TRUE(loaded.has_value(), "clusterer load state should succeed");
+    auto restored_assignments = (*restored).Predict(*clustering_features);
+    ML_EXPECT_TRUE(restored_assignments.has_value(),
+                   "restored clusterer predict should succeed");
+    ML_EXPECT_TRUE(*restored_assignments == *assignments,
+                   "restored clusterer should reproduce assignments");
+  }
+
   return 0;
 }

@@ -81,6 +81,11 @@ MakeStackingClassifierModel(const StackingClassifierSpec &spec,
 std::expected<AnomalyDetector, std::string>
 MakeIsolationForestModel(const IsolationForestSpec &spec);
 
+std::expected<Clusterer, std::string> MakeKMeansModel(const KMeansSpec &spec);
+std::expected<Clusterer, std::string> MakeDbscanModel(const DbscanSpec &spec);
+std::expected<Clusterer, std::string>
+MakeGaussianMixtureModel(const GaussianMixtureSpec &spec);
+
 } // namespace ml::models::detail
 
 #endif // ML_MODELS_DETAIL_FACTORY_HOOKS_H_

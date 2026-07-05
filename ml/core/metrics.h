@@ -24,6 +24,10 @@ std::expected<std::vector<std::vector<std::size_t>>, std::string>
 ConfusionMatrix(std::span<const int> actual, std::span<const int> predicted,
                 std::span<const int> labels);
 double LogLoss(const DenseMatrix &probabilities, std::span<const int> actual);
+double SilhouetteScore(const DenseMatrix &features,
+                       std::span<const int> labels);
+double AdjustedRandIndex(std::span<const int> actual,
+                         std::span<const int> predicted);
 
 } // namespace ml::core
 

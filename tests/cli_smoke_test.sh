@@ -36,6 +36,16 @@ expect_contains "${predict_regression}" "\"predictions\""
 anomaly_json="$("${BIN}" eval --task anomaly --algorithm isolation_forest --data "${DATA}/regression.csv" --target target --json)"
 expect_contains "${anomaly_json}" "\"anomaly\""
 
+clustering_json="$("${BIN}" eval --task clustering --algorithm kmeans --data "${DATA}/clustering.csv" --target cluster --json)"
+expect_contains "${clustering_json}" "\"clustering\""
+
+clustering_model="${TMP}/kmeans.bundle"
+fit_clustering="$("${BIN}" fit --task clustering --algorithm kmeans --data "${DATA}/clustering.csv" --target cluster --transformers standard_scaler --model "${clustering_model}")"
+expect_contains "${fit_clustering}" "Model saved"
+
+predict_clustering="$("${BIN}" predict --model "${clustering_model}" --input "${DATA}/clustering.csv" --json)"
+expect_contains "${predict_clustering}" "\"predictions\""
+
 model_path="${TMP}/offset.bundle"
 fit_output="$("${BIN}" fit --task classification --algorithm logistic --data "${DATA}/classification_offset.csv" --target label --transformers standard_scaler --model "${model_path}")"
 expect_contains "${fit_output}" "Model saved"

@@ -132,4 +132,23 @@ MakeAnomalyDetector(const EstimatorSpec &spec) {
       spec);
 }
 
+std::expected<Clusterer, std::string> MakeClusterer(const EstimatorSpec &spec) {
+  return std::visit(
+      ml::core::Overload{
+          [](const KMeansSpec &value) {
+            return detail::MakeKMeansModel(value);
+          },
+          [](const DbscanSpec &value) {
+            return detail::MakeDbscanModel(value);
+          },
+          [](const GaussianMixtureSpec &value) {
+            return detail::MakeGaussianMixtureModel(value);
+          },
+          [](const auto &) -> std::expected<Clusterer, std::string> {
+            return std::unexpected("estimator spec is not a clusterer");
+          },
+      },
+      spec);
+}
+
 } // namespace ml::models

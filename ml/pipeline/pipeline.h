@@ -25,6 +25,8 @@ public:
   Predict(const core::DenseMatrix &features) const;
   std::expected<core::DenseMatrix, std::string>
   PredictProba(const core::DenseMatrix &features) const;
+  std::expected<core::DenseMatrix, std::string>
+  TransformFeatures(const core::DenseMatrix &features) const;
   std::vector<int> classes() const;
 
   std::expected<ModelBundle, std::string>
@@ -43,12 +45,13 @@ public:
   [[nodiscard]] double AnomalyThreshold() const;
   std::expected<core::LabelVector, std::string>
   PredictAnomalyLabels(const core::DenseMatrix &features) const;
+  [[nodiscard]] std::size_t ClusterCount() const;
+  std::expected<core::LabelVector, std::string>
+  PredictClusterLabels(const core::DenseMatrix &features) const;
 
 private:
   std::expected<void, std::string>
   EnsureInitializedForFit(std::size_t class_count);
-  std::expected<core::DenseMatrix, std::string>
-  TransformFeatures(const core::DenseMatrix &features) const;
 
   Task task_;
   std::vector<preprocess::TransformerSpec> transformer_specs_;
@@ -57,6 +60,7 @@ private:
   std::optional<models::Regressor> regressor_;
   std::optional<models::Classifier> classifier_;
   std::optional<models::AnomalyDetector> anomaly_detector_;
+  std::optional<models::Clusterer> clusterer_;
   std::vector<int> class_labels_;
   bool fitted_ = false;
 };
