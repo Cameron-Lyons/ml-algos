@@ -355,7 +355,7 @@ private:
   ml::core::DenseMatrix components_;
 };
 
-} // namespace
+}
 
 std::expected<std::unique_ptr<Transformer>, std::string>
 MakeTransformer(const TransformerSpec &spec) {
@@ -373,4 +373,4 @@ MakeTransformer(const TransformerSpec &spec) {
       spec);
 }
 
-} // namespace ml::preprocess
+}

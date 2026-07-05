@@ -12,7 +12,6 @@ bazel test //...
 ## CLI
 
 ```sh
-# Fit and save a regression pipeline
 ./bazel-bin/app/ml-algos fit \
   --task regression \
   --algorithm ridge \
@@ -20,7 +19,6 @@ bazel test //...
   --target target \
   --model /tmp/ridge.bundle
 
-# Evaluate a classifier with preprocessing
 ./bazel-bin/app/ml-algos eval \
   --task classification \
   --algorithm logistic \
@@ -28,7 +26,6 @@ bazel test //...
   --target label \
   --transformers standard_scaler
 
-# Tune a classifier
 ./bazel-bin/app/ml-algos tune \
   --task classification \
   --algorithm logistic \
@@ -37,7 +34,6 @@ bazel test //...
   --transformers standard_scaler \
   --cv-folds 4
 
-# Evaluate an anomaly detector with optional ground-truth labels
 ./bazel-bin/app/ml-algos eval \
   --task anomaly \
   --algorithm isolation_forest \
@@ -45,7 +41,6 @@ bazel test //...
   --target target \
   --transformers standard_scaler
 
-# Evaluate a clusterer with optional ground-truth labels
 ./bazel-bin/app/ml-algos eval \
   --task clustering \
   --algorithm kmeans \
@@ -53,10 +48,8 @@ bazel test //...
   --target cluster \
   --transformers standard_scaler
 
-# Inspect a saved bundle
 ./bazel-bin/app/ml-algos inspect --model /tmp/ridge.bundle
 
-# Predict from a saved bundle
 ./bazel-bin/app/ml-algos predict \
   --model /tmp/ridge.bundle \
   --input data/regression_features.csv

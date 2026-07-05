@@ -16,7 +16,7 @@ std::vector<models::BaseEstimatorSpec> DefaultClassificationBases() {
           models::GaussianNbSpec{}};
 }
 
-} // namespace
+}
 
 std::vector<std::string> AlgorithmsForTask(Task task) {
   if (task == Task::kAnomalyDetection) {
@@ -393,4 +393,4 @@ TuneGrid(Task task, std::string_view algorithm) {
                          std::string(algorithm));
 }
 
-} // namespace ml
+}

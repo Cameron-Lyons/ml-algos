@@ -582,4 +582,4 @@ SerializeStoredKernelClassificationState(std::size_t class_count, double gamma,
          std::format("{}\n", ml::core::JoinFormatted(labels));
 }
 
-} // namespace ml::models::detail
+}

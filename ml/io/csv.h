@@ -29,6 +29,6 @@ std::expected<core::DenseMatrix, std::string>
 SelectFeatureColumns(const NumericTable &table,
                      std::initializer_list<std::string_view> feature_names);
 
-} // namespace ml::io
+}
 
-#endif // ML_IO_CSV_H_
+#endif

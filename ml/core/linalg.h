@@ -27,6 +27,6 @@ double RbfKernel(std::span<const double> lhs, std::span<const double> rhs,
                  double gamma);
 double ClampProbability(double value);
 
-} // namespace ml::core
+}
 
-#endif // ML_CORE_LINALG_H_
+#endif

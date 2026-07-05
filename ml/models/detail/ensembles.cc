@@ -661,4 +661,4 @@ MakeStackingClassifierModel(const StackingClassifierSpec &spec,
   return Classifier(StackingClassifierModel(spec, class_count));
 }
 
-} // namespace ml::models::detail
+}

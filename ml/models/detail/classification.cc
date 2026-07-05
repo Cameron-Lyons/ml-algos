@@ -1076,4 +1076,4 @@ MakeRbfSvmClassifierModel(const RbfSvmSpec &spec, std::size_t class_count) {
   return Classifier(RbfSvmClassifierModel(spec, class_count));
 }
 
-} // namespace ml::models::detail
+}

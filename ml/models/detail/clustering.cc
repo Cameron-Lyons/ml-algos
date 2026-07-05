@@ -23,7 +23,6 @@ ReadFeatureBlock(StateReader &reader, std::string_view shape_line_error,
       });
 }
 
-// Chooses initial centers with distance-squared weighting (k-means++).
 std::vector<std::size_t> SeedCenters(const DenseMatrix &features,
                                      std::size_t center_count,
                                      std::mt19937 &rng) {
@@ -112,7 +111,6 @@ KMeansRun RunLloyd(const DenseMatrix &features, std::size_t cluster_count,
     }
     for (std::size_t center = 0; center < cluster_count; ++center) {
       if (counts[center] == 0) {
-        // Reseed an empty cluster to the point farthest from its centroid.
         std::size_t farthest = 0;
         double farthest_distance = -1.0;
         for (std::size_t row = 0; row < features.rows(); ++row) {
@@ -152,7 +150,7 @@ KMeansRun RunLloyd(const DenseMatrix &features, std::size_t cluster_count,
   return run;
 }
 
-} // namespace
+}
 
 class KMeansModel {
 public:
@@ -371,7 +369,6 @@ private:
   std::size_t cluster_count_ = 0;
 };
 
-// Gaussian mixture with diagonal covariance fitted by expectation-maximization.
 class GaussianMixtureModel {
 public:
   explicit GaussianMixtureModel(GaussianMixtureSpec spec) : spec_(spec) {}
@@ -418,7 +415,6 @@ public:
     DenseMatrix responsibilities(features.rows(), components, 0.0);
     double previous_log_likelihood = -std::numeric_limits<double>::infinity();
     for (int iteration = 0; iteration < spec_.max_iterations; ++iteration) {
-      // E-step: responsibilities via log-sum-exp for numeric stability.
       double log_likelihood = 0.0;
       for (std::size_t row = 0; row < features.rows(); ++row) {
         Vector log_terms(components, 0.0);
@@ -439,7 +435,6 @@ public:
         }
       }
 
-      // M-step: update weights, means, and diagonal variances.
       for (std::size_t component = 0; component < components; ++component) {
         double total_weight = 0.0;
         for (std::size_t row = 0; row < features.rows(); ++row) {
@@ -562,7 +557,6 @@ private:
   DenseMatrix variances_;
 };
 
-// Bottom-up hierarchical clustering with Lance-Williams distance updates.
 class AgglomerativeModel {
 public:
   explicit AgglomerativeModel(AgglomerativeSpec spec) : spec_(spec) {}
@@ -580,7 +574,6 @@ public:
     const auto target_count =
         std::min(static_cast<std::size_t>(spec_.cluster_count), rows);
 
-    // Dense inter-cluster distance matrix; merged clusters become inactive.
     DenseMatrix distances(rows, rows, 0.0);
     for (std::size_t row = 0; row < rows; ++row) {
       for (std::size_t other = row + 1; other < rows; ++other) {
@@ -644,7 +637,6 @@ public:
       }
     }
 
-    // Relabel clusters densely in order of first appearance.
     std::vector<int> relabel(rows, -1);
     int next_label = 0;
     labels_.assign(rows, 0);
@@ -748,4 +740,4 @@ MakeAgglomerativeModel(const AgglomerativeSpec &spec) {
   return Clusterer(AgglomerativeModel(spec));
 }
 
-} // namespace ml::models::detail
+}

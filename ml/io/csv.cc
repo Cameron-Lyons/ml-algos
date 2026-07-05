@@ -45,7 +45,7 @@ ParseDouble(std::string_view text, std::size_t row, std::string_view column) {
   return value;
 }
 
-} // namespace
+}
 
 std::expected<NumericTable, std::string>
 ReadNumericCsv(const std::string &path) {
@@ -181,4 +181,4 @@ SelectFeatureColumns(const NumericTable &table,
   return SelectFeatureColumns(table, std::span<const std::string>(owned_names));
 }
 
-} // namespace ml::io
+}

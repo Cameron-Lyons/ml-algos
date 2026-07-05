@@ -59,4 +59,4 @@ DenseMatrix::FromRows(std::span<const Vector> rows) {
   return matrix;
 }
 
-} // namespace ml::core
+}

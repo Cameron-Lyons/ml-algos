@@ -124,4 +124,4 @@ MakeKernelKnnRegressorModel(const KernelKnnSpec &spec) {
   return Regressor(KernelKnnRegressorModel(spec));
 }
 
-} // namespace ml::models::detail
+}

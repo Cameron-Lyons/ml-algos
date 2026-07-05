@@ -22,6 +22,6 @@ std::string SerializeTransformerSpec(const TransformerSpec &spec);
 std::expected<TransformerSpec, std::string>
 ParseTransformerSpec(std::string_view text);
 
-} // namespace ml::preprocess
+}
 
-#endif // ML_PREPROCESS_SPECS_H_
+#endif

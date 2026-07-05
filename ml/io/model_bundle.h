@@ -13,6 +13,6 @@ std::expected<void, std::string> SaveModelBundle(const ModelBundle &bundle,
 std::expected<ModelBundle, std::string>
 LoadModelBundle(const std::string &path);
 
-} // namespace ml::io
+}
 
-#endif // ML_IO_MODEL_BUNDLE_H_
+#endif

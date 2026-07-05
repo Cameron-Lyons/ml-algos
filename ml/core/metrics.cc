@@ -124,7 +124,6 @@ double LogLoss(const DenseMatrix &probabilities, std::span<const int> actual) {
 
 double SilhouetteScore(const DenseMatrix &features,
                        std::span<const int> labels) {
-  // Points labelled below zero are treated as noise and excluded.
   std::unordered_map<int, std::size_t> cluster_sizes;
   for (int label : labels) {
     if (label >= 0) {
@@ -211,4 +210,4 @@ double AdjustedRandIndex(std::span<const int> actual,
   return (joint_pairs - expected) / (maximum - expected);
 }
 
-} // namespace ml::core
+}

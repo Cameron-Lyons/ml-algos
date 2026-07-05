@@ -18,7 +18,7 @@ using ml::core::ParseDelimitedNumbers;
 using ml::core::ParseKeyedFields;
 using ml::core::Split;
 
-} // namespace
+}
 
 std::string_view LinkageName(Linkage linkage) {
   switch (linkage) {
@@ -157,7 +157,7 @@ ParseEstimatorList(std::string_view text) {
   return specs;
 }
 
-} // namespace
+}
 
 std::string_view EstimatorId(const EstimatorSpec &spec) {
   return std::visit(
@@ -795,4 +795,4 @@ ParseEstimatorSpec(std::string_view text) {
   return std::unexpected("unknown estimator spec: " + std::string(id));
 }
 
-} // namespace ml::models
+}

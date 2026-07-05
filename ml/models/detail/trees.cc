@@ -1211,4 +1211,4 @@ MakeDecisionTreeClassifierModel(const DecisionTreeSpec &spec,
   return Classifier(DecisionTreeClassifierModel(spec, class_count));
 }
 
-} // namespace ml::models::detail
+}

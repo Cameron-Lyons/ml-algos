@@ -14,7 +14,7 @@ using ml::core::Overload;
 using ml::core::ParseKeyedFields;
 using ml::core::Split;
 
-} // namespace
+}
 
 std::string_view TransformerId(const TransformerSpec &spec) {
   return std::visit(
@@ -66,4 +66,4 @@ ParseTransformerSpec(std::string_view text) {
   return std::unexpected("unknown transformer spec: " + std::string(text));
 }
 
-} // namespace ml::preprocess
+}

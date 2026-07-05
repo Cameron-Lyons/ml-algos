@@ -29,6 +29,6 @@ public:
 std::expected<std::unique_ptr<Transformer>, std::string>
 MakeTransformer(const TransformerSpec &spec);
 
-} // namespace ml::preprocess
+}
 
-#endif // ML_PREPROCESS_TRANSFORMERS_H_
+#endif

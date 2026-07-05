@@ -29,6 +29,6 @@ using ml::core::ParseNumber;
 using ml::core::StateReader;
 using ml::core::Vector;
 
-} // namespace ml::models::detail
+}
 
-#endif // ML_MODELS_DETAIL_MODEL_CONTEXT_H_
+#endif

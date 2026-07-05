@@ -367,9 +367,8 @@ std::vector<Neighbor> NearestNeighbors(DenseMatrix::ConstRow query,
   return neighbors;
 }
 
-} // namespace
+}
 
-// Local outlier factor with novelty-style scoring against the training set.
 class LofModel {
 public:
   explicit LofModel(LofSpec spec) : spec_(spec) {}
@@ -540,4 +539,4 @@ std::expected<AnomalyDetector, std::string> MakeLofModel(const LofSpec &spec) {
   return AnomalyDetector(LofModel(spec));
 }
 
-} // namespace ml::models::detail
+}

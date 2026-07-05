@@ -29,6 +29,6 @@ double SilhouetteScore(const DenseMatrix &features,
 double AdjustedRandIndex(std::span<const int> actual,
                          std::span<const int> predicted);
 
-} // namespace ml::core
+}
 
-#endif // ML_CORE_METRICS_H_
+#endif
