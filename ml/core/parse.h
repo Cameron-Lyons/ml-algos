@@ -108,6 +108,6 @@ AssignFieldIfPresent(T &field, const Map &values, std::string_view key,
       .transform([&field](T parsed) { field = parsed; });
 }
 
-} // namespace ml::core
+}
 
-#endif // ML_CORE_PARSE_H_
+#endif

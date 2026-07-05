@@ -15,6 +15,6 @@ inline std::string TempPath(const std::string &relative) {
   return std::string(std::getenv("TEST_TMPDIR")) + "/" + relative;
 }
 
-} // namespace ml::test
+}
 
-#endif // ML_TEST_PATHS_H_
+#endif

@@ -344,7 +344,7 @@ BuildShuffledOrder(const TabularDataset &dataset, Task task, bool stratified,
   return order;
 }
 
-} // namespace
+}
 
 Pipeline::Pipeline(Task task,
                    std::vector<preprocess::TransformerSpec> transformer_specs,
@@ -829,4 +829,4 @@ GridSearch(const FoldSet &folds, Task task,
   return report;
 }
 
-} // namespace ml
+}

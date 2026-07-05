@@ -448,6 +448,6 @@ MakeSubsample(const ml::core::DenseMatrix &features,
       });
 }
 
-} // namespace ml::models::detail
+}
 
-#endif // ML_MODELS_DETAIL_COMMON_H_
+#endif

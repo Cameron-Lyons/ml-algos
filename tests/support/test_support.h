@@ -29,7 +29,7 @@ inline void ExpectNear(double actual, double expected, double tolerance,
   }
 }
 
-} // namespace ml::test
+}
 
 #define ML_EXPECT_TRUE(condition, message)                                     \
   ::ml::test::Expect((condition), (message), __FILE__, __LINE__)
@@ -38,4 +38,4 @@ inline void ExpectNear(double actual, double expected, double tolerance,
   ::ml::test::ExpectNear((actual), (expected), (tolerance), (message),         \
                          __FILE__, __LINE__)
 
-#endif // ML_TEST_SUPPORT_H_
+#endif

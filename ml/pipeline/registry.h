@@ -19,6 +19,6 @@ DefaultEstimatorSpec(Task task, std::string_view algorithm);
 std::expected<std::vector<models::EstimatorSpec>, std::string>
 TuneGrid(Task task, std::string_view algorithm);
 
-} // namespace ml
+}
 
-#endif // ML_PIPELINE_REGISTRY_H_
+#endif

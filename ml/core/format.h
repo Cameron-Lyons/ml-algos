@@ -102,6 +102,6 @@ std::string JoinJsonArrayRows(const Range &rows) {
       std::views::join_with(delimiter));
 }
 
-} // namespace ml::core
+}
 
-#endif // ML_CORE_FORMAT_H_
+#endif

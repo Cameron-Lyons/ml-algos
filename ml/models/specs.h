@@ -192,6 +192,6 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec);
 std::expected<EstimatorSpec, std::string>
 ParseEstimatorSpec(std::string_view text);
 
-} // namespace ml::models
+}
 
-#endif // ML_MODELS_SPECS_H_
+#endif

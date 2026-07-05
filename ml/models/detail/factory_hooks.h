@@ -89,6 +89,6 @@ MakeGaussianMixtureModel(const GaussianMixtureSpec &spec);
 std::expected<Clusterer, std::string>
 MakeAgglomerativeModel(const AgglomerativeSpec &spec);
 
-} // namespace ml::models::detail
+}
 
-#endif // ML_MODELS_DETAIL_FACTORY_HOOKS_H_
+#endif

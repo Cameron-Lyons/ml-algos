@@ -154,4 +154,4 @@ MakeKernelKnnClassifierModel(const KernelKnnSpec &spec,
   return Classifier(KernelKnnClassifierModel(spec, class_count));
 }
 
-} // namespace ml::models::detail
+}

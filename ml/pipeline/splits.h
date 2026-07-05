@@ -21,6 +21,6 @@ MakeStratifiedFoldIndices(std::span<const int> labels, int fold_count,
 std::expected<std::vector<IndexFold>, std::string>
 MakeKFoldIndices(std::size_t row_count, int fold_count, unsigned int seed);
 
-} // namespace ml
+}
 
-#endif // ML_PIPELINE_SPLITS_H_
+#endif

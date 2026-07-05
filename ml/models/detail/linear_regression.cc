@@ -410,4 +410,4 @@ MakeMlpRegressionModel(const MlpSpec &spec) {
   return Regressor(MlpRegressionModel(spec));
 }
 
-} // namespace ml::models::detail
+}

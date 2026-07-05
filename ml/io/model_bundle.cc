@@ -169,7 +169,7 @@ std::string SerializeBody(const ModelBundle &bundle) {
   return out;
 }
 
-} // namespace
+}
 
 std::expected<void, std::string> SaveModelBundle(const ModelBundle &bundle,
                                                  const std::string &path) {
@@ -283,4 +283,4 @@ LoadModelBundle(const std::string &path) {
   return bundle;
 }
 
-} // namespace ml::io
+}

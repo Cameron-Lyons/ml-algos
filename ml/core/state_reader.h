@@ -98,6 +98,6 @@ inline std::string FormatDualScalarBlock(std::span<const double> first,
          JoinFormattedLines(second);
 }
 
-} // namespace ml::core
+}
 
-#endif // ML_CORE_STATE_READER_H_
+#endif

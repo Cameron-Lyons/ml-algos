@@ -30,7 +30,7 @@ MakeIndexFoldsFromTestPartitions(
   return folds;
 }
 
-} // namespace
+}
 
 std::expected<std::vector<IndexFold>, std::string>
 MakeStratifiedFoldIndices(std::span<const int> labels, int fold_count,
@@ -72,4 +72,4 @@ MakeKFoldIndices(std::size_t row_count, int fold_count, unsigned int seed) {
   return MakeIndexFoldsFromTestPartitions(test_indices);
 }
 
-} // namespace ml
+}

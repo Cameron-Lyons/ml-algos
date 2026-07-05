@@ -92,6 +92,6 @@ GridSearch(const FoldSet &folds, Task task,
            const std::vector<preprocess::TransformerSpec> &transformer_specs,
            std::span<const models::EstimatorSpec> candidates);
 
-} // namespace ml
+}
 
-#endif // ML_PIPELINE_PIPELINE_H_
+#endif

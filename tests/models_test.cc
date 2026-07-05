@@ -23,7 +23,7 @@ ml::core::LabelVector ClassificationLabels() {
   return {0, 0, 0, 0, 1, 1, 1, 1};
 }
 
-} // namespace
+}
 
 int main() {
   const auto regression_features = RegressionFeatures();

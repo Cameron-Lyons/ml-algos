@@ -99,6 +99,6 @@ FormatClassificationTreeHeader(int class_count,
   return std::format("{}\n{}", class_count, FormatFeatureIndices(indices));
 }
 
-} // namespace ml::models::detail
+}
 
-#endif // ML_MODELS_DETAIL_TREE_STATE_H_
+#endif

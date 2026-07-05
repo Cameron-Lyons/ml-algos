@@ -10,7 +10,7 @@ namespace {
 
 constexpr double kProbabilityFloor = 1e-12;
 
-} // namespace
+}
 
 std::expected<DenseMatrix, std::string> Transpose(const DenseMatrix &matrix) {
   DenseMatrix out(matrix.cols(), matrix.rows(), 0.0);
@@ -224,4 +224,4 @@ double ClampProbability(double value) {
   return std::clamp(value, kProbabilityFloor, 1.0 - kProbabilityFloor);
 }
 
-} // namespace ml::core
+}

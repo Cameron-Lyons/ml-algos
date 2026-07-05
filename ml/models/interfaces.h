@@ -417,6 +417,6 @@ std::expected<AnomalyDetector, std::string>
 MakeAnomalyDetector(const EstimatorSpec &spec);
 std::expected<Clusterer, std::string> MakeClusterer(const EstimatorSpec &spec);
 
-} // namespace ml::models
+}
 
-#endif // ML_MODELS_INTERFACES_H_
+#endif

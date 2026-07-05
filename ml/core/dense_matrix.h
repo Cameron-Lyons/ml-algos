@@ -63,6 +63,6 @@ private:
   std::vector<double> values_;
 };
 
-} // namespace ml::core
+}
 
-#endif // ML_CORE_DENSE_MATRIX_H_
+#endif

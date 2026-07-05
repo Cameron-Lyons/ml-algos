@@ -144,6 +144,6 @@ constexpr std::string_view TaskName(Task task) {
   return "unknown";
 }
 
-} // namespace ml
+}
 
-#endif // ML_PIPELINE_TYPES_H_
+#endif
