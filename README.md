@@ -92,15 +92,17 @@ Commands support `--json` for machine-readable output.
 
 ### Anomaly Detection
 
-- `isolation_forest`
+- `isolation_forest` (scores in `[0, 1]`)
+- `lof` (local outlier factor; scores near `1` are inliers, larger is more anomalous)
 
-Predictions return anomaly scores in `[0, 1]` where higher values indicate more anomalous points. Optional `--target` labels (`0` = normal, `1` = anomaly) enable precision/recall/F1 during eval and tune.
+Higher scores indicate more anomalous points; the fitted threshold follows the configured contamination. Optional `--target` labels (`0` = normal, `1` = anomaly) enable precision/recall/F1 during eval and tune.
 
 ### Clustering
 
 - `kmeans` (k-means++ initialization with restarts)
 - `dbscan` (density-based; new points map to the nearest in-range core point, `-1` = noise)
 - `gaussian_mixture` (diagonal-covariance EM)
+- `agglomerative` (hierarchical with `single`, `complete`, or `average` linkage; new points map to the nearest training point's cluster)
 
 Predictions return cluster assignments. Eval reports the cluster count, silhouette score, and noise ratio; integer-like `--target` labels additionally enable the adjusted Rand index. Tune selects by silhouette.
 

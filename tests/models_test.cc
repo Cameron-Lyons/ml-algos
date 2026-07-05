@@ -169,6 +169,32 @@ int main() {
   ML_EXPECT_TRUE((*anomaly_scores)[5] > (*anomaly_scores)[0],
                  "clear outlier should score higher than inlier");
 
+  const auto lof_features =
+      ml::core::DenseMatrix::FromRows(std::vector<ml::core::Vector>{
+          {0, 0}, {0, 1}, {1, 0}, {1, 1}, {0.5, 0.5}, {0.4, 0.6}, {10, 10}});
+  ML_EXPECT_TRUE(lof_features.has_value(), "lof feature matrix should build");
+  const ml::models::LofSpec lof_spec{.neighbor_count = 3, .contamination = 0.2};
+  auto lof_model = ml::models::MakeAnomalyDetector(lof_spec);
+  ML_EXPECT_TRUE(lof_model.has_value(), "lof factory should succeed");
+  auto lof_fit = (*lof_model).Fit(*lof_features);
+  ML_EXPECT_TRUE(lof_fit.has_value(), "lof fit should succeed");
+  auto lof_scores = (*lof_model).Score(*lof_features);
+  ML_EXPECT_TRUE(lof_scores.has_value(), "lof score should succeed");
+  ML_EXPECT_TRUE((*lof_scores)[6] > (*lof_scores)[4],
+                 "isolated point should have higher lof than dense point");
+  auto lof_state = (*lof_model).SaveState();
+  ML_EXPECT_TRUE(lof_state.has_value(), "lof save state should succeed");
+  auto lof_restored = ml::models::MakeAnomalyDetector(lof_spec);
+  ML_EXPECT_TRUE(lof_restored.has_value(),
+                 "restored lof factory should succeed");
+  auto lof_loaded = (*lof_restored).LoadState(*lof_state);
+  ML_EXPECT_TRUE(lof_loaded.has_value(), "lof load state should succeed");
+  auto lof_restored_scores = (*lof_restored).Score(*lof_features);
+  ML_EXPECT_TRUE(lof_restored_scores.has_value(),
+                 "restored lof score should succeed");
+  ML_EXPECT_TRUE(*lof_restored_scores == *lof_scores,
+                 "restored lof should reproduce scores");
+
   const auto clustering_features = ml::core::DenseMatrix::FromRows(
       std::vector<ml::core::Vector>{{0.0, 0.1},
                                     {0.2, 0.0},
@@ -183,7 +209,10 @@ int main() {
   const std::vector<ml::models::EstimatorSpec> clusterers = {
       ml::models::KMeansSpec{.cluster_count = 2, .seed = 7},
       ml::models::DbscanSpec{.eps = 1.0, .min_samples = 3},
-      ml::models::GaussianMixtureSpec{.component_count = 2, .seed = 7}};
+      ml::models::GaussianMixtureSpec{.component_count = 2, .seed = 7},
+      ml::models::AgglomerativeSpec{.cluster_count = 2},
+      ml::models::AgglomerativeSpec{.cluster_count = 2,
+                                    .linkage = ml::models::Linkage::kSingle}};
   for (const auto &spec : clusterers) {
     auto model = ml::models::MakeClusterer(spec);
     ML_EXPECT_TRUE(model.has_value(), "clusterer factory should succeed");

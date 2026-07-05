@@ -18,9 +18,8 @@ ReadFeatureBlock(StateReader &reader, std::string_view shape_line_error,
       .and_then([&](std::pair<std::size_t, std::size_t> shape) {
         return ReadDoubleRowBlock(reader, shape.first, shape.second,
                                   row_line_error, row_error)
-            .and_then([](std::vector<Vector> rows) {
-              return MatrixFromRows(rows);
-            });
+            .and_then(
+                [](std::vector<Vector> rows) { return MatrixFromRows(rows); });
       });
 }
 
@@ -30,8 +29,7 @@ std::vector<std::size_t> SeedCenters(const DenseMatrix &features,
                                      std::mt19937 &rng) {
   std::vector<std::size_t> centers;
   centers.reserve(center_count);
-  std::uniform_int_distribution<std::size_t> first_dist(0,
-                                                        features.rows() - 1);
+  std::uniform_int_distribution<std::size_t> first_dist(0, features.rows() - 1);
   centers.push_back(first_dist(rng));
 
   Vector nearest(features.rows(), 0.0);
@@ -195,7 +193,8 @@ public:
     }
     LabelVector labels(features.rows(), 0);
     for (std::size_t row = 0; row < features.rows(); ++row) {
-      labels[row] = static_cast<int>(NearestCentroid(features[row], centroids_));
+      labels[row] =
+          static_cast<int>(NearestCentroid(features[row], centroids_));
     }
     return labels;
   }
@@ -218,10 +217,9 @@ public:
         })
         .and_then([this, &reader](double inertia) {
           inertia_ = inertia;
-          return ReadFeatureBlock(reader, "invalid kmeans centroid shape",
-                                  "kmeans centroid shape",
-                                  "invalid kmeans centroid row",
-                                  "kmeans centroid row");
+          return ReadFeatureBlock(
+              reader, "invalid kmeans centroid shape", "kmeans centroid shape",
+              "invalid kmeans centroid row", "kmeans centroid row");
         })
         .and_then([this](DenseMatrix centroids) {
           centroids_ = std::move(centroids);
@@ -258,9 +256,8 @@ public:
     std::vector<std::vector<std::size_t>> neighborhoods(features.rows());
     for (std::size_t row = 0; row < features.rows(); ++row) {
       for (std::size_t other = 0; other < features.rows(); ++other) {
-        if (ml::core::SquaredEuclideanDistance(features[row],
-                                               features[other]) <=
-            eps_squared) {
+        if (ml::core::SquaredEuclideanDistance(
+                features[row], features[other]) <= eps_squared) {
           neighborhoods[row].push_back(other);
         }
       }
@@ -312,8 +309,8 @@ public:
         if (core_flags_[train] == 0) {
           continue;
         }
-        const double distance = ml::core::SquaredEuclideanDistance(
-            features[row], features_[train]);
+        const double distance =
+            ml::core::SquaredEuclideanDistance(features[row], features_[train]);
         if (distance <= eps_squared && distance < best_distance) {
           best_distance = distance;
           labels[row] = labels_[train];
@@ -342,10 +339,9 @@ public:
         })
         .and_then([this, &reader](std::size_t cluster_count) {
           cluster_count_ = cluster_count;
-          return ReadFeatureBlock(reader, "invalid dbscan feature shape",
-                                  "dbscan feature shape",
-                                  "invalid dbscan feature row",
-                                  "dbscan feature row");
+          return ReadFeatureBlock(
+              reader, "invalid dbscan feature shape", "dbscan feature shape",
+              "invalid dbscan feature row", "dbscan feature row");
         })
         .and_then([this, &reader](DenseMatrix features) {
           features_ = std::move(features);
@@ -356,15 +352,15 @@ public:
           return reader.ReadLine("invalid dbscan core flags")
               .and_then(ParseInts);
         })
-        .and_then([this](LabelVector core_flags)
-                      -> std::expected<void, std::string> {
-          if (labels_.size() != features_.rows() ||
-              core_flags.size() != features_.rows()) {
-            return std::unexpected("dbscan state size mismatch");
-          }
-          core_flags_ = std::move(core_flags);
-          return {};
-        });
+        .and_then(
+            [this](LabelVector core_flags) -> std::expected<void, std::string> {
+              if (labels_.size() != features_.rows() ||
+                  core_flags.size() != features_.rows()) {
+                return std::unexpected("dbscan state size mismatch");
+              }
+              core_flags_ = std::move(core_flags);
+              return {};
+            });
   }
 
 private:
@@ -399,8 +395,7 @@ public:
     means_ = DenseMatrix(components, cols, 0.0);
     const auto seeds = SeedCenters(features, components, rng);
     for (std::size_t component = 0; component < components; ++component) {
-      std::ranges::copy(features[seeds[component]],
-                        means_[component].begin());
+      std::ranges::copy(features[seeds[component]], means_[component].begin());
     }
 
     const Vector column_means = ml::core::MeanColumns(features);
@@ -421,8 +416,7 @@ public:
     }
 
     DenseMatrix responsibilities(features.rows(), components, 0.0);
-    double previous_log_likelihood =
-        -std::numeric_limits<double>::infinity();
+    double previous_log_likelihood = -std::numeric_limits<double>::infinity();
     for (int iteration = 0; iteration < spec_.max_iterations; ++iteration) {
       // E-step: responsibilities via log-sum-exp for numeric stability.
       double log_likelihood = 0.0;
@@ -457,16 +451,15 @@ public:
         for (std::size_t col = 0; col < cols; ++col) {
           double weighted_sum = 0.0;
           for (std::size_t row = 0; row < features.rows(); ++row) {
-            weighted_sum += responsibilities[row][component] *
-                            features[row][col];
+            weighted_sum +=
+                responsibilities[row][component] * features[row][col];
           }
           means_[component][col] = weighted_sum / total_weight;
         }
         for (std::size_t col = 0; col < cols; ++col) {
           double weighted_variance = 0.0;
           for (std::size_t row = 0; row < features.rows(); ++row) {
-            const double centered =
-                features[row][col] - means_[component][col];
+            const double centered = features[row][col] - means_[component][col];
             weighted_variance +=
                 responsibilities[row][component] * centered * centered;
           }
@@ -499,8 +492,8 @@ public:
       std::size_t best = 0;
       double best_score = -std::numeric_limits<double>::infinity();
       for (std::size_t component = 0; component < means_.rows(); ++component) {
-        const double score =
-            std::log(weights_[component]) + LogDensity(features[row], component);
+        const double score = std::log(weights_[component]) +
+                             LogDensity(features[row], component);
         if (score > best_score) {
           best_score = score;
           best = component;
@@ -533,22 +526,22 @@ public:
         })
         .and_then([this, &reader](DenseMatrix means) {
           means_ = std::move(means);
-          return ReadFeatureBlock(
-              reader, "invalid gaussian mixture variance shape",
-              "gaussian mixture variance shape",
-              "invalid gaussian mixture variance row",
-              "gaussian mixture variance row");
+          return ReadFeatureBlock(reader,
+                                  "invalid gaussian mixture variance shape",
+                                  "gaussian mixture variance shape",
+                                  "invalid gaussian mixture variance row",
+                                  "gaussian mixture variance row");
         })
-        .and_then([this](DenseMatrix variances)
-                      -> std::expected<void, std::string> {
-          if (weights_.size() != means_.rows() ||
-              variances.rows() != means_.rows() ||
-              variances.cols() != means_.cols()) {
-            return std::unexpected("gaussian mixture state size mismatch");
-          }
-          variances_ = std::move(variances);
-          return {};
-        });
+        .and_then(
+            [this](DenseMatrix variances) -> std::expected<void, std::string> {
+              if (weights_.size() != means_.rows() ||
+                  variances.rows() != means_.rows() ||
+                  variances.cols() != means_.cols()) {
+                return std::unexpected("gaussian mixture state size mismatch");
+              }
+              variances_ = std::move(variances);
+              return {};
+            });
   }
 
 private:
@@ -569,6 +562,174 @@ private:
   DenseMatrix variances_;
 };
 
+// Bottom-up hierarchical clustering with Lance-Williams distance updates.
+class AgglomerativeModel {
+public:
+  explicit AgglomerativeModel(AgglomerativeSpec spec) : spec_(spec) {}
+
+  std::string_view name() const { return "agglomerative"; }
+
+  std::expected<void, std::string> Fit(const DenseMatrix &features) {
+    if (spec_.cluster_count < 1) {
+      return std::unexpected("agglomerative requires at least one cluster");
+    }
+    if (features.rows() == 0) {
+      return std::unexpected("agglomerative requires at least one row");
+    }
+    const std::size_t rows = features.rows();
+    const auto target_count =
+        std::min(static_cast<std::size_t>(spec_.cluster_count), rows);
+
+    // Dense inter-cluster distance matrix; merged clusters become inactive.
+    DenseMatrix distances(rows, rows, 0.0);
+    for (std::size_t row = 0; row < rows; ++row) {
+      for (std::size_t other = row + 1; other < rows; ++other) {
+        const double distance = std::sqrt(
+            ml::core::SquaredEuclideanDistance(features[row], features[other]));
+        distances[row][other] = distance;
+        distances[other][row] = distance;
+      }
+    }
+    std::vector<bool> active(rows, true);
+    std::vector<std::size_t> sizes(rows, 1);
+    std::vector<std::size_t> membership = IotaVector<std::size_t>(rows);
+
+    for (std::size_t cluster_count = rows; cluster_count > target_count;
+         --cluster_count) {
+      std::size_t merge_left = 0;
+      std::size_t merge_right = 0;
+      double closest = std::numeric_limits<double>::infinity();
+      for (std::size_t left = 0; left < rows; ++left) {
+        if (!active[left]) {
+          continue;
+        }
+        for (std::size_t right = left + 1; right < rows; ++right) {
+          if (active[right] && distances[left][right] < closest) {
+            closest = distances[left][right];
+            merge_left = left;
+            merge_right = right;
+          }
+        }
+      }
+
+      for (std::size_t other = 0; other < rows; ++other) {
+        if (!active[other] || other == merge_left || other == merge_right) {
+          continue;
+        }
+        const double to_left = distances[merge_left][other];
+        const double to_right = distances[merge_right][other];
+        double merged = 0.0;
+        switch (spec_.linkage) {
+        case Linkage::kSingle:
+          merged = std::min(to_left, to_right);
+          break;
+        case Linkage::kComplete:
+          merged = std::max(to_left, to_right);
+          break;
+        case Linkage::kAverage:
+          merged = ((static_cast<double>(sizes[merge_left]) * to_left) +
+                    (static_cast<double>(sizes[merge_right]) * to_right)) /
+                   static_cast<double>(sizes[merge_left] + sizes[merge_right]);
+          break;
+        }
+        distances[merge_left][other] = merged;
+        distances[other][merge_left] = merged;
+      }
+      sizes[merge_left] += sizes[merge_right];
+      active[merge_right] = false;
+      for (std::size_t row = 0; row < rows; ++row) {
+        if (membership[row] == merge_right) {
+          membership[row] = merge_left;
+        }
+      }
+    }
+
+    // Relabel clusters densely in order of first appearance.
+    std::vector<int> relabel(rows, -1);
+    int next_label = 0;
+    labels_.assign(rows, 0);
+    for (std::size_t row = 0; row < rows; ++row) {
+      const std::size_t representative = membership[row];
+      if (relabel[representative] < 0) {
+        relabel[representative] = next_label++;
+      }
+      labels_[row] = relabel[representative];
+    }
+    features_ = features;
+    cluster_count_ = static_cast<std::size_t>(next_label);
+    return {};
+  }
+
+  std::expected<LabelVector, std::string>
+  Predict(const DenseMatrix &features) const {
+    if (features_.rows() == 0) {
+      return std::unexpected("agglomerative model is not fitted");
+    }
+    if (features.cols() != features_.cols()) {
+      return std::unexpected("agglomerative feature width mismatch");
+    }
+    LabelVector labels(features.rows(), 0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      std::size_t nearest = 0;
+      double nearest_distance = std::numeric_limits<double>::infinity();
+      for (std::size_t train = 0; train < features_.rows(); ++train) {
+        const double distance =
+            ml::core::SquaredEuclideanDistance(features[row], features_[train]);
+        if (distance < nearest_distance) {
+          nearest_distance = distance;
+          nearest = train;
+        }
+      }
+      labels[row] = labels_[nearest];
+    }
+    return labels;
+  }
+
+  std::size_t cluster_count() const { return cluster_count_; }
+
+  EstimatorSpec spec() const { return spec_; }
+
+  std::expected<std::string, std::string> SaveState() const {
+    return std::format("{}\n", cluster_count_) +
+           SerializeFeatureRows(features_) +
+           std::format("{}\n", JoinFormatted(labels_));
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) {
+    StateReader reader(state);
+    return reader.ReadLine("invalid agglomerative state")
+        .and_then([](std::string_view line) {
+          return ParseNumber<std::size_t>(line, "agglomerative cluster count");
+        })
+        .and_then([this, &reader](std::size_t cluster_count) {
+          cluster_count_ = cluster_count;
+          return ReadFeatureBlock(reader, "invalid agglomerative feature shape",
+                                  "agglomerative feature shape",
+                                  "invalid agglomerative feature row",
+                                  "agglomerative feature row");
+        })
+        .and_then([this, &reader](DenseMatrix features) {
+          features_ = std::move(features);
+          return reader.ReadLine("invalid agglomerative labels")
+              .and_then(ParseInts);
+        })
+        .and_then(
+            [this](LabelVector labels) -> std::expected<void, std::string> {
+              if (labels.size() != features_.rows()) {
+                return std::unexpected("agglomerative state size mismatch");
+              }
+              labels_ = std::move(labels);
+              return {};
+            });
+  }
+
+private:
+  AgglomerativeSpec spec_;
+  DenseMatrix features_;
+  LabelVector labels_;
+  std::size_t cluster_count_ = 0;
+};
+
 std::expected<Clusterer, std::string> MakeKMeansModel(const KMeansSpec &spec) {
   return Clusterer(KMeansModel(spec));
 }
@@ -580,6 +741,11 @@ std::expected<Clusterer, std::string> MakeDbscanModel(const DbscanSpec &spec) {
 std::expected<Clusterer, std::string>
 MakeGaussianMixtureModel(const GaussianMixtureSpec &spec) {
   return Clusterer(GaussianMixtureModel(spec));
+}
+
+std::expected<Clusterer, std::string>
+MakeAgglomerativeModel(const AgglomerativeSpec &spec) {
+  return Clusterer(AgglomerativeModel(spec));
 }
 
 } // namespace ml::models::detail

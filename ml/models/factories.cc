@@ -125,6 +125,7 @@ MakeAnomalyDetector(const EstimatorSpec &spec) {
           [](const IsolationForestSpec &value) {
             return detail::MakeIsolationForestModel(value);
           },
+          [](const LofSpec &value) { return detail::MakeLofModel(value); },
           [](const auto &) -> std::expected<AnomalyDetector, std::string> {
             return std::unexpected("estimator spec is not an anomaly detector");
           },
@@ -143,6 +144,9 @@ std::expected<Clusterer, std::string> MakeClusterer(const EstimatorSpec &spec) {
           },
           [](const GaussianMixtureSpec &value) {
             return detail::MakeGaussianMixtureModel(value);
+          },
+          [](const AgglomerativeSpec &value) {
+            return detail::MakeAgglomerativeModel(value);
           },
           [](const auto &) -> std::expected<Clusterer, std::string> {
             return std::unexpected("estimator spec is not a clusterer");
