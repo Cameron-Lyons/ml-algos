@@ -1,6 +1,7 @@
 #ifndef ML_MODELS_SPECS_H_
 #define ML_MODELS_SPECS_H_
 
+#include <cstdint>
 #include <expected>
 #include <string>
 #include <string_view>
@@ -110,6 +111,39 @@ struct IsolationForestSpec {
   double contamination = 0.1;
   unsigned int seed = 42;
 };
+struct KMeansSpec {
+  int cluster_count = 3;
+  int max_iterations = 300;
+  double tolerance = 1e-4;
+  int init_count = 5;
+  unsigned int seed = 42;
+};
+struct DbscanSpec {
+  double eps = 0.5;
+  int min_samples = 5;
+};
+struct GaussianMixtureSpec {
+  int component_count = 3;
+  int max_iterations = 100;
+  double tolerance = 1e-3;
+  double reg_covar = 1e-6;
+  unsigned int seed = 42;
+};
+enum class Linkage : std::uint8_t {
+  kAverage = 0,
+  kSingle = 1,
+  kComplete = 2,
+};
+std::string_view LinkageName(Linkage linkage);
+std::expected<Linkage, std::string> ParseLinkage(std::string_view text);
+struct AgglomerativeSpec {
+  int cluster_count = 3;
+  Linkage linkage = Linkage::kAverage;
+};
+struct LofSpec {
+  int neighbor_count = 20;
+  double contamination = 0.1;
+};
 
 using BaseEstimatorSpec =
     std::variant<LinearSpec, RidgeSpec, LassoSpec, ElasticNetSpec, KnnSpec,
@@ -144,7 +178,8 @@ using EstimatorSpec = std::variant<
     DecisionTreeSpec, RandomForestSpec, GradientBoostingSpec, AdaBoostSpec,
     LinearSvrSpec, SgdRegressionSpec, MlpSpec, LogisticSpec,
     OneVsRestLogisticSpec, SoftmaxSpec, GaussianNbSpec, LinearSvmSpec,
-    RbfSvmSpec, SgdClassificationSpec, IsolationForestSpec, VotingRegressorSpec,
+    RbfSvmSpec, SgdClassificationSpec, IsolationForestSpec, LofSpec, KMeansSpec,
+    DbscanSpec, GaussianMixtureSpec, AgglomerativeSpec, VotingRegressorSpec,
     VotingClassifierSpec, StackingRegressorSpec, StackingClassifierSpec>;
 
 bool IsEnsembleSpec(const EstimatorSpec &spec);

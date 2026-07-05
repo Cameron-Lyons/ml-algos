@@ -32,25 +32,25 @@ struct CommandArgs {
 };
 
 void PrintUsage(const char *program) {
+  constexpr std::string_view kTasks =
+      "<regression|classification|anomaly|clustering>";
   std::println("Usage:");
-  std::println("  {} fit --task <regression|classification|anomaly> "
+  std::println("  {} fit --task {} "
                "--algorithm <name> --data <csv> --target <column> "
                "[--transformers a,b] [--test-ratio <r>] [--seed <n>] "
                "[--model <path>] [--json]",
-               program);
-  std::println("  {} eval --task <regression|classification|anomaly> "
+               program, kTasks);
+  std::println("  {} eval --task {} "
                "--algorithm <name> --data <csv> --target <column> "
                "[--transformers a,b] [--test-ratio <r>] [--seed <n>] [--json]",
-               program);
-  std::println("  {} tune --task <regression|classification|anomaly> "
+               program, kTasks);
+  std::println("  {} tune --task {} "
                "--algorithm <name> --data <csv> --target <column> "
                "[--transformers a,b] [--cv-folds <k>] [--seed <n>] [--json]",
-               program);
+               program, kTasks);
   std::println("  {} predict --model <bundle> --input <csv> [--json]", program);
   std::println("  {} inspect --model <bundle> [--json]", program);
-  std::println(
-      "  {} list [--task <regression|classification|anomaly>] [--json]",
-      program);
+  std::println("  {} list [--task {}] [--json]", program, kTasks);
 }
 
 void PrintError(std::string_view message) {
@@ -118,6 +118,9 @@ std::expected<Task, std::string> ParseTask(std::string_view text) {
   if (text == "anomaly") {
     return Task::kAnomalyDetection;
   }
+  if (text == "clustering") {
+    return Task::kClustering;
+  }
   return std::unexpected("unknown task: " + std::string(text));
 }
 
@@ -173,6 +176,13 @@ std::string FormatMetricsJson(const ml::EvaluationMetrics &metrics) {
                 ml::core::FormatOptionalJson(summary.precision),
                 ml::core::FormatOptionalJson(summary.recall),
                 ml::core::FormatOptionalJson(summary.f1));
+          },
+          [](const ml::ClusteringSummary &summary) {
+            return std::format(
+                "\"clustering\":{{\"cluster_count\":{},\"silhouette\":{},"
+                "\"noise_ratio\":{},\"adjusted_rand\":{}}}",
+                summary.cluster_count, summary.silhouette, summary.noise_ratio,
+                ml::core::FormatOptionalJson(summary.adjusted_rand));
           },
       },
       metrics);
@@ -264,6 +274,12 @@ void PrintEvaluation(const ml::EvaluationReport &report) {
                    PrintOptionalMetric("Recall", summary.recall);
                    PrintOptionalMetric("F1", summary.f1);
                  },
+                 [](const ml::ClusteringSummary &summary) {
+                   std::println("Clusters: {}", summary.cluster_count);
+                   std::println("Silhouette: {}", summary.silhouette);
+                   std::println("Noise ratio: {}", summary.noise_ratio);
+                   PrintOptionalMetric("Adjusted Rand", summary.adjusted_rand);
+                 },
              },
              report.metrics);
 }
@@ -314,11 +330,12 @@ int HandleList(const CommandArgs &args) {
   if (args.json) {
     std::println(
         "{{\"regression\":[{}],\"classification\":[{}],\"anomaly\":[{}],"
+        "\"clustering\":[{}],"
         "\"transformers\":[\"standard_scaler\",\"minmax_scaler\",\"pca\"]}}",
         FormatAlgorithmListJson(ml::AlgorithmsForTask(Task::kRegression)),
         FormatAlgorithmListJson(ml::AlgorithmsForTask(Task::kClassification)),
-        FormatAlgorithmListJson(
-            ml::AlgorithmsForTask(Task::kAnomalyDetection)));
+        FormatAlgorithmListJson(ml::AlgorithmsForTask(Task::kAnomalyDetection)),
+        FormatAlgorithmListJson(ml::AlgorithmsForTask(Task::kClustering)));
     return 0;
   }
   std::println("Regression:");
@@ -331,6 +348,10 @@ int HandleList(const CommandArgs &args) {
   }
   std::println("Anomaly:");
   for (const auto &algorithm : ml::AlgorithmsForTask(Task::kAnomalyDetection)) {
+    std::println("  {}", algorithm);
+  }
+  std::println("Clustering:");
+  for (const auto &algorithm : ml::AlgorithmsForTask(Task::kClustering)) {
     std::println("  {}", algorithm);
   }
   std::println("Transformers:\n  standard_scaler\n  minmax_scaler\n  pca");

@@ -338,9 +338,205 @@ private:
   std::vector<IsolationTree> trees_;
 };
 
+namespace {
+
+struct Neighbor {
+  std::size_t index = 0;
+  double distance = 0.0;
+};
+
+std::vector<Neighbor> NearestNeighbors(DenseMatrix::ConstRow query,
+                                       const DenseMatrix &features,
+                                       std::size_t neighbor_count,
+                                       std::optional<std::size_t> skip_row) {
+  std::vector<Neighbor> neighbors;
+  neighbors.reserve(features.rows());
+  for (std::size_t row = 0; row < features.rows(); ++row) {
+    if (skip_row && row == *skip_row) {
+      continue;
+    }
+    neighbors.push_back({row, std::sqrt(ml::core::SquaredEuclideanDistance(
+                                  query, features[row]))});
+  }
+  const std::size_t count = std::min(neighbor_count, neighbors.size());
+  std::ranges::nth_element(
+      neighbors, neighbors.begin() + static_cast<std::ptrdiff_t>(count - 1), {},
+      &Neighbor::distance);
+  neighbors.resize(count);
+  return neighbors;
+}
+
+} // namespace
+
+// Local outlier factor with novelty-style scoring against the training set.
+class LofModel {
+public:
+  explicit LofModel(LofSpec spec) : spec_(spec) {}
+
+  std::string_view name() const { return "lof"; }
+
+  std::expected<void, std::string> Fit(const DenseMatrix &features) {
+    if (features.rows() < 2) {
+      return std::unexpected("lof requires at least two rows");
+    }
+    features_ = features;
+    const auto neighbor_count = std::min<std::size_t>(
+        static_cast<std::size_t>(std::max(spec_.neighbor_count, 1)),
+        features.rows() - 1);
+
+    std::vector<std::vector<Neighbor>> neighborhoods(features.rows());
+    k_distances_.assign(features.rows(), 0.0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      neighborhoods[row] =
+          NearestNeighbors(features[row], features_, neighbor_count, row);
+      double k_distance = 0.0;
+      for (const Neighbor &neighbor : neighborhoods[row]) {
+        k_distance = std::max(k_distance, neighbor.distance);
+      }
+      k_distances_[row] = k_distance;
+    }
+
+    local_densities_.assign(features.rows(), 0.0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      local_densities_[row] = LocalReachabilityDensity(neighborhoods[row]);
+    }
+    return FitThreshold(features);
+  }
+
+  std::expected<Vector, std::string> Score(const DenseMatrix &features) const {
+    if (features_.rows() == 0) {
+      return std::unexpected("lof model is not fitted");
+    }
+    if (features.cols() != features_.cols()) {
+      return std::unexpected("lof feature width mismatch");
+    }
+    const auto neighbor_count = std::min<std::size_t>(
+        static_cast<std::size_t>(std::max(spec_.neighbor_count, 1)),
+        features_.rows());
+    Vector scores(features.rows(), 0.0);
+    for (std::size_t row = 0; row < features.rows(); ++row) {
+      const auto neighbors = NearestNeighbors(features[row], features_,
+                                              neighbor_count, std::nullopt);
+      const double density = LocalReachabilityDensity(neighbors);
+      double neighbor_density = 0.0;
+      for (const Neighbor &neighbor : neighbors) {
+        neighbor_density += local_densities_[neighbor.index];
+      }
+      neighbor_density /= static_cast<double>(neighbors.size());
+      scores[row] = neighbor_density / density;
+    }
+    return scores;
+  }
+
+  std::expected<LabelVector, std::string>
+  Predict(const DenseMatrix &features) const {
+    auto scores = Score(features);
+    if (!scores) {
+      return std::unexpected(scores.error());
+    }
+    LabelVector labels(scores->size(), 0);
+    for (std::size_t index = 0; index < scores->size(); ++index) {
+      if ((*scores)[index] >= threshold_) {
+        labels[index] = 1;
+      }
+    }
+    return labels;
+  }
+
+  double threshold() const { return threshold_; }
+
+  EstimatorSpec spec() const { return spec_; }
+
+  std::expected<std::string, std::string> SaveState() const {
+    return std::format("{}\n{}\n{}\n", threshold_,
+                       ml::core::JoinFormatted(k_distances_),
+                       ml::core::JoinFormatted(local_densities_)) +
+           SerializeFeatureRows(features_);
+  }
+
+  std::expected<void, std::string> LoadState(std::string_view state) {
+    StateReader reader(state);
+    return reader.ReadLine("invalid lof state")
+        .and_then([](std::string_view line) {
+          return ParseNumber<double>(line, "lof threshold");
+        })
+        .and_then([this, &reader](double threshold) {
+          threshold_ = threshold;
+          return reader.ReadLine("invalid lof k-distances")
+              .and_then(ParseDoubles);
+        })
+        .and_then([this, &reader](Vector k_distances) {
+          k_distances_ = std::move(k_distances);
+          return reader.ReadLine("invalid lof densities")
+              .and_then(ParseDoubles);
+        })
+        .and_then([this, &reader](Vector local_densities) {
+          local_densities_ = std::move(local_densities);
+          return reader.ReadLine("invalid lof feature shape")
+              .and_then([](std::string_view line) {
+                return ParseShape(line, "lof feature shape");
+              });
+        })
+        .and_then([&reader](std::pair<std::size_t, std::size_t> shape) {
+          return ReadDoubleRowBlock(reader, shape.first, shape.second,
+                                    "invalid lof feature row",
+                                    "lof feature row")
+              .and_then([](std::vector<Vector> rows) {
+                return MatrixFromRows(rows);
+              });
+        })
+        .and_then(
+            [this](DenseMatrix features) -> std::expected<void, std::string> {
+              if (k_distances_.size() != features.rows() ||
+                  local_densities_.size() != features.rows()) {
+                return std::unexpected("lof state size mismatch");
+              }
+              features_ = std::move(features);
+              return {};
+            });
+  }
+
+private:
+  double
+  LocalReachabilityDensity(const std::vector<Neighbor> &neighbors) const {
+    double total_reachability = 0.0;
+    for (const Neighbor &neighbor : neighbors) {
+      total_reachability +=
+          std::max(k_distances_[neighbor.index], neighbor.distance);
+    }
+    const double mean_reachability =
+        total_reachability / static_cast<double>(neighbors.size());
+    return 1.0 / std::max(mean_reachability, kProbabilityFloor);
+  }
+
+  std::expected<void, std::string> FitThreshold(const DenseMatrix &features) {
+    auto scores = Score(features);
+    if (!scores) {
+      return std::unexpected(scores.error());
+    }
+    std::vector<double> sorted(scores->begin(), scores->end());
+    std::ranges::sort(sorted);
+    const double contamination = std::clamp(spec_.contamination, 0.0, 0.5);
+    const std::size_t index = static_cast<std::size_t>(
+        std::floor((1.0 - contamination) * static_cast<double>(sorted.size())));
+    threshold_ = sorted[std::min(index, sorted.size() - 1)];
+    return {};
+  }
+
+  LofSpec spec_;
+  DenseMatrix features_;
+  Vector k_distances_;
+  Vector local_densities_;
+  double threshold_ = 0.0;
+};
+
 std::expected<AnomalyDetector, std::string>
 MakeIsolationForestModel(const IsolationForestSpec &spec) {
   return AnomalyDetector(IsolationForestModel(spec));
+}
+
+std::expected<AnomalyDetector, std::string> MakeLofModel(const LofSpec &spec) {
+  return AnomalyDetector(LofModel(spec));
 }
 
 } // namespace ml::models::detail

@@ -1,7 +1,11 @@
 #include "ml/core/metrics.h"
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
+#include <map>
 #include <unordered_map>
+#include <utility>
 
 #include "ml/core/linalg.h"
 
@@ -116,6 +120,95 @@ double LogLoss(const DenseMatrix &probabilities, std::span<const int> actual) {
     loss -= std::log(ClampProbability(probabilities[row][label]));
   }
   return loss / static_cast<double>(probabilities.rows());
+}
+
+double SilhouetteScore(const DenseMatrix &features,
+                       std::span<const int> labels) {
+  // Points labelled below zero are treated as noise and excluded.
+  std::unordered_map<int, std::size_t> cluster_sizes;
+  for (int label : labels) {
+    if (label >= 0) {
+      ++cluster_sizes[label];
+    }
+  }
+  if (cluster_sizes.size() < 2) {
+    return 0.0;
+  }
+
+  double total = 0.0;
+  std::size_t scored = 0;
+  for (std::size_t row = 0; row < features.rows(); ++row) {
+    if (labels[row] < 0) {
+      continue;
+    }
+    std::unordered_map<int, double> distance_sums;
+    for (std::size_t other = 0; other < features.rows(); ++other) {
+      if (other == row || labels[other] < 0) {
+        continue;
+      }
+      distance_sums[labels[other]] +=
+          std::sqrt(SquaredEuclideanDistance(features[row], features[other]));
+    }
+    const std::size_t own_size = cluster_sizes.at(labels[row]);
+    ++scored;
+    if (own_size <= 1) {
+      continue;
+    }
+    const double cohesion =
+        distance_sums[labels[row]] / static_cast<double>(own_size - 1);
+    double separation = std::numeric_limits<double>::infinity();
+    for (const auto &[label, distance_sum] : distance_sums) {
+      if (label != labels[row]) {
+        separation = std::min(separation,
+                              distance_sum /
+                                  static_cast<double>(cluster_sizes.at(label)));
+      }
+    }
+    const double denominator = std::max(cohesion, separation);
+    if (denominator > 0.0) {
+      total += (separation - cohesion) / denominator;
+    }
+  }
+  return scored == 0 ? 0.0 : total / static_cast<double>(scored);
+}
+
+double AdjustedRandIndex(std::span<const int> actual,
+                         std::span<const int> predicted) {
+  const auto pair_count = [](double count) {
+    return count * (count - 1.0) / 2.0;
+  };
+  std::map<std::pair<int, int>, std::size_t> contingency;
+  std::unordered_map<int, std::size_t> actual_sizes;
+  std::unordered_map<int, std::size_t> predicted_sizes;
+  for (std::size_t index = 0; index < actual.size(); ++index) {
+    ++contingency[{actual[index], predicted[index]}];
+    ++actual_sizes[actual[index]];
+    ++predicted_sizes[predicted[index]];
+  }
+
+  double joint_pairs = 0.0;
+  for (const auto &[cell, count] : contingency) {
+    joint_pairs += pair_count(static_cast<double>(count));
+  }
+  double actual_pairs = 0.0;
+  for (const auto &[label, count] : actual_sizes) {
+    actual_pairs += pair_count(static_cast<double>(count));
+  }
+  double predicted_pairs = 0.0;
+  for (const auto &[label, count] : predicted_sizes) {
+    predicted_pairs += pair_count(static_cast<double>(count));
+  }
+
+  const double total_pairs = pair_count(static_cast<double>(actual.size()));
+  if (total_pairs == 0.0) {
+    return 0.0;
+  }
+  const double expected = actual_pairs * predicted_pairs / total_pairs;
+  const double maximum = 0.5 * (actual_pairs + predicted_pairs);
+  if (maximum == expected) {
+    return 0.0;
+  }
+  return (joint_pairs - expected) / (maximum - expected);
 }
 
 } // namespace ml::core

@@ -20,6 +20,31 @@ using ml::core::Split;
 
 } // namespace
 
+std::string_view LinkageName(Linkage linkage) {
+  switch (linkage) {
+  case Linkage::kAverage:
+    return "average";
+  case Linkage::kSingle:
+    return "single";
+  case Linkage::kComplete:
+    return "complete";
+  }
+  return "average";
+}
+
+std::expected<Linkage, std::string> ParseLinkage(std::string_view text) {
+  if (text == "average") {
+    return Linkage::kAverage;
+  }
+  if (text == "single") {
+    return Linkage::kSingle;
+  }
+  if (text == "complete") {
+    return Linkage::kComplete;
+  }
+  return std::unexpected("unknown linkage: " + std::string(text));
+}
+
 bool IsEnsembleSpec(const EstimatorSpec &spec) {
   return std::holds_alternative<VotingRegressorSpec>(spec) ||
          std::holds_alternative<VotingClassifierSpec>(spec) ||
@@ -69,6 +94,35 @@ ParseBaseEstimatorSpec(std::string_view text) {
                          -> std::expected<BaseEstimatorSpec, std::string> {
                        return std::unexpected(
                            "anomaly specs cannot be used as base estimators");
+                     },
+                     [](const LofSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "anomaly specs cannot be used as base estimators");
+                     },
+                     [](const AgglomerativeSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "clustering specs cannot be used as base "
+                           "estimators");
+                     },
+                     [](const KMeansSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "clustering specs cannot be used as base "
+                           "estimators");
+                     },
+                     [](const DbscanSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "clustering specs cannot be used as base "
+                           "estimators");
+                     },
+                     [](const GaussianMixtureSpec &)
+                         -> std::expected<BaseEstimatorSpec, std::string> {
+                       return std::unexpected(
+                           "clustering specs cannot be used as base "
+                           "estimators");
                      }},
             spec);
       });
@@ -152,6 +206,15 @@ std::string_view EstimatorId(const EstimatorSpec &spec) {
           },
           [](const IsolationForestSpec &) -> std::string_view {
             return "isolation_forest";
+          },
+          [](const LofSpec &) -> std::string_view { return "lof"; },
+          [](const KMeansSpec &) -> std::string_view { return "kmeans"; },
+          [](const DbscanSpec &) -> std::string_view { return "dbscan"; },
+          [](const GaussianMixtureSpec &) -> std::string_view {
+            return "gaussian_mixture";
+          },
+          [](const AgglomerativeSpec &) -> std::string_view {
+            return "agglomerative";
           },
           [](const VotingRegressorSpec &) -> std::string_view {
             return "voting_regressor";
@@ -276,6 +339,31 @@ std::string SerializeEstimatorSpec(const EstimatorSpec &spec) {
                                value.tree_count, value.max_samples,
                                value.feature_fraction, value.contamination,
                                value.seed);
+          },
+          [](const LofSpec &value) {
+            return std::format("lof|neighbor_count={};contamination={}",
+                               value.neighbor_count, value.contamination);
+          },
+          [](const AgglomerativeSpec &value) {
+            return std::format("agglomerative|cluster_count={};linkage={}",
+                               value.cluster_count, LinkageName(value.linkage));
+          },
+          [](const KMeansSpec &value) {
+            return std::format("kmeans|cluster_count={};max_iterations={};"
+                               "tolerance={};init_count={};seed={}",
+                               value.cluster_count, value.max_iterations,
+                               value.tolerance, value.init_count, value.seed);
+          },
+          [](const DbscanSpec &value) {
+            return std::format("dbscan|eps={};min_samples={}", value.eps,
+                               value.min_samples);
+          },
+          [](const GaussianMixtureSpec &value) {
+            return std::format(
+                "gaussian_mixture|component_count={};max_"
+                "iterations={};tolerance={};reg_covar={};seed={}",
+                value.component_count, value.max_iterations, value.tolerance,
+                value.reg_covar, value.seed);
           },
           [](const VotingRegressorSpec &value) {
             return std::format("voting_regressor|estimators={}",
@@ -558,6 +646,69 @@ ParseEstimatorSpec(std::string_view text) {
         .and_then([&] {
           return AssignFieldIfPresent(spec.contamination, values,
                                       "contamination");
+        })
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })
+        .transform([&] { return EstimatorSpec(spec); });
+  }
+  if (id == "lof") {
+    LofSpec spec;
+    return AssignFieldIfPresent(spec.neighbor_count, values, "neighbor_count")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.contamination, values,
+                                      "contamination");
+        })
+        .transform([&] { return EstimatorSpec(spec); });
+  }
+  if (id == "agglomerative") {
+    AgglomerativeSpec spec;
+    if (const auto linkage = values.find("linkage"); linkage != values.end()) {
+      auto parsed = ParseLinkage(linkage->second);
+      if (!parsed) {
+        return std::unexpected(parsed.error());
+      }
+      spec.linkage = *parsed;
+    }
+    return AssignFieldIfPresent(spec.cluster_count, values, "cluster_count")
+        .transform([&] { return EstimatorSpec(spec); });
+  }
+  if (id == "kmeans") {
+    KMeansSpec spec;
+    return AssignFieldIfPresent(spec.cluster_count, values, "cluster_count")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_iterations, values,
+                                      "max_iterations");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.tolerance, values, "tolerance");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.init_count, values, "init_count");
+        })
+        .and_then(
+            [&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })
+        .transform([&] { return EstimatorSpec(spec); });
+  }
+  if (id == "dbscan") {
+    DbscanSpec spec;
+    return AssignFieldIfPresent(spec.eps, values, "eps")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.min_samples, values, "min_samples");
+        })
+        .transform([&] { return EstimatorSpec(spec); });
+  }
+  if (id == "gaussian_mixture") {
+    GaussianMixtureSpec spec;
+    return AssignFieldIfPresent(spec.component_count, values, "component_count")
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.max_iterations, values,
+                                      "max_iterations");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.tolerance, values, "tolerance");
+        })
+        .and_then([&] {
+          return AssignFieldIfPresent(spec.reg_covar, values, "reg_covar");
         })
         .and_then(
             [&] { return AssignFieldIfPresent(spec.seed, values, "seed"); })

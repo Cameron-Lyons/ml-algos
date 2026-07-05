@@ -19,6 +19,7 @@ enum class Task : std::uint8_t {
   kRegression = 0,
   kClassification = 1,
   kAnomalyDetection = 2,
+  kClustering = 3,
 };
 
 struct DatasetSchema {
@@ -80,8 +81,15 @@ struct AnomalySummary {
   std::optional<double> f1;
 };
 
-using EvaluationMetrics =
-    std::variant<RegressionSummary, ClassificationSummary, AnomalySummary>;
+struct ClusteringSummary {
+  std::size_t cluster_count = 0;
+  double silhouette = 0.0;
+  double noise_ratio = 0.0;
+  std::optional<double> adjusted_rand;
+};
+
+using EvaluationMetrics = std::variant<RegressionSummary, ClassificationSummary,
+                                       AnomalySummary, ClusteringSummary>;
 
 struct EvaluationReport {
   Task task = Task::kRegression;
@@ -130,6 +138,8 @@ constexpr std::string_view TaskName(Task task) {
     return "classification";
   case Task::kAnomalyDetection:
     return "anomaly";
+  case Task::kClustering:
+    return "clustering";
   }
   return "unknown";
 }

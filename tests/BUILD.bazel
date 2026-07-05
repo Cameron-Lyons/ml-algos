@@ -62,6 +62,7 @@ cc_test(
     ],
     data = [
         "//data:classification_offset.csv",
+        "//data:clustering.csv",
         "//data:prediction_features.csv",
     ],
     deps = [
@@ -81,6 +82,7 @@ sh_test(
         "//app:ml-algos",
         "//data:classification_binary.csv",
         "//data:classification_offset.csv",
+        "//data:clustering.csv",
         "//data:prediction_features.csv",
         "//data:regression.csv",
         "//data:regression_features.csv",

@@ -20,7 +20,10 @@ std::vector<models::BaseEstimatorSpec> DefaultClassificationBases() {
 
 std::vector<std::string> AlgorithmsForTask(Task task) {
   if (task == Task::kAnomalyDetection) {
-    return {"isolation_forest"};
+    return {"isolation_forest", "lof"};
+  }
+  if (task == Task::kClustering) {
+    return {"kmeans", "dbscan", "gaussian_mixture", "agglomerative"};
   }
   if (task == Task::kRegression) {
     return {"linear",        "ridge",         "lasso",
@@ -52,6 +55,24 @@ DefaultEstimatorSpec(Task task, std::string_view algorithm) {
   if (task == Task::kAnomalyDetection) {
     if (algorithm == "isolation_forest") {
       return models::IsolationForestSpec{};
+    }
+    if (algorithm == "lof") {
+      return models::LofSpec{};
+    }
+    return std::unexpected("unsupported algorithm: " + std::string(algorithm));
+  }
+  if (task == Task::kClustering) {
+    if (algorithm == "kmeans") {
+      return models::KMeansSpec{};
+    }
+    if (algorithm == "dbscan") {
+      return models::DbscanSpec{};
+    }
+    if (algorithm == "gaussian_mixture") {
+      return models::GaussianMixtureSpec{};
+    }
+    if (algorithm == "agglomerative") {
+      return models::AgglomerativeSpec{};
     }
     return std::unexpected("unsupported algorithm: " + std::string(algorithm));
   }
@@ -149,6 +170,36 @@ TuneGrid(Task task, std::string_view algorithm) {
         models::IsolationForestSpec{.tree_count = 50, .max_samples = 128},
         models::IsolationForestSpec{.tree_count = 100, .max_samples = 256},
         models::IsolationForestSpec{.tree_count = 150, .max_samples = 512}};
+  }
+  if (task == Task::kAnomalyDetection && algorithm == "lof") {
+    return std::vector<models::EstimatorSpec>{
+        models::LofSpec{.neighbor_count = 10}, models::LofSpec{},
+        models::LofSpec{.neighbor_count = 35}};
+  }
+  if (task == Task::kClustering && algorithm == "agglomerative") {
+    return std::vector<models::EstimatorSpec>{
+        models::AgglomerativeSpec{.cluster_count = 2},
+        models::AgglomerativeSpec{},
+        models::AgglomerativeSpec{.cluster_count = 4},
+        models::AgglomerativeSpec{.cluster_count = 3,
+                                  .linkage = models::Linkage::kComplete}};
+  }
+  if (task == Task::kClustering && algorithm == "kmeans") {
+    return std::vector<models::EstimatorSpec>{
+        models::KMeansSpec{.cluster_count = 2}, models::KMeansSpec{},
+        models::KMeansSpec{.cluster_count = 4},
+        models::KMeansSpec{.cluster_count = 5}};
+  }
+  if (task == Task::kClustering && algorithm == "dbscan") {
+    return std::vector<models::EstimatorSpec>{
+        models::DbscanSpec{.eps = 0.3, .min_samples = 4}, models::DbscanSpec{},
+        models::DbscanSpec{.eps = 0.8, .min_samples = 5}};
+  }
+  if (task == Task::kClustering && algorithm == "gaussian_mixture") {
+    return std::vector<models::EstimatorSpec>{
+        models::GaussianMixtureSpec{.component_count = 2},
+        models::GaussianMixtureSpec{},
+        models::GaussianMixtureSpec{.component_count = 4}};
   }
   if (task == Task::kRegression && algorithm == "linear") {
     return std::vector<models::EstimatorSpec>{models::LinearSpec{}};
