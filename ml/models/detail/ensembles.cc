@@ -4,6 +4,8 @@
 
 #include <optional>
 
+#include "ml/pipeline/splits.h"
+
 namespace ml::models::detail {
 
 std::expected<Regressor, std::string>

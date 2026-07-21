@@ -1,5 +1,6 @@
 #include "ml/models/detail/factory_hooks.h"
 #include "ml/models/detail/model_context.h"
+#include "ml/models/detail/tree_state.h"
 #include "ml/models/interfaces.h"
 
 namespace ml::models::detail {
