@@ -3,9 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
-#include <limits>
-#include <memory>
-#include <numbers>
 #include <random>
 #include <ranges>
 #include <utility>
@@ -14,14 +11,12 @@
 #include "ml/core/linalg.h"
 #include "ml/core/parse.h"
 #include "ml/core/state_reader.h"
-#include "ml/models/specs.h"
 
 namespace ml::models::detail {
 
 using ml::core::DenseMatrix;
 using ml::core::JoinFormatted;
 using ml::core::LabelVector;
-using ml::core::Overload;
 using ml::core::ParseDelimitedNumbers;
 using ml::core::ParseNumber;
 using ml::core::StateReader;

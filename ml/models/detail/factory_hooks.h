@@ -2,7 +2,6 @@
 #define ML_MODELS_DETAIL_FACTORY_HOOKS_H_
 
 #include <expected>
-#include <optional>
 
 #include "ml/models/interfaces.h"
 #include "ml/models/specs.h"
